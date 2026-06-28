@@ -33,9 +33,8 @@ except ImportError:
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 BASE_DIR = Path(__file__).parent
-# Use /app/data for DB persistence (Railway Volume mount point)
-# Fall back to local data dir if /app/data doesn't exist (local dev)
-DATA_DIR = Path('/app/data') if Path('/app/data').exists() else (BASE_DIR / 'data')
+# Railway Volume: data lives in a subdirectory of the app
+DATA_DIR = BASE_DIR / 'data'
 DB_PATH = DATA_DIR / 'inventory.db'
 UPLOAD_DIR = BASE_DIR / 'uploads'
 
