@@ -167,6 +167,11 @@ def init_db():
         db.execute("ALTER TABLE inbound_records ADD COLUMN photo TEXT")
     except:
         pass
+    # Migrate: add brand column to mercari_listings
+    try:
+        db.execute("ALTER TABLE mercari_listings ADD COLUMN brand TEXT")
+    except:
+        pass
     
     db.commit()
     db.close()
@@ -723,18 +728,18 @@ def api_mercari_generate(product_id):
         'condition': condition
     }
     
-    # Save to DB
+    # Save to DB (include brand)
     existing = db.execute("SELECT id FROM mercari_listings WHERE product_id=? AND status='draft'", (product_id,)).fetchone()
     if existing:
         db.execute("""
-            UPDATE mercari_listings SET title=?, description=?, price=?, shipping_method=?, condition=?, updated_at=CURRENT_TIMESTAMP
+            UPDATE mercari_listings SET title=?, description=?, price=?, shipping_method=?, condition=?, brand=?, updated_at=CURRENT_TIMESTAMP
             WHERE id=?
-        """, (title, description, price, shipping_method, condition, existing['id']))
+        """, (title, description, price, shipping_method, condition, brand, existing['id']))
     else:
         db.execute("""
-            INSERT INTO mercari_listings (product_id, title, description, price, shipping_method, condition)
-            VALUES (?,?,?,?,?,?)
-        """, (product_id, title, description, price, shipping_method, condition))
+            INSERT INTO mercari_listings (product_id, title, description, price, shipping_method, condition, brand)
+            VALUES (?,?,?,?,?,?,?)
+        """, (product_id, title, description, price, shipping_method, condition, brand))
     db.commit()
     
     return jsonify({'success': True, 'listing': listing})
@@ -753,6 +758,22 @@ def api_mercari_draft(product_id):
 def api_mercari_high_value():
     db = get_db()
     products = db.execute("SELECT * FROM products WHERE is_high_value=1 AND status='in_stock' ORDER BY selling_price DESC").fetchall()
+    result = []
+    for p in products:
+        total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        d = dict(p)
+        d['current_stock'] = total_in - total_out
+        d['has_listing'] = bool(db.execute("SELECT id FROM mercari_listings WHERE product_id=?", (p['id'],)).fetchone())
+        result.append(d)
+    return jsonify(result)
+
+
+@app.route('/api/mercari/stock')
+def api_mercari_stock():
+    """获取所有在库商品供煤炉上架（不限高额）"""
+    db = get_db()
+    products = db.execute("SELECT * FROM products WHERE status='in_stock' ORDER BY updated_at DESC").fetchall()
     result = []
     for p in products:
         total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]

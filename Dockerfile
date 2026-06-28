@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY inventory-system/ .
 
+# Ensure data & uploads directories exist (for persistent volume mount)
+RUN mkdir -p /app/data /app/uploads
+
 EXPOSE 5000
 
 CMD ["sh", "-c", "gunicorn web:app --bind 0.0.0.0:${PORT:-5000}"]
