@@ -59,17 +59,31 @@ if DATABASE_URL:
 
 BASE_DIR = Path(__file__).parent
 
+# Railway volume is typically mounted at /data (NOT /app/data)
+RAILWAY_VOLUME = Path('/data')
+
 if USE_POSTGRES:
-    UPLOAD_DIR = Path('/app/data/uploads') if Path('/app/data').exists() else (BASE_DIR / 'uploads')
+    # In PostgreSQL mode, we still need to persist uploads to Railway volume
+    if RAILWAY_VOLUME.exists():
+        UPLOAD_DIR = RAILWAY_VOLUME / 'uploads'
+        app.logger.info(f"[Upload] Using Railway volume: {UPLOAD_DIR}")
+    else:
+        # Fallback for local development or if volume is not mounted
+        UPLOAD_DIR = BASE_DIR / 'uploads'
+        app.logger.warning(f"[Upload] Railway volume NOT found, using local: {UPLOAD_DIR}")
+        app.logger.warning("[Upload] WARNING: Uploads will be LOST on deployment without persistent volume!")
 else:
-    import sqlite3
-    RAILWAY_DATA = Path('/app/data')
-    DATA_DIR = RAILWAY_DATA if RAILWAY_DATA.exists() else (BASE_DIR / 'data')
-    DB_PATH = DATA_DIR / 'inventory.db'
-    UPLOAD_DIR = RAILWAY_DATA / 'uploads' if RAILWAY_DATA.exists() else (BASE_DIR / 'uploads')
+    # SQLite mode (local development)
+    if RAILWAY_VOLUME.exists():
+        DATA_DIR = RAILWAY_VOLUME
+    else:
+        DATA_DIR = BASE_DIR / 'data'
     DATA_DIR.mkdir(exist_ok=True, parents=True)
+    DB_PATH = DATA_DIR / 'inventory.db'
+    UPLOAD_DIR = DATA_DIR / 'uploads'
 
 UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+app.logger.info(f"[Upload] UPLOAD_DIR = {UPLOAD_DIR}, exists = {UPLOAD_DIR.exists()}, writable = {os.access(str(UPLOAD_DIR), os.W_OK)}")
 
 app.logger.info(f"DB mode: {'PostgreSQL' if USE_POSTGRES else f'SQLite ({DB_PATH})'}")
 

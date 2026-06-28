@@ -86,7 +86,7 @@ async function loadLabels() {
         allLabels = products.filter(p => (p.current_stock || 0) > 0);
         
         if (allLabels.length === 0) {
-            document.querySelector('#labelTable tbody').innerHTML = '<tr><td colspan="6" class="text-center py-5 text-muted">在庫商品がありません。先に入庫を行ってください。</td></tr>';
+            document.querySelector('#labelTable tbody').innerHTML = '<tr><td colspan="6" class="text-center py-5 text-muted">在庫商品がありません。<br><a href="/inbound" class="btn btn-sm btn-primary mt-2">入庫を行う</a><br><small class="text-muted">先に入庫を行ってください。入庫後、在庫数が1以上の商品が表示されます。</small></td></tr>';
             return;
         }
         
