@@ -43,8 +43,8 @@
                              style="cursor:pointer;border:3px solid #198754;transition:all 0.3s;border-color:#dee2e6">
                             <div class="card-body text-center p-3">
                                 <i class="bi bi-camera" style="font-size:2.5rem;color:#198754"></i>
-                                <div class="fw-bold mt-2" style="font-size:0.9rem">📸 <span data-i18n="photo_recog">拍照识别</span></div>
-                                <div class="small text-muted mt-1"><span data-i18n="photo_mode_short">上传照片</span></div>
+                                <div class="fw-bold mt-2" style="font-size:0.9rem">🤖 AI实物识别</div>
+                                <div class="small text-muted mt-1">AIで自動マッチ</div>
                             </div>
                         </div>
                     </div>
@@ -83,20 +83,20 @@
                     </div>
                 </div>
 
-                <!-- Photo Mode Panel -->
+                <!-- Photo Mode Panel (AI实物识别) -->
                 <div id="photoPanel" class="method-panel d-none">
                     <div class="alert alert-success" id="photoModeHint">
                         <i class="bi bi-info-circle-fill"></i> 
-                        <strong><span data-i18n="photo_mode_label">拍照识别模式</span>：</strong><span data-i18n="photo_mode_desc">给商品拍照或上传图片，自动检测条形码</span>
+                        <strong>AI实物识别模式：</strong>拍商品照片，AI自动分析实物，匹配进货清单中未入库的商品
                     </div>
                     <div class="border rounded p-4 bg-light text-center" id="photoDropZone" style="min-height:200px">
                         <i class="bi bi-cloud-upload" style="font-size:4rem;color:#999"></i>
-                        <p class="mt-3 mb-1"><span data-i18n="drop_image_here">拖放图片到此处</span></p>
-                        <p class="text-muted small"><span data-i18n="or_click_btn">或点击下方按钮</span></p>
+                        <p class="mt-3 mb-1">拍商品实物照片上传</p>
+                        <p class="text-muted small">AI会自动识别商品类型并匹配清单</p>
                         <input type="file" id="photoInput" accept="image/*" capture="environment" 
-                               class="form-control" onchange="uploadPhoto()" style="display:none">
+                               class="form-control" onchange="uploadAIPhoto()" style="display:none">
                         <button class="btn btn-success btn-lg mt-2" onclick="document.getElementById('photoInput').click()">
-                            <i class="bi bi-camera"></i> <span data-i18n="take_photo_select">拍照 / 选择图片</span>
+                            <i class="bi bi-camera"></i> 📸 拍照上传（AI识别实物）
                         </button>
                         <div class="mt-3">
                             <div id="photoPreview" class="d-none">
@@ -388,8 +388,8 @@ async function stopScanner() {
     document.getElementById('stopScanBtn').disabled = true;
 }
 
-// ─── Mode 2: Photo Upload ──────────────────────
-async function uploadPhoto() {
+// ─── Mode 2: AI Photo Recognition ────────────
+async function uploadAIPhoto() {
     const fileInput = document.getElementById('photoInput');
     const file = fileInput.files[0];
     if (!file) return;
@@ -402,45 +402,159 @@ async function uploadPhoto() {
     };
     reader.readAsDataURL(file);
     
-    // Upload for barcode detection
+    // Upload for AI recognition
     const formData = new FormData();
     formData.append('image', file);
     
     const resultDiv = document.getElementById('photoResult');
-    resultDiv.innerHTML = `<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span> ${t('barcode_detecting')}</div>`;
+    resultDiv.innerHTML = `<div class="text-center py-3">
+        <div class="spinner-border text-success" style="width:3rem;height:3rem"></div>
+        <p class="mt-2 fw-bold">🤖 AI分析中...</p>
+        <p class="text-muted small">Geminiが写真を見て商品を認識し、<br>仕入れリストと照合しています</p>
+    </div>`;
     
     try {
-        const res = await fetch('/api/inbound/photo', { method: 'POST', body: formData });
+        const res = await fetch('/api/inbound/ai-recognize', { method: 'POST', body: formData });
         const data = await res.json();
         
         if (data.error) {
-            resultDiv.innerHTML = `<div class="alert alert-warning small">${data.error}</div>`;
-            if (data.type === 'no_barcode') {
-                resultDiv.innerHTML += `<button class="btn btn-outline-secondary btn-sm w-100" onclick="switchMethod('manual')">
-                    <i class="bi bi-keyboard"></i> ${t('switch_manual')}
+            if (data.type === 'no_api_key' || data.type === 'not_configured') {
+                resultDiv.innerHTML = `<div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> 
+                    AI認識がまだ設定されていません。<br>
+                    <small>管理者にGemini APIキーの設定を依頼してください。</small>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="switchMethod('manual')">
+                    ⌨️ 手动输入に切り替える
                 </button>`;
+            } else if (data.type === 'no_unmatched') {
+                resultDiv.innerHTML = `<div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> ${data.error}
+                </div>`;
+            } else {
+                resultDiv.innerHTML = `<div class="alert alert-danger small">${data.error}</div>`;
             }
             return;
         }
         
-        if (data.codes && data.codes.length > 0) {
-            const code = data.codes[0];
-            resultDiv.innerHTML = `
-                <div class="alert alert-success small">
-                    <i class="bi bi-check-circle"></i> ${t('barcode_detected')}: <strong>${code.code}</strong>
-                    ${code.matched ? '<span class="badge bg-success ms-1">' + t('list_match') + '</span>' : '<span class="badge bg-warning ms-1">' + t('new_item') + '</span>'}
-                </div>`;
-            lookupBarcode(code.code);
+        if (data.success) {
+            showAIResults(data, resultDiv);
         }
     } catch (err) {
-        resultDiv.innerHTML = `<div class="alert alert-danger small">${t('error')}: ${err.message}</div>`;
+        resultDiv.innerHTML = `<div class="alert alert-danger small">通信エラー: ${err.message}</div>`;
     }
 }
 
-// Drop zone support
+function showAIResults(data, resultDiv) {
+    // Get supplier item IDs from candidates
+    const candidates = data.candidates || [];
+    const matchedItems = candidates.filter(c => c.matched_item);
+    
+    let html = `<div class="alert alert-success">
+        <i class="bi bi-robot"></i> <strong>AI分析結果：</strong>${data.description || ''}
+    </div>`;
+    
+    if (data.fallback) {
+        html += `<div class="alert alert-warning small">${data.message || ''}</div>`;
+    }
+    
+    if (matchedItems.length > 0) {
+        html += `<div class="mb-2 fw-bold">📋 候補商品（クリックで選択）：</div>`;
+        matchedItems.forEach((c, i) => {
+            const item = c.matched_item;
+            const isTop = i === 0;
+            html += `<div class="card mb-2 ai-candidate" style="cursor:pointer;border-left:4px solid ${isTop ? '#198754' : '#0d6efd'}"
+                         onclick="selectAICandidate(${c.rank}, ${item.id})">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            ${isTop ? '<span class="badge bg-success">最適</span> ' : ''}
+                            <span class="badge bg-secondary">#${c.rank}</span>
+                            <strong>${escapeHtml(item.product_name || '')}</strong>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-1">
+                        ${c.reason ? '💡 ' + escapeHtml(c.reason) : ''}
+                    </div>
+                    <div class="small mt-1">
+                        ${item.tracking_no ? '<span class="me-2">📦 ' + escapeHtml(item.tracking_no) + '</span>' : ''}
+                        ${item.category ? '<span class="badge bg-light text-dark">' + escapeHtml(item.category) + '</span>' : ''}
+                        ${item.weight ? ' <span class="ms-1">' + item.weight + 'kg</span>' : ''}
+                    </div>
+                </div>
+            </div>`;
+        });
+        html += `<div class="text-muted small mb-2">※ AIの候補が不正確な場合は、下のボタンで手動選択してください</div>`;
+    } else {
+        html += `<div class="alert alert-warning">
+            <i class="bi bi-exclamation-circle"></i> AIが候補を見つけられませんでした。<br>
+            <small>手動選択で仕入れリストから選んでください。</small>
+        </div>`;
+    }
+    
+    html += `<button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="showAllUnmatched()">
+        📋 手動でリストから選択する (${data.total_unmatched || '?'}件)
+    </button>`;
+    
+    resultDiv.innerHTML = html;
+}
+
+async function selectAICandidate(rank, supplierItemId) {
+    // Find the supplier item and fill the form
+    try {
+        const res = await fetch(`/api/lookup/${encodeURIComponent(supplierItemId)}`);
+        const data = await res.json();
+        
+        // We need to get the supplier item directly
+        const items = await (await fetch('/api/inbound/unmatched')).json();
+        const item = items.find(i => i.id === supplierItemId);
+        
+        if (item) {
+            currentSupplierItem = item;
+            document.getElementById('initialState').classList.add('d-none');
+            document.getElementById('matchResult').classList.remove('d-none');
+            document.getElementById('matchAlert').className = 'alert alert-success';
+            document.getElementById('matchMsg').textContent = 'AIでマッチしました！';
+            fillSupplierData(item);
+            
+            // Scroll to right panel
+            document.getElementById('matchResult').scrollIntoView({ behavior: 'smooth' });
+            
+            showToast(`AI候補 #${rank} を選択しました`, 'success');
+        }
+    } catch (err) {
+        showToast('選択エラー: ' + err.message, 'error');
+    }
+}
+
+async function showAllUnmatched() {
+    // Switch to a modal that shows all unmatched items
+    const items = await (await fetch('/api/inbound/unmatched')).json();
+    
+    const resultDiv = document.getElementById('photoResult');
+    let html = `<div class="card"><div class="card-body"><h6>📋 未入库商品一覧（${items.length}件）</h6>
+        <div style="max-height:300px;overflow-y:auto">`;
+    items.forEach(item => {
+        html += `<div class="border-bottom py-1 small ai-candidate" style="cursor:pointer"
+                     onclick="selectAICandidate(0, ${item.id})">
+            <strong>${escapeHtml(item.product_name || '不明')}</strong>
+            <span class="text-muted ms-2">${escapeHtml(item.tracking_no || '')}</span>
+            ${item.category ? '<span class="badge bg-light text-dark ms-1">' + escapeHtml(item.category) + '</span>' : ''}
+        </div>`;
+    });
+    html += `</div></div></div>`;
+    resultDiv.innerHTML = html;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Drop zone for AI photo
 document.getElementById('photoDropZone').addEventListener('dragover', (e) => {
     e.preventDefault();
-    e.currentTarget.style.borderColor = '#0d6efd';
+    e.currentTarget.style.borderColor = '#198754';
 });
 document.getElementById('photoDropZone').addEventListener('dragleave', (e) => {
     e.currentTarget.style.borderColor = '';
@@ -451,7 +565,7 @@ document.getElementById('photoDropZone').addEventListener('drop', (e) => {
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
         document.getElementById('photoInput').files = e.dataTransfer.files;
-        uploadPhoto();
+        uploadAIPhoto();
     }
 });
 
