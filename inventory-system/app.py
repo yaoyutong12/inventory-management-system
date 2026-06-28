@@ -924,7 +924,7 @@ def api_inbound_create():
                   (product_id, supplier_item_id, qty, unit_cost or 0, photo_filename))
     
     # Mark supplier item as matched
-    db.execute("UPDATE supplier_items SET matched=1, matched_date=CURRENT_TIMESTAMP WHERE id=?", (supplier_item_id,))
+    db.execute("UPDATE supplier_items SET matched=TRUE, matched_date=CURRENT_TIMESTAMP WHERE id=?", (supplier_item_id,))
     db.commit()
     
     product = db.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
@@ -1637,7 +1637,7 @@ def api_inbound_manual():
     # Record inbound
     db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost) VALUES (?,?,?,?)",
               (product_id, supplier_item_id, qty, unit_cost or 0))
-    db.execute("UPDATE supplier_items SET matched=1, matched_date=CURRENT_TIMESTAMP WHERE id=?", (supplier_item_id,))
+    db.execute("UPDATE supplier_items SET matched=TRUE, matched_date=CURRENT_TIMESTAMP WHERE id=?", (supplier_item_id,))
     db.commit()
     
     product = db.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
