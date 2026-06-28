@@ -1122,6 +1122,35 @@ def api_inventory_stats():
     return jsonify(stats)
 
 
+# ─── API: Update Product Price ───────────────────────────────────
+@app.route('/api/product/<int:product_id>/price', methods=['POST'])
+def api_update_product_price(product_id):
+    """更新商品售价（用于库存列表内联编辑）"""
+    data = request.json or {}
+    new_price = data.get('selling_price')
+    
+    if new_price is None:
+        return jsonify({'success': False, 'error': '販売価格が必要です'}), 400
+    
+    try:
+        new_price = int(new_price)
+        if new_price < 0:
+            return jsonify({'success': False, 'error': '価格は0以上でなければなりません'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': '有効な数値を入力してください'}), 400
+    
+    db = get_db()
+    product = db.execute("SELECT id FROM products WHERE id=?", (product_id,)).fetchone()
+    if not product:
+        return jsonify({'success': False, 'error': '商品が見つかりません'}), 404
+    
+    db.execute("UPDATE products SET selling_price=?, updated_at=? WHERE id=?",
+              (new_price, datetime.now(), product_id))
+    
+    app.logger.info(f'[PriceUpdate] Product {product_id}: price changed to ¥{new_price}')
+    return jsonify({'success': True, 'new_price': new_price})
+
+
 # ─── API: Labels ────────────────────────────────────────────────
 @app.route('/api/labels/generate', methods=['POST'])
 def api_labels_generate():
@@ -1955,7 +1984,70 @@ def api_products_all():
 # ─── Static files (uploads) ────────────────────────────────────
 @app.route('/uploads/<path:filename>')
 def serve_upload(filename):
-    return send_from_directory(str(UPLOAD_DIR), filename)
+    import mimetypes
+    # 安全检查：防止路径穿越攻击
+    safe_filename = os.path.basename(filename)
+    file_path = UPLOAD_DIR / safe_filename
+    
+    if not file_path.exists():
+        app.logger.warning(f'[Upload] File not found: {file_path}')
+        return jsonify({'error': 'File not found'}), 404
+    
+    # 检查文件大小（0字节或过小可能是损坏的）
+    file_size = file_path.stat().st_size
+    if file_size == 0:
+        app.logger.error(f'[Upload] File is empty: {file_path}')
+        return jsonify({'error': 'File is empty (corrupted)'}), 500
+    
+    # 自动检测MIME类型
+    mime_type = mimetypes.guess_type(str(file_path))[0] or 'application/octet-stream'
+    app.logger.info(f'[Upload] Serving: {safe_filename} ({file_size} bytes, {mime_type})')
+    
+    return send_from_directory(str(UPLOAD_DIR), safe_filename, mimetype=mime_type)
+
+
+@app.route('/api/debug/photo-check/<int:product_id>')
+def api_debug_photo_check(product_id):
+    """检查指定商品的照片文件状态"""
+    db = get_db()
+    result = db.execute("SELECT photo FROM inbound_records WHERE product_id=? ORDER BY id DESC LIMIT 1", (product_id,)).fetchone()
+    
+    if not result or not result.get('photo'):
+        return jsonify({'found': False, 'message': '写真が見つかりません'})
+    
+    photo_name = result['photo']
+    photo_path = UPLOAD_DIR / photo_name
+    
+    info = {
+        'photo_name': photo_name,
+        'photo_url': f'/uploads/{photo_name}',
+        'file_exists': photo_path.exists(),
+        'UPLOAD_dir': str(UPLOAD_DIR),
+        'UPLOAD_exists': UPLOAD_DIR.exists()
+    }
+    
+    if photo_path.exists():
+        stat = photo_path.stat()
+        info['file_size'] = stat.st_size
+        info['is_empty'] = stat.st_size == 0
+        # 读取前几个字节判断是否是有效图片
+        with open(photo_path, 'rb') as f:
+            header = f.read(8)
+        info['header_hex'] = header.hex()
+        # 常见图片头: JPEG=ffd8, PNG=89504e47, GIF=47494638
+        if header[:2] == b'\xff\xd8':
+            info['format'] = 'JPEG (valid)'
+        elif header[:4] == b'\x89PNG':
+            info['format'] = 'PNG (valid)'
+        elif header[:2] == b'GI':
+            info['format'] = 'GIF (valid)'
+        else:
+            info['format'] = f'UNKNOWN (possibly corrupted!)'
+            info['warning'] = 'ファイルが画像形式ではありません！再アップロードが必要です。'
+    else:
+        info['message'] = f'ファイルが存在しません: {photo_path}'
+    
+    return jsonify(info)
 
 
 @app.route('/api/debug/data-check')
