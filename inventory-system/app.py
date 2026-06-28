@@ -45,12 +45,15 @@ if DATABASE_URL:
         # Railway provides postgres://user:pass@host:port/dbname
         # psycopg2 needs postgresql:// scheme
         PG_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-        # Test connection immediately
-        test_conn = psycopg2.connect(PG_URL, connect_timeout=5)
+        app.logger.info(f"[DB] Attempting PostgreSQL connection...")
+        app.logger.info(f"[DB] DATABASE_URL length: {len(DATABASE_URL)}")
+        # Test connection immediately with longer timeout
+        test_conn = psycopg2.connect(PG_URL, connect_timeout=15)
         test_conn.close()
         USE_POSTGRES = True
+        app.logger.info(f"[DB] ✓ PostgreSQL connection successful!")
     except Exception as e:
-        app.logger.warning(f"PostgreSQL not available, falling back to SQLite: {e}")
+        app.logger.error(f"[DB] ✗ PostgreSQL failed: {type(e).__name__}: {e}")
         USE_POSTGRES = False
         import sqlite3
 

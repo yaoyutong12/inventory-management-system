@@ -765,7 +765,8 @@ function fillSupplierData(data) {
     document.getElementById('category').value = data.category || '';
     document.getElementById('weight').value = data.weight || '';
     document.getElementById('dimensions').value = data.dimensions || '';
-    document.getElementById('unitCost').value = '';
+    // 默认进货价500日元，用户可修改
+    document.getElementById('unitCost').value = '500';
     document.getElementById('sellingPrice').value = '';
     document.getElementById('qty').value = data.expected_qty || 1;
     document.getElementById('location').value = '';
