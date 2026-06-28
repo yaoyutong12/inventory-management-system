@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-upc-scan me-2"></i>ラベル印刷</h4>
+    <h4><i class="bi bi-upc-scan me-2"></i>ラベル印刷 <small class="text-muted fs-6" id="verInfo">(v20260629-3)</small></h4>
     <div>
         <button class="btn btn-outline-primary" id="selectAllBtn" onclick="selectAll()"><i class="bi bi-check-all"></i> 全選択</button>
         <div class="btn-group">
@@ -25,38 +25,76 @@
     <div class="col-md-4">
         <select class="form-select" id="labelCatFilter" onchange="filterLabels()">
             <option value="">全カテゴリ</option>
+            {% for cat in ssr_categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
         </select>
     </div>
-        <div class="col-md-4">
-            <select class="form-select" onchange="filterLabels()">
-                <option value="all" selected>全商品（默认显示全部）</option>
-                <option value="in_stock">在庫ありのみ</option>
-                <option value="unlabeled">ラベル未発行</option>
-            </select>
-        </div>
+    <div class="col-md-4">
+        <select class="form-select" id="labelModeFilter" onchange="filterLabels()">
+            <option value="all" selected>全商品（默认）</option>
+            <option value="in_stock">在庫ありのみ</option>
+        </select>
+    </div>
 </div>
 
 <div class="card">
-    <div class="card-body">
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover" id="labelTable">
+            <table class="table table-hover mb-0" id="labelTable">
                 <thead>
                     <tr>
                         <th style="width:40px"><input type="checkbox" id="selectAllCB" onchange="toggleAll(this)"></th>
                         <th>内部コード</th><th>商品名</th><th>販売価格</th><th>状態</th><th>プレビュー</th>
                     </tr>
                 </thead>
-                <tbody></tbody>
+                <tbody id="invTbody">
+                    {% if ssr_data %}
+                        {% for p in ssr_data %}
+                            {% if p.current_stock <= 0 %}
+                                {% set stock_class = "secondary" %}
+                            {% elif p.current_stock <= 3 %}
+                                {% set stock_class = "warning" %}
+                            {% else %}
+                                {% set stock_class = "success" %}
+                            {% endif %}
+                        <tr data-category="{{ p.category or '' }}" data-name="{{ p.product_name or '' }}" data-code="{{ p.internal_code or '' }}" data-stock="{{ p.current_stock or 0 }}">
+                            <td><input type="checkbox" class="label-cb" value="{{ p.id }}" onchange="toggleLabel({{ p.id }}, this)"></td>
+                            <td><code>{{ p.internal_code }}{% if p.is_high_value %} <span class="badge bg-warning">高額</span>{% endif %}</code></td>
+                            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ p.product_name }}">{{ (p.product_name or '')[:40] }}</td>
+                            <td class="fw-bold">¥{{ '%d' | format(p.selling_price or 0) | int }}</td>
+                            <td><span class="badge bg-{{ stock_class }}">{{ p.current_stock or 0 }}個</span></td>
+                            <td><button class="btn btn-sm btn-outline-secondary" onclick="previewLabel({{ p.id }})"><i class="bi bi-eye"></i></button></td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox" style="font-size:3rem;display:block;margin-bottom:1rem"></i>
+                            <p class="mb-2"><strong>まだ商品が登録されていません</strong></p>
+                            <p class="small mb-3">手順：<br>
+                            ① <a href="/import">仕入リスト管理</a> でExcelファイルをアップロード<br>
+                            ② <a href="/inbound">入庫管理</a> で商品を選択 → 販売価格を入力 → 入庫実行<br>
+                            ③ ラベルが表示されます</p>
+                            <p>
+                            <a href="/debug-data" class="btn btn-sm btn-outline-secondary me-2">データ状態を確認</a>
+                            <a href="/api/inventory/list" target="_blank" class="btn btn-sm btn-outline-info me-2">APIデータ確認</a>
+                            </p>
+                        </td></tr>
+                    {% endif %}
+                </tbody>
             </table>
         </div>
-        <div class="mt-3 text-center" id="labelPagination"></div>
     </div>
+</div>
+
+<div class="mt-2 text-muted small text-end" id="labelCountInfo">
+    {% if ssr_data %}全 {{ ssr_data|length }} 件の商品{% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// API helper
+// API helper (用于标签生成等操作)
 const API = {
     async get(url) {
         const resp = await fetch(url);
@@ -76,86 +114,11 @@ const API = {
 
 function formatJPY(n) { return '¥' + Number(n).toLocaleString('ja-JP'); }
 
-let allLabels = [];
 let selectedIds = new Set();
 
-async function loadLabels() {
-    try {
-        // 显示加载状态
-        const tbody = document.querySelector('#labelTable tbody');
-        if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">読み込み中...</p></td></tr>';
-        }
-
-        const resp = await fetch('/api/inventory/list?_t=' + Date.now()); // 破坏缓存
-        if (!resp.ok) {
-            throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-        }
-        const allProducts = await resp.json();
-        
-        // 调试：在页面上显示调试信息
-        console.log('=== ラベルデータデバッグ ===');
-        console.log('全商品数:', allProducts.length);
-        
-        // 在页面顶部显示数据状态（临时，方便排查）
-        let debugDiv = document.getElementById('labelsDebugInfo');
-        if (!debugDiv) {
-            debugDiv = document.createElement('div');
-            debugDiv.id = 'labelsDebugInfo';
-            debugDiv.className = 'alert alert-secondary small';
-            debugDiv.style.fontSize = '11px';
-            const cardBody = document.querySelector('.card-body');
-            if (cardBody) cardBody.insertBefore(debugDiv, cardBody.firstChild);
-        }
-        
-        debugDiv.innerHTML = '<strong>デバッグ:</strong> APIから ' + allProducts.length + '件の商品を取得しました。' +
-            (allProducts.length > 0 ? ' 先頭: ' + (allProducts[0].internal_code||'') + ' - ' + ((allProducts[0].product_name||'').substring(0,30)) : '');
-        
-        // 默认加载全部商品（不过滤），由下拉框控制是否过滤
-        allLabels = allProducts;
-        
-        if (allLabels.length === 0) {
-            let msg = '<tr><td colspan="6" class="text-center py-5 text-muted">';
-            msg += '商品がありません。<br><a href="/import" class="btn btn-sm btn-primary mt-2">仕入リストをアップロード</a>';
-            msg += '</td></tr>';
-            document.querySelector('#labelTable tbody').innerHTML = msg;
-            return;
-        }
-        
-        const categories = [...new Set(allLabels.map(p => p.category).filter(Boolean))];
-        const catSelect = document.getElementById('labelCatFilter');
-        catSelect.innerHTML = '<option value="">全カテゴリ</option>';
-        categories.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c; opt.textContent = c;
-            catSelect.appendChild(opt);
-        });
-        
-        renderLabelTable(allLabels);
-    } catch(e) {
-        console.error('Failed to load labels:', e);
-        const tbody = document.querySelector('#labelTable tbody');
-        if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-danger">データの読み込みに失敗しました: ' + e.message + '</td></tr>';
-        }
-    }
-}
-
-function renderLabelTable(products) {
-    const tbody = document.querySelector('#labelTable tbody');
-    tbody.innerHTML = products.map(p => `
-        <tr>
-            <td><input type="checkbox" class="label-cb" value="${p.id}" ${selectedIds.has(p.id)?'checked':''} onchange="toggleLabel(${p.id},this)"></td>
-            <td><code>${p.internal_code||''}</code></td>
-            <td title="${p.product_name||''}">${(p.product_name||'').substring(0,50)}</td>
-            <td class="fw-bold">${formatJPY(p.selling_price||0)}</td>
-            <td><span class="badge bg-${(p.current_stock||0)>3?'success':'warning'}">${p.current_stock||0}個</span></td>
-            <td><button class="btn btn-sm btn-outline-secondary" onclick="previewLabel(${p.id})"><i class="bi bi-eye"></i></button></td>
-        </tr>`).join('');
-}
-
+// ─── 全选/反选 ─────────────────────────────
 function toggleAll(cb) {
-    document.querySelectorAll('.label-cb').forEach(c => {
+    document.querySelectorAll('.label-cb').forEach(function(c) {
         c.checked = cb.checked;
         toggleLabel(parseInt(c.value), c);
     });
@@ -168,162 +131,132 @@ function toggleLabel(id, cb) {
 
 function selectAll() {
     document.getElementById('selectAllCB').checked = true;
-    document.querySelectorAll('.label-cb').forEach(c => {
+    document.querySelectorAll('.label-cb').forEach(function(c) {
         c.checked = true;
         selectedIds.add(parseInt(c.value));
     });
 }
 
-function showAllProducts() {
-    // 重新加载并显示所有商品（包括库存为0的）
-    API.get('/api/inventory/list').then(allProducts => {
-        allLabels = allProducts; // 不过滤，显示所有
-        renderLabelTable(allLabels);
-        showToast(`全${allProducts.length}件の商品を表示しました`, 'info');
-    });
-}
-
+// ─── 筛选（客户端过滤，不需要重新请求API） ──
 function filterLabels() {
-    const search = document.getElementById('labelSearch').value.toLowerCase();
-    const cat = document.getElementById('labelCatFilter').value;
-    // 获取筛选模式下拉框（第三个select）
-    const modeSelect = document.querySelector('select[onchange="filterLabels()"]:last-of-type');
-    const mode = modeSelect ? modeSelect.value : 'all';
+    var search = (document.getElementById('labelSearch').value || '').toLowerCase();
+    var cat = document.getElementById('labelCatFilter').value;
+    var mode = document.getElementById('labelModeFilter').value;
+
+    var rows = document.querySelectorAll('#invTbody > tr[data-category]');
+    var visibleCount = 0;
     
-    let filtered = allLabels;
+    rows.forEach(function(row) {
+        var rStock = parseInt(row.dataset.stock || '0');
+        var rName = (row.dataset.name || '').toLowerCase();
+        var rCode = (row.dataset.code || '').toLowerCase();
+        var rCat = row.dataset.category;
+        
+        var show = true;
+        
+        // 模式筛选
+        if (mode === 'in_stock' && rStock <= 0) show = false;
+        
+        // 分类筛选
+        if (cat && rCat !== cat) show = false;
+        
+        // 关键词筛选
+        if (search && !rName.includes(search) && !rCode.includes(search)) show = false;
+        
+        row.style.display = show ? '' : 'none';
+        if (show) visibleCount++;
+    });
     
-    // 按模式过滤
-    if (mode === 'in_stock') {
-        filtered = filtered.filter(p => (p.current_stock || 0) > 0);
+    // 更新计数
+    var countEl = document.getElementById('labelCountInfo');
+    if (countEl) {
+        var total = rows.length;
+        countEl.textContent = visibleCount + ' / ' + total + ' 件';
     }
-    
-    if (cat) filtered = filtered.filter(p => p.category === cat);
-    if (search) filtered = filtered.filter(p => 
-        (p.product_name||'').toLowerCase().includes(search) || 
-        (p.internal_code||'').toLowerCase().includes(search)
-    );
-    renderLabelTable(filtered);
 }
 
+// ─── 标签预览 ─────────────────────────────
 async function previewLabel(id) {
-    const result = await API.post('/api/labels/generate', {product_ids: [id]});
-    if (result.labels.length > 0) {
-        const l = result.labels[0];
-        const win = window.open('', '_blank', 'width=400,height=450');
-        win.document.write(`
-            <html><head><title>ラベルプレビュー</title>
-            <style>
-                @page { size: 62mm 40mm; margin: 3mm; }
-                body { font-family: 'MS Gothic', sans-serif; margin: 20px; display:flex; justify-content:center; }
-                .label { text-align: center; border: 2px dashed #ccc; padding: 20px; border-radius: 12px; width: 250px; }
-                .label img { width: 150px; height: 150px; }
-                .label .code { font-size: 16px; font-weight: bold; margin: 8px 0; }
-                .label .name { font-size: 9px; margin: 4px 0; word-break: break-all; }
-                .label .price { font-size: 24px; font-weight: bold; color: #c00; }
-            </style></head><body>
-            <div class="label">
-                <img src="data:image/png;base64,${l.qr_code}">
-                <div class="code">${l.internal_code}</div>
-                <div class="name">${l.product_name}</div>
-                <div class="price">¥${Number(l.selling_price||0).toLocaleString()}</div>
-            </div>
-        `);
+    try {
+        var result = await API.post('/api/labels/generate', {product_ids: [id]});
+        if (result.labels.length > 0) {
+            var l = result.labels[0];
+            var win = window.open('', '_blank', 'width=400,height=450');
+            win.document.write('<html><head><title>ラベルプレビュー</title>' +
+                '<style>@page{size:62mm 40mm;margin:3mm}body{font-family:"MS Gothic",sans-serif;margin:20px;display:flex;justify-content:center}' +
+                '.label{text-align:center;border:2px dashed #ccc;padding:20px;border-radius:12px;width:250px}' +
+                '.label img{width:150px;height:150px}.label .code{font-size:16px;font-weight:bold;margin:8px 0}' +
+                '.label .name{font-size:9px;margin:4px 0;word-break:break-all}.label .price{font-size:24px;font-weight:bold;color:#c00}</style></head><body>' +
+                '<div class="label"><img src="data:image/png;base64,' + l.qr_code + '">' +
+                '<div class="code">' + l.internal_code + '</div>' +
+                '<div class="name">' + l.product_name + '</div>' +
+                '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>');
+        } else {
+            showToast('ラベル生成に失敗しました', 'danger');
+        }
+    } catch(e) {
+        alert('エラー: ' + e.message);
     }
 }
 
-async function printSelected(mode = 'normal') {
+// ─── 打印标签 ─────────────────────────────
+async function printSelected(mode) {
+    mode = mode || 'normal';
     if (selectedIds.size === 0) {
         showToast('印刷するラベルを選択してください', 'warning');
         return;
     }
     
-    const result = await API.post('/api/labels/generate', {product_ids: [...selectedIds]});
-    if (result.labels.length === 0) return;
-    
-    const isThermal = mode === 'thermal';
-    const win = window.open('', '_blank', `width=${isThermal ? 400 : 800},height=600`);
-    
-    if (isThermal) {
-        // Thermal print - one label per page, 48mm width
-        win.document.write(`
-            <html><head><title>热敏标签印刷 (${result.labels.length}枚)</title>
-            <style>
-                @page { size: 48mm 35mm; margin: 1mm; }
-                body { 
-                    font-family: 'MS Gothic', 'Microsoft YaHei', sans-serif; 
-                    margin: 0; padding: 0;
-                }
-                .thermal-label { 
-                    text-align: center; 
-                    padding: 1mm; 
-                    page-break-after: always;
-                    width: 46mm;
-                }
-                .thermal-label img { 
-                    width: 28mm; height: 28mm; 
-                    display: block; margin: 0 auto;
-                }
-                .thermal-label .code { 
-                    font-size: 9px; font-weight: bold; 
-                    margin: 1mm 0; letter-spacing: 0.5px;
-                }
-                .thermal-label .name { 
-                    font-size: 6px; margin: 0.5mm 0; 
-                    word-break: break-all; line-height: 1.2;
-                    max-height: 9mm; overflow: hidden;
-                }
-                .thermal-label .price { 
-                    font-size: 12px; font-weight: bold; 
-                    color: #000; margin: 0.5mm 0;
-                }
-                @media print { 
-                    body { -webkit-print-color-adjust: exact; }
-                }
-            </style></head><body>
-            ${result.labels.map(l => `
-                <div class="thermal-label">
-                    <img src="data:image/png;base64,${l.qr_code}">
-                    <div class="code">${l.internal_code}</div>
-                    <div class="name">${l.product_name}</div>
-                    <div class="price">¥${Number(l.selling_price||0).toLocaleString()}</div>
-                </div>
-            `).join('')}
-            <script>window.onload=function(){window.print();}<\/script>
-        `);
-    } else {
-        // Normal A4 print
-        win.document.write(`
-            <html><head><title>ラベル印刷 (${result.labels.length}枚)</title>
-            <style>
-                @page { size: A4; margin: 10mm; }
-                body { font-family: 'MS Gothic', sans-serif; margin: 0; padding: 0; }
-                .labels { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-start; padding: 10px; }
-                .label { width: 170px; height: 110px; border: 1px solid #ccc; padding: 5px; text-align: center; 
-                         page-break-inside: avoid; border-radius: 6px; display: flex; flex-direction: column; align-items: center; }
-                .label img { width: 60px; height: 60px; }
-                .label .code { font-size: 11px; font-weight: bold; margin: 2px 0; }
-                .label .name { font-size: 7px; margin: 1px 0; overflow: hidden; max-height: 2em; }
-                .label .price { font-size: 13px; font-weight: bold; color: #c00; }
-                @media print { .label { border-color: #ddd; } }
-            </style></head><body>
-            <div class="labels">
-                ${result.labels.map(l => `
-                    <div class="label">
-                        <img src="data:image/png;base64,${l.qr_code}">
-                        <div class="code">${l.internal_code}</div>
-                        <div class="name">${l.product_name}</div>
-                        <div class="price">¥${Number(l.selling_price||0).toLocaleString()}</div>
-                    </div>
-                `).join('')}
-            </div>
-            <script>window.onload=function(){window.print();}<\/script>
-        `);
+    try {
+        var result = await API.post('/api/labels/generate', {product_ids: Array.from(selectedIds)});
+        if (result.labels.length === 0) return;
+        
+        var isThermal = mode === 'thermal';
+        var win = window.open('', '_blank', 'width=' + (isThermal ? 400 : 800) + ',height=600');
+        
+        if (isThermal) {
+            var labelsHtml = result.labels.map(function(l) {
+                return '<div class="thermal-label">' +
+                    '<img src="data:image/png;base64,' + l.qr_code + '">' +
+                    '<div class="code">' + l.internal_code + '</div>' +
+                    '<div class="name">' + l.product_name + '</div>' +
+                    '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>';
+            }).join('');
+            
+            win.document.write('<html><head><title>热敏标签印刷 (' + result.labels.length + '枚)</title>' +
+                '<style>@page{size:48mm 35mm;margin:1mm}body{font-family:"MS Gothic","Microsoft YaHei",sans-serif;margin:0;padding:0}' +
+                '.thermal-label{text-align:center;padding:1mm;page-break-after:always;width:46mm}' +
+                '.thermal-label img{width:28mm;height:28mm;display:block;margin:0 auto}' +
+                '.thermal-label .code{font-size:9px;font-weight:bold;margin:1mm 0;letter-spacing:.5px}' +
+                '.thermal-label .name{font-size:6px;margin:.5mm 0;word-break:break-all;line-height:1.2;max-height:9mm;overflow:hidden}' +
+                '.thermal-label .price{font-size:12px;font-weight:bold;color:#000;margin:.5mm 0}' +
+                '@media print{body{-webkit-print-color-adjust:exact}}</style></head><body>' +
+                labelsHtml + '<script>window.onload=function(){window.print();}<\/script></body></html>');
+        } else {
+            var labelsHtml = result.labels.map(function(l) {
+                return '<div class="label"><img src="data:image/png;base64,' + l.qr_code + '">' +
+                    '<div class="code">' + l.internal_code + '</div>' +
+                    '<div class="name">' + l.product_name + '</div>' +
+                    '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>';
+            }).join('');
+            
+            win.document.write('<html><head><title>ラベル印刷 (' + result.labels.length + '枚)</title>' +
+                '<style>@page{size:A4;margin:10mm}body{font-family:"MS Gothic",sans-serif;margin:0;padding:0}' +
+                '.labels{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-start;padding:10px}' +
+                '.label{width:170px;height:110px;border:1px solid #ccc;padding:5px;text-align:center;page-break-inside:avoid;' +
+                'border-radius:6px;display:flex;flex-direction:column;align-items:center}' +
+                '.label img{width:60px;height:60px}.label .code{font-size:11px;font-weight:bold;margin:2px 0}' +
+                '.label .name{font-size:7px;margin:1px 0;overflow:hidden;max-height:2em}' +
+                '.label .price{font-size:13px;font-weight:bold;color:#c00}@media print{.label{border-color:#ddd}}</style></head><body>' +
+                '<div class="labels">' + labelsHtml + '</div>' +
+                '<script>window.onload=function(){window.print();}<\/script></body></html>');
+        }
+        
+        var modeLabel = isThermal ? '热敏 (48mm)' : 'A4';
+        showToast(result.labels.length + '枚のラベルを' + modeLabel + 'で印刷します', 'info');
+    } catch(e) {
+        alert('通信エラー: ' + e.message);
     }
-    
-    const modeLabel = isThermal ? '热敏 (48mm)' : 'A4';
-    showToast(`${result.labels.length}枚のラベルを${modeLabel}で印刷します`, 'info');
 }
-
-loadLabels();
 </script>
 {% endblock %}

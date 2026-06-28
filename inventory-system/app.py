@@ -741,7 +741,58 @@ code{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:.85em}
 
 @app.route('/labels')
 def labels_page():
-    return render_template('labels.html')
+    from time import time
+    try:
+        db = get_db()
+        if not db:
+            return render_template('labels.html', ssr_data=[], now_ts=int(time()))
+        
+        # SSR: 服务端直接查询数据（与 /inventory 相同逻辑）
+        try:
+            products = db.execute("""SELECT p.*,
+                (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo,
+                (SELECT si.tracking_no FROM supplier_items si WHERE si.id=p.supplier_item_id LIMIT 1) as tracking_no
+                FROM products p ORDER BY p.updated_at DESC""").fetchall()
+        except Exception as e:
+            app.logger.error(f"Labels query failed: {e}")
+            products = []
+        
+        label_data = []
+        for p in products:
+            try:
+                p_dict = dict(p)
+                total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p_dict.get('id'),)).fetchone()
+                total_in = total_in[0] if total_in else 0
+                total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (p_dict.get('id'),)).fetchone()
+                total_out = total_out[0] if total_out else 0
+                p_dict['current_stock'] = total_in - total_out
+                p_dict['total_in'] = total_in
+                p_dict['total_out'] = total_out
+                if p_dict.get('photo'):
+                    p_dict['photo_url'] = f'/uploads/{p_dict["photo"]}'
+                else:
+                    p_dict['photo_url'] = None
+                label_data.append(p_dict)
+            except Exception as e:
+                app.logger.error(f"Error processing label product {p}: {e}")
+                continue
+
+        # Unique categories for filter dropdown
+        categories = sorted(set(d.get('category') or '' for d in label_data))
+
+        response = make_response(render_template(
+            'labels.html',
+            ssr_data=label_data,
+            ssr_categories=categories,
+            now_ts=int(time())
+        ))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+    except Exception as e:
+        app.logger.error(f"Labels page error: {e}", exc_info=True)
+        raise
 
 
 @app.route('/mercari')
