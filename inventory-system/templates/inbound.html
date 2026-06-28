@@ -215,6 +215,22 @@
                             <option><span data-i18n="other">其他</span></option>
                         </select>
                     </div>
+
+                    <!-- 商品照片上传（所有模式通用） -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-primary">
+                            <i class="bi bi-camera me-1"></i>商品照片（选填）
+                            <small class="text-muted fw-normal">- 入库时上传，库存和煤炉页面可预览</small>
+                        </label>
+                        <input type="file" id="inboundPhotoInput" accept="image/*" capture="environment"
+                               class="form-control form-control-sm" onchange="previewInboundPhoto()">
+                        <div id="inboundPhotoPreviewArea" class="mt-2 d-none">
+                            <img id="inboundPhotoPreviewImg" style="max-width:200px;max-height:150px;border-radius:8px;border:1px solid #ddd">
+                            <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearInboundPhoto()">
+                                <i class="bi bi-x"></i> 删除
+                            </button>
+                        </div>
+                    </div>
                     
                     <button class="btn btn-success btn-lg w-100 mt-2" id="inboundBtn" onclick="doInbound()">
                         <i class="bi bi-box-arrow-in-down me-1"></i> <span data-i18n="inbound_register_print">入库登记 & 标签生成</span>
@@ -784,6 +800,29 @@ function fillProductData(data) {
     document.getElementById('sellingPrice').value = data.selling_price || '';
 }
 
+// ─── Inbound Photo (通用照片上传) ─────────────
+let _formPhotoBase64 = null; // 表单中的通用照片
+
+function previewInboundPhoto() {
+    const fileInput = document.getElementById('inboundPhotoInput');
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        _formPhotoBase64 = e.target.result;
+        document.getElementById('inboundPhotoPreviewImg').src = e.target.result;
+        document.getElementById('inboundPhotoPreviewArea').classList.remove('d-none');
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearInboundPhoto() {
+    _formPhotoBase64 = null;
+    document.getElementById('inboundPhotoInput').value = '';
+    document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
+}
+
 // ─── Common Actions ────────────────────────────
 function toggleHighValue() {
     const div = document.getElementById('highValueReason');
@@ -811,7 +850,8 @@ async function doInbound() {
         is_high_value: document.getElementById('isHighValue').checked,
         location: document.getElementById('location').value,
         inbound_date: document.getElementById('inboundDate').value || null,
-        photo_base64: _currentPhotoBase64 || null
+        // 优先使用表单上传的照片，其次是AI识别时拍摄的照片
+        photo_base64: _formPhotoBase64 || _currentPhotoBase64 || null
     };
     
     const result = await API.post('/api/inbound/create', data);
@@ -845,6 +885,7 @@ function handleInboundResult(result, btn) {
 function resetInbound() {
     currentSupplierItem = null;
     _currentPhotoBase64 = null;
+    _formPhotoBase64 = null; // 清除表单照片
     document.getElementById('photoThumbnail').classList.add('d-none');
     document.getElementById('matchResult').classList.add('d-none');
     document.getElementById('qrResult').classList.add('d-none');
@@ -852,6 +893,8 @@ function resetInbound() {
     document.getElementById('initialState').classList.remove('d-none');
     document.getElementById('manualBarcodeInput').value = '';
     document.getElementById('photoInput').value = '';
+    document.getElementById('inboundPhotoInput').value = ''; // 清除照片输入
+    document.getElementById('inboundPhotoPreviewArea').classList.add('d-none'); // 隐藏预览
     document.getElementById('photoPreview').classList.add('d-none');
     document.getElementById('photoResult').innerHTML = '';
     document.getElementById('manualBarcodeInput').focus();

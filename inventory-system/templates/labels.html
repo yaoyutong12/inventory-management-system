@@ -27,13 +27,13 @@
             <option value="">全カテゴリ</option>
         </select>
     </div>
-    <div class="col-md-4">
-        <select class="form-select" onchange="filterLabels()">
-            <option value="all">全商品</option>
-            <option value="in_stock">在庫ありのみ</option>
-            <option value="unlabeled">ラベル未発行</option>
-        </select>
-    </div>
+        <div class="col-md-4">
+            <select class="form-select" onchange="filterLabels()">
+                <option value="all" selected>全商品（默认显示全部）</option>
+                <option value="in_stock">在庫ありのみ</option>
+                <option value="unlabeled">ラベル未発行</option>
+            </select>
+        </div>
 </div>
 
 <div class="card">
@@ -90,23 +90,12 @@ async function loadLabels() {
             console.log(`ID:${p.id} | ${p.internal_code} | 在庫:${p.current_stock} | 入庫合計:${p.total_in} | 出庫合計:${p.total_out}`);
         });
         
-        // 默认显示有库存的商品（可以切换）
-        allLabels = allProducts.filter(p => (p.current_stock || 0) > 0);
-        
-        const noStockProducts = allProducts.filter(p => (p.current_stock || 0) <= 0);
+        // 默认加载全部商品（不过滤），由下拉框控制是否过滤
+        allLabels = allProducts;
         
         if (allLabels.length === 0) {
             let msg = '<tr><td colspan="6" class="text-center py-5 text-muted">';
-            if (allProducts.length === 0) {
-                msg += '商品がありません。<br><a href="/import" class="btn btn-sm btn-primary mt-2">仕入リストをアップロード</a>';
-            } else if (noStockProducts.length > 0) {
-                msg += `在庫のある商品がありません（全${noStockProducts.length}件は在庫切れ）。<br>`;
-                msg += `<small class="text-muted">デバッグ情報: 全${allProducts.length}件の商品のうち、`;
-                msg += `${noStockProducts.length}件が在庫0、${allLabels.length}件に在庫あり</small><br><br>`;
-                msg += `<button class="btn btn-sm btn-warning mt-2" onclick="showAllProducts()">在庫0の商品も含めて表示</button>`;
-            } else {
-                msg += '在庫商品がありません。<br><a href="/inbound" class="btn btn-sm btn-primary mt-2">入庫を行う</a>';
-            }
+            msg += '商品がありません。<br><a href="/import" class="btn btn-sm btn-primary mt-2">仕入リストをアップロード</a>';
             msg += '</td></tr>';
             document.querySelector('#labelTable tbody').innerHTML = msg;
             return;
@@ -176,7 +165,17 @@ function showAllProducts() {
 function filterLabels() {
     const search = document.getElementById('labelSearch').value.toLowerCase();
     const cat = document.getElementById('labelCatFilter').value;
+    // 获取筛选模式下拉框（第三个select）
+    const modeSelect = document.querySelector('select[onchange="filterLabels()"]:last-of-type');
+    const mode = modeSelect ? modeSelect.value : 'all';
+    
     let filtered = allLabels;
+    
+    // 按模式过滤
+    if (mode === 'in_stock') {
+        filtered = filtered.filter(p => (p.current_stock || 0) > 0);
+    }
+    
     if (cat) filtered = filtered.filter(p => p.category === cat);
     if (search) filtered = filtered.filter(p => 
         (p.product_name||'').toLowerCase().includes(search) || 
