@@ -249,10 +249,106 @@ def sales_page():
 
 @app.route('/inventory')
 def inventory_page():
-    response = make_response(render_template('inventory.html'))
+    db = get_db()
+    # Pre-fetch data server-side for SSR fallback
+    products = db.execute("SELECT * FROM products ORDER BY updated_at DESC").fetchall()
+    inventory_data = []
+    for p in products:
+        total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        total_revenue = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        d = dict(p)
+        d['current_stock'] = total_in - total_out
+        d['total_in'] = total_in
+        d['total_out'] = total_out
+        d['total_revenue'] = total_revenue
+        inventory_data.append(d)
+
+    response = make_response(render_template('inventory.html', ssr_data=inventory_data))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
+    return response
+
+
+@app.route('/inventory-simple')
+def inventory_simple_page():
+    """Simple server-side rendered inventory - no JS needed"""
+    db = get_db()
+    products = db.execute("SELECT * FROM products ORDER BY updated_at DESC").fetchall()
+
+    html = '''<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>在庫一覧 (簡易版)</title>
+<style>
+body{font-family:sans-serif;padding:16px;max-width:1200px;margin:0 auto;background:#f8f9fa}
+h2{color:#1a1a2e}.ok{color:green}.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{border:1px solid #e5e7eb;padding:8px 12px;text-align:left}
+th{background:#f9fafb;font-weight:600}.text-end{text-align:right}.text-center{text-align:center}
+.badge{padding:2px 8px;border-radius:6px;font-size:.8em;color:#fff}
+.bg-success{background:#0d904f}.bg-warning{background:#f5a623}.bg-danger{background:#d93025}.bg-info{background:#1a73e8}
+code{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:.85em}
+.nav{margin-bottom:16px}.nav a{color:#1a73e8;margin-right:12px;text-decoration:none}
+.nav a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="nav">
+<a href="/">ダッシュボード</a>
+<a href="/inventory"><strong>在庫一覧</strong></a>
+<a href="/inventory-simple">在庫一覧(簡易版)</a>
+<a href="/debug-data">データ診断</a>
+</div>
+<h2>在庫一覧 (サーバーサイドレンダリング)</h2>
+<p>このページはJavaScriptに依存せず、サーバーで直接データを表示します。</p>
+'''
+
+    if not products:
+        html += '<div class="card"><p>まだ商品が登録されていません。</p>'
+        html += '<p><a href="/debug-data">データ状態を確認</a></p></div>'
+    else:
+        html += '<div class="card"><table><thead><tr>'
+        html += '<th>内部コード</th><th>商品名</th><th>カテゴリ</th><th>仕入単価</th><th>販売価格</th>'
+        html += '<th>入庫数</th><th>販売数</th><th>在庫数</th><th>売上</th><th>状態</th>'
+        html += '</tr></thead><tbody>'
+
+        for p in products:
+            total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+            total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+            total_revenue = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+            stock = total_in - total_out
+
+            stock_cls = 'bg-danger' if stock <= 0 else ('bg-warning' if stock <= 3 else 'bg-success')
+            status = '売切れ' if p['status'] == 'sold_out' else ('残りわずか' if stock <= 3 else '在庫あり')
+            status_cls = 'bg-danger' if p['status'] == 'sold_out' else ('bg-warning' if stock <= 3 else 'bg-success')
+
+            html += '<tr>'
+            html += f'<td><code>{p["internal_code"]}</code></td>'
+            html += f'<td>{p["product_name"] or ""}</td>'
+            html += f'<td>{p["category"] or "-"}</td>'
+            html += f'<td class="text-end">¥{int(p["unit_cost"] or 0):,}</td>'
+            html += f'<td class="text-end">¥{int(p["selling_price"] or 0):,}</td>'
+            html += f'<td class="text-center">{total_in}</td>'
+            html += f'<td class="text-center">{total_out}</td>'
+            html += f'<td class="text-center"><span class="badge {stock_cls}">{stock}</span></td>'
+            html += f'<td class="text-end">¥{int(total_revenue or 0):,}</td>'
+            html += f'<td><span class="badge {status_cls}">{status}</span></td>'
+            html += '</tr>'
+
+        html += '</tbody></table></div>'
+
+    html += f'<p style="margin-top:20px;color:#666;font-size:.85em">'
+    html += f'DBパス: /app/data/inventory.db | '
+    html += f'商品数: {len(products)} | '
+    html += f'DBサイズ: {DB_PATH.stat().st_size if DB_PATH.exists() else 0} bytes'
+    html += '</p></body></html>'
+
+    response = make_response(html)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return response
 
 

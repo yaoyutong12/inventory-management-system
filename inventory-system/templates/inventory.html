@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo" style="display:none">(v20260628-2)</small></h4>
+    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo" style="display:none">(v20260628-3 SSR)</small></h4>
     <div class="d-flex gap-2">
         <select class="form-select form-select-sm" id="categoryFilter" onchange="filterInventory()">
             <option value="">全カテゴリ</option>
@@ -58,12 +58,15 @@
 
 {% block extra_js %}
 <script>
-let allProducts = [];
+// SSR data embedded directly from server (always available)
+const SSR_DATA_RAW = {{ ssr_data | tojson | safe }};
+let allProducts = SSR_DATA_RAW;
 
 async function loadInventory() {
     // Show version to confirm latest code is loaded
-    document.getElementById('verInfo').style.display = 'inline';
-    
+    const verEl = document.getElementById('verInfo');
+    if (verEl) verEl.style.display = 'inline';
+
     let loadError = null;
     try {
         const resp = await fetch('/api/inventory/list');
@@ -71,26 +74,34 @@ async function loadInventory() {
         allProducts = await resp.json();
     } catch(e) {
         loadError = e.message || String(e);
-        allProducts = [];
+        // Keep SSR data on fetch error
+        if (!allProducts || allProducts.length === 0) {
+            allProducts = SSR_DATA_RAW;
+        }
     }
-    
-    // Show load status on page (not just console)
+
+    // Show load status on page
+    const existingStatus = document.getElementById('loadStatus');
+    if (existingStatus) existingStatus.remove();
+
     const statusTag = document.createElement('span');
     statusTag.className = 'badge ms-2 ' + (loadError ? 'bg-danger' : allProducts.length > 0 ? 'bg-success' : 'bg-warning');
-    statusTag.textContent = loadError ? 'API ERROR: ' + loadError : 'Loaded ' + allProducts.length + ' product(s)';
+    statusTag.textContent = loadError ? 'API ERROR: ' + loadError : allProducts.length + ' product(s)';
     statusTag.id = 'loadStatus';
-    document.getElementById('verInfo').after(statusTag);
-    
+    if (verEl) verEl.after(statusTag);
+
     // Populate category filter
     const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
     const catSelect = document.getElementById('categoryFilter');
-    catSelect.innerHTML = '<option value="">全カテゴリ</option>';
-    categories.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c; opt.textContent = c;
-        catSelect.appendChild(opt);
-    });
-    
+    if (catSelect) {
+        catSelect.innerHTML = '<option value="">全カテゴリ</option>';
+        categories.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c; opt.textContent = c;
+            catSelect.appendChild(opt);
+        });
+    }
+
     renderTable(allProducts);
     if (allProducts.length > 0) {
         try { renderCharts(allProducts); } catch(e) {}
@@ -226,6 +237,20 @@ async function viewDetail(id) {
     alert(`商品詳細\n======\nコード: ${p.internal_code}\n商品名: ${p.product_name}\n仕入単価: ${formatJPY(p.unit_cost||0)}\n販売価格: ${formatJPY(p.selling_price||0)}\n在庫: ${p.current_stock}個\n売上: ${formatJPY(p.total_revenue||0)}`);
 }
 
+// Render SSR data immediately (before async fetch)
+if (SSR_DATA_RAW && SSR_DATA_RAW.length > 0) {
+    console.log('SSR data available:', SSR_DATA_RAW.length, 'products');
+    renderTable(SSR_DATA_RAW);
+    try { renderCharts(SSR_DATA_RAW); } catch(e) {}
+    const statusTag = document.createElement('span');
+    statusTag.className = 'badge ms-2 bg-info';
+    statusTag.textContent = 'SSR: ' + SSR_DATA_RAW.length + ' product(s)';
+    statusTag.id = 'loadStatus';
+    const verEl = document.getElementById('verInfo');
+    if (verEl) { verEl.style.display = 'inline'; verEl.after(statusTag); }
+}
+
+// Then refresh with live API data
 loadInventory();
 </script>
 {% endblock %}
