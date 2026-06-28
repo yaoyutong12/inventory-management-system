@@ -91,6 +91,8 @@ function renderTable(products) {
         </td></tr>`;
         return;
     }
+    
+    tbody.innerHTML = products.map(p => {
         const profit = (p.selling_price||0) - (p.unit_cost||0);
         const margin = p.selling_price ? ((profit/p.selling_price)*100).toFixed(0) : 0;
         const stockClass = p.current_stock <= 0 ? 'danger' : p.current_stock <= 3 ? 'warning' : 'success';
