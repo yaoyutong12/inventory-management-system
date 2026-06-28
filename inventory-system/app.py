@@ -497,34 +497,53 @@ def sales_page():
 @app.route('/inventory')
 def inventory_page():
     from time import time
-    db = get_db()
-    # Pre-fetch data server-side for SSR (table rendered by Jinja2, not JS)
-    products = db.execute("SELECT * FROM products ORDER BY updated_at DESC").fetchall()
-    inventory_data = []
-    for p in products:
-        total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]
-        total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
-        total_revenue = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
-        d = dict(p)
-        d['current_stock'] = total_in - total_out
-        d['total_in'] = total_in
-        d['total_out'] = total_out
-        d['total_revenue'] = total_revenue
-        inventory_data.append(d)
+    try:
+        db = get_db()
+        if not db:
+            return render_template('inventory.html', ssr_data=[], ssr_categories=[], now_ts=int(time()))
+        
+        # Pre-fetch data server-side for SSR (table rendered by Jinja2, not JS)
+        try:
+            products = db.execute("SELECT * FROM products ORDER BY updated_at DESC").fetchall()
+        except Exception as e:
+            app.logger.error(f"Inventory query failed: {e}")
+            products = []
+        
+        inventory_data = []
+        for p in products:
+            try:
+                p_dict = dict(p)
+                total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p_dict.get('id'),)).fetchone()
+                total_in = total_in[0] if total_in else 0
+                total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (p_dict.get('id'),)).fetchone()
+                total_out = total_out[0] if total_out else 0
+                total_revenue = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records WHERE product_id=?", (p_dict.get('id'),)).fetchone()
+                total_revenue = total_revenue[0] if total_revenue else 0
+                p_dict['current_stock'] = total_in - total_out
+                p_dict['total_in'] = total_in
+                p_dict['total_out'] = total_out
+                p_dict['total_revenue'] = total_revenue
+                inventory_data.append(p_dict)
+            except Exception as e:
+                app.logger.error(f"Error processing product {p}: {e}")
+                continue
 
-    # Unique categories for filter dropdown
-    categories = sorted(set(d.get('category') or '' for d in inventory_data))
+        # Unique categories for filter dropdown
+        categories = sorted(set(d.get('category') or '' for d in inventory_data))
 
-    response = make_response(render_template(
-        'inventory.html',
-        ssr_data=inventory_data,
-        ssr_categories=categories,
-        now_ts=int(time())
-    ))
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+        response = make_response(render_template(
+            'inventory.html',
+            ssr_data=inventory_data,
+            ssr_categories=categories,
+            now_ts=int(time())
+        ))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+    except Exception as e:
+        app.logger.error(f"Inventory page error: {e}", exc_info=True)
+        raise
 
 
 @app.route('/inventory-simple')
