@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理</h4>
+    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo" style="display:none">(v20260628-2)</small></h4>
     <div class="d-flex gap-2">
         <select class="form-select form-select-sm" id="categoryFilter" onchange="filterInventory()">
             <option value="">全カテゴリ</option>
@@ -61,14 +61,25 @@
 let allProducts = [];
 
 async function loadInventory() {
+    // Show version to confirm latest code is loaded
+    document.getElementById('verInfo').style.display = 'inline';
+    
+    let loadError = null;
     try {
         const resp = await fetch('/api/inventory/list');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
         allProducts = await resp.json();
-        console.log('[Inventory] Loaded', allProducts.length, 'products');
     } catch(e) {
-        console.error('[Inventory] Failed to load:', e);
+        loadError = e.message || String(e);
         allProducts = [];
     }
+    
+    // Show load status on page (not just console)
+    const statusTag = document.createElement('span');
+    statusTag.className = 'badge ms-2 ' + (loadError ? 'bg-danger' : allProducts.length > 0 ? 'bg-success' : 'bg-warning');
+    statusTag.textContent = loadError ? 'API ERROR: ' + loadError : 'Loaded ' + allProducts.length + ' product(s)';
+    statusTag.id = 'loadStatus';
+    document.getElementById('verInfo').after(statusTag);
     
     // Populate category filter
     const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
@@ -81,7 +92,9 @@ async function loadInventory() {
     });
     
     renderTable(allProducts);
-    if (allProducts.length > 0) renderCharts(allProducts);
+    if (allProducts.length > 0) {
+        try { renderCharts(allProducts); } catch(e) {}
+    }
 }
 
 function renderTable(products) {
@@ -95,7 +108,11 @@ function renderTable(products) {
             ① <a href="/import">仕入リスト管理</a> でExcelファイルをアップロード<br>
             ② <a href="/inbound">入庫管理</a> で商品を選択 → 販売価格を入力 → 入庫実行<br>
             ③ このページに在庫が表示されます</p>
-            <p><a href="/debug-data" class="btn btn-sm btn-outline-secondary">データの状態を確認</a></p>
+            <p>
+            <a href="/debug-data" class="btn btn-sm btn-outline-secondary me-2">データ状態を確認</a>
+            <a href="/api/inventory/list" target="_blank" class="btn btn-sm btn-outline-info me-2">APIデータ確認</a>
+            <button class="btn btn-sm btn-warning" onclick="location.reload(true)">🔄 強制再読込</button>
+            </p>
         </td></tr>`;
         return;
     }
