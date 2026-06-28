@@ -8,7 +8,6 @@ import io
 import json
 import uuid
 import base64
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -33,28 +32,161 @@ except ImportError:
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
-# Railway Volume: /app/data (mounted at runtime)
-# Local dev: use ./data
-RAILWAY_DATA = Path('/app/data')
-BASE_DIR = Path(__file__).parent
-DATA_DIR = RAILWAY_DATA if RAILWAY_DATA.exists() else (BASE_DIR / 'data')
-DB_PATH = DATA_DIR / 'inventory.db'
-UPLOAD_DIR = RAILWAY_DATA / 'uploads' if RAILWAY_DATA.exists() else (BASE_DIR / 'uploads')
+# ─── Database: Auto-detect PostgreSQL (Railway) or SQLite (local) ──
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+USE_POSTGRES = bool(DATABASE_URL)
 
-# Ensure directories exist
-DATA_DIR.mkdir(exist_ok=True)
-UPLOAD_DIR.mkdir(exist_ok=True)
+if USE_POSTGRES:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    # Railway provides postgres://user:pass@host:port/dbname
+    # psycopg2 needs postgresql:// scheme
+    PG_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    BASE_DIR = Path(__file__).parent
+    UPLOAD_DIR = Path('/app/data/uploads') if Path('/app/data').exists() else (BASE_DIR / 'uploads')
+    UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+else:
+    import sqlite3
+    RAILWAY_DATA = Path('/app/data')
+    BASE_DIR = Path(__file__).parent
+    DATA_DIR = RAILWAY_DATA if RAILWAY_DATA.exists() else (BASE_DIR / 'data')
+    DB_PATH = DATA_DIR / 'inventory.db'
+    UPLOAD_DIR = RAILWAY_DATA / 'uploads' if RAILWAY_DATA.exists() else (BASE_DIR / 'uploads')
+    DATA_DIR.mkdir(exist_ok=True, parents=True)
+    UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
 
-app.logger.info(f"DB_PATH={DB_PATH}, exists={DB_PATH.exists()}")
+app.logger.info(f"DB mode: {'PostgreSQL' if USE_POSTGRES else f'SQLite ({DB_PATH})'}")
 
 
-# ─── Database ───────────────────────────────────────────────────
+# ─── Database Connection ─────────────────────────────────────────
+class PostgresCursor:
+    """Cursor-like wrapper that mimics sqlite3.Cursor interface"""
+    def __init__(self, real_cursor):
+        self._cur = real_cursor
+        self.lastrowid = None
+
+    def fetchone(self):
+        row = self._cur.fetchone()
+        if row is not None and isinstance(row, dict):
+            # Convert dict to a dict-like object that supports both [] and .get()
+            return DictRow(row)
+        return row
+
+    def fetchall(self):
+        rows = self._cur.fetchall()
+        if rows and isinstance(rows[0], dict):
+            return [DictRow(r) for r in rows]
+        return rows
+
+
+class DictRow(dict):
+    """Dict that supports attribute-style access like sqlite3.Row"""
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(f"'DictRow' has no attribute '{key}'")
+
+
+class PostgresConnection:
+    """Wrapper around psycopg2 connection to mimic sqlite3 interface"""
+    def __init__(self, url):
+        self._conn = psycopg2.connect(url)
+        self._conn.autocommit = False
+
+    def execute(self, sql, params=None):
+        if params is None:
+            params = ()
+        # Replace ? placeholders with %s for psycopg2
+        if '?' in sql:
+            sql = sql.replace('?', '%s')
+        cur = self._conn.cursor()
+        # Check if this is an INSERT - we need to get back the lastrowid
+        is_insert = sql.strip().upper().startswith('INSERT')
+        if is_insert:
+            # Add RETURNING id to get the inserted ID
+            returning_sql = sql.rstrip().rstrip(';')
+            if 'RETURNING' not in returning_sql.upper():
+                returning_sql += ' RETURNING id'
+            try:
+                cur.execute(returning_sql, params)
+                result = cur.fetchone()
+                if result:
+                    wrapper = PostgresCursor(cur)
+                    wrapper.lastrowid = result.get('id') if isinstance(result, (dict, DictRow)) else result[0] if hasattr(result, '__getitem__') else None
+                    return wrapper
+            except Exception as e:
+                # If RETURNING fails (e.g., already has it), try normal execute
+                self._conn.rollback()
+        try:
+            cur.execute(sql, params)
+        except Exception as e:
+            self._conn.rollback()
+            raise e
+        return PostgresCursor(cur)
+
+    def executemany(self, sql, params_list):
+        if '?' in sql and '%s' not in sql:
+            sql = sql.replace('?', '%s')
+        cur = self._conn.cursor()
+        cur.executemany(sql, params_list)
+        return cur
+
+    def executescript(self, sql):
+        """Execute multiple SQL statements separated by semicolons"""
+        # Split script into individual statements
+        statements = [s.strip() for s in sql.split(';') if s.strip()]
+        cur = self._conn.cursor()
+        for stmt in statements:
+            if stmt:
+                try:
+                    cur.execute(stmt)
+                except Exception as e:
+                    # Ignore "already exists" errors for CREATE TABLE IF NOT EXISTS
+                    if 'already exists' not in str(e).lower():
+                        raise
+        return cur
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
+    @property
+    def row_factory(self):
+        return RealDictCursor  # Returns dict-like rows
+
+
+class SqliteConnection:
+    """Thin wrapper around sqlite3 for consistent interface"""
+    def __init__(self, db_path):
+        self._conn = sqlite3.connect(str(db_path))
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA foreign_keys=ON")
+
+    def execute(self, sql, params=None):
+        if params is None:
+            params = ()
+        return self._conn.execute(sql, params)
+
+    def executescript(self, sql):
+        return self._conn.executescript(sql)
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
+
 def get_db():
     if 'db' not in g:
-        g.db = sqlite3.connect(str(DB_PATH))
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA journal_mode=WAL")
-        g.db.execute("PRAGMA foreign_keys=ON")
+        if USE_POSTGRES:
+            g.db = PostgresConnection(PG_URL)
+        else:
+            g.db = SqliteConnection(DB_PATH)
     return g.db
 
 
@@ -66,6 +198,24 @@ def close_db(e):
 
 
 def init_db():
+    """Initialize database tables. Works with both PostgreSQL and SQLite."""
+    if USE_POSTGRES:
+        _init_postgres()
+    else:
+        _init_sqlite()
+
+
+def _get_pk_keyword():
+    return "SERIAL PRIMARY KEY" if USE_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
+
+
+def _get_bool_default(val):
+    if USE_POSTGRES:
+        return "TRUE" if val else "FALSE"
+    return str(int(val))
+
+
+def _init_sqlite():
     db = sqlite3.connect(str(DB_PATH))
     db.executescript("""
         CREATE TABLE IF NOT EXISTS supplier_imports (
@@ -115,7 +265,8 @@ def init_db():
             qty INTEGER DEFAULT 1,
             unit_cost REAL,
             inbound_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            notes TEXT
+            notes TEXT,
+            photo TEXT
         );
         CREATE TABLE IF NOT EXISTS sales_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,7 +292,8 @@ def init_db():
             status TEXT DEFAULT 'draft',
             listing_url TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            posted_at TIMESTAMP
+            posted_at TIMESTAMP,
+            brand TEXT
         );
         CREATE TABLE IF NOT EXISTS receipts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,28 +313,100 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_supplier_items_import ON supplier_items(import_id);
     """)
     
-    # Migrate: add scrap columns if not exist
-    try:
-        db.execute("ALTER TABLE products ADD COLUMN scrap_reason TEXT")
-    except:
-        pass
-    try:
-        db.execute("ALTER TABLE products ADD COLUMN scrapped_at TIMESTAMP")
-    except:
-        pass
-    # Migrate: add photo column to inbound_records
-    try:
-        db.execute("ALTER TABLE inbound_records ADD COLUMN photo TEXT")
-    except:
-        pass
-    # Migrate: add brand column to mercari_listings
-    try:
-        db.execute("ALTER TABLE mercari_listings ADD COLUMN brand TEXT")
-    except:
-        pass
+    # Migration: add optional columns silently
+    for sql in [
+        "ALTER TABLE products ADD COLUMN scrap_reason TEXT",
+        "ALTER TABLE products ADD COLUMN scrapped_at TIMESTAMP",
+        "ALTER TABLE inbound_records ADD COLUMN photo TEXT",
+        "ALTER TABLE mercari_listings ADD COLUMN brand TEXT",
+    ]:
+        try: db.execute(sql)
+        except: pass
     
     db.commit()
     db.close()
+
+
+def _init_postgres():
+    conn = psycopg2.connect(PG_URL)
+    cur = conn.cursor()
+    pk = _get_pk_keyword()
+
+    statements = [
+        f"""CREATE TABLE IF NOT EXISTS supplier_imports (
+            id {pk}, filename TEXT, import_date TIMESTAMP DEFAULT NOW(),
+            total_items INTEGER DEFAULT 0
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS supplier_items (
+            id {pk}, import_id INTEGER REFERENCES supplier_imports(id) ON DELETE SET NULL,
+            tracking_no TEXT, location_code TEXT, weight REAL, dimensions TEXT,
+            product_name TEXT, expected_qty INTEGER DEFAULT 1, category TEXT,
+            unit_cost REAL, matched BOOLEAN DEFAULT FALSE, matched_date TIMESTAMP
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS products (
+            id {pk}, internal_code TEXT UNIQUE NOT NULL,
+            supplier_item_id INTEGER REFERENCES supplier_items(id) ON DELETE SET NULL,
+            product_name TEXT, product_name_ja TEXT, category TEXT, weight REAL,
+            dimensions TEXT, unit_cost REAL, selling_price REAL,
+            is_high_value INTEGER DEFAULT 0, high_value_reason TEXT,
+            status TEXT DEFAULT 'in_stock', scrap_reason TEXT, scrapped_at TIMESTAMP,
+            location TEXT, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS inbound_records (
+            id {pk}, product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+            supplier_item_id INTEGER REFERENCES supplier_items(id) ON DELETE SET NULL,
+            qty INTEGER DEFAULT 1, unit_cost REAL,
+            inbound_date TIMESTAMP DEFAULT NOW(), notes TEXT, photo TEXT
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS sales_records (
+            id {pk}, product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+            qty INTEGER DEFAULT 1, unit_price REAL, total_amount REAL,
+            cost_amount REAL, profit_amount REAL,
+            payment_method TEXT DEFAULT 'cash', platform TEXT,
+            sale_date TIMESTAMP DEFAULT NOW(), notes TEXT
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS mercari_listings (
+            id {pk}, product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+            title TEXT, description TEXT, price INTEGER, shipping_method TEXT,
+            condition TEXT, status TEXT DEFAULT 'draft', listing_url TEXT,
+            created_at TIMESTAMP DEFAULT NOW(), posted_at TIMESTAMP, brand TEXT
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS receipts (
+            id {pk}, sale_id INTEGER REFERENCES sales_records(id) ON DELETE CASCADE,
+            receipt_no TEXT UNIQUE, receipt_html TEXT,
+            printed_count INTEGER DEFAULT 0, last_printed TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)""",
+    ]
+
+    for stmt in statements:
+        try: cur.execute(stmt)
+        except Exception as e:
+            app.logger.warning(f"Init table warning: {e}")
+
+    # Create indexes
+    for idx_sql in [
+        "CREATE INDEX IF NOT EXISTS idx_supplier_items_tracking ON supplier_items(tracking_no)",
+        "CREATE INDEX IF NOT EXISTS idx_products_internal ON products(internal_code)",
+        "CREATE INDEX IF NOT EXISTS idx_supplier_items_import ON supplier_items(import_id)",
+    ]:
+        try: cur.execute(idx_sql)
+        except: pass
+
+    # Add optional columns (PostgreSQL style)
+    for col_sql in [
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS scrap_reason TEXT",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS scrapped_at TIMESTAMP",
+        "ALTER TABLE inbound_records ADD COLUMN IF NOT EXISTS photo TEXT",
+        "ALTER TABLE mercari_listings ADD COLUMN IF NOT EXISTS brand TEXT",
+    ]:
+        try: cur.execute(col_sql)
+        except: pass
+
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 # ─── Helpers ────────────────────────────────────────────────────
@@ -357,9 +581,13 @@ code{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:.85em}
         html += '</tbody></table></div>'
 
     html += f'<p style="margin-top:20px;color:#666;font-size:.85em">'
-    html += f'DBパス: /app/data/inventory.db | '
-    html += f'商品数: {len(products)} | '
-    html += f'DBサイズ: {DB_PATH.stat().st_size if DB_PATH.exists() else 0} bytes'
+    if USE_POSTGRES:
+        html += f'DBモード: PostgreSQL (データは永続化されています)'
+    else:
+        html += f'DBパス: {DB_PATH} | '
+        html += f'商品数: {len(products)} | '
+        if DB_PATH.exists():
+            html += f'DBサイズ: {DB_PATH.stat().st_size} bytes'
     html += '</p></body></html>'
 
     response = make_response(html)
@@ -395,9 +623,8 @@ def debug_data():
             result.append({'table': table, 'count': 'ERROR'})
     
     db_info = {
-        'path': str(DB_PATH),
-        'exists': DB_PATH.exists(),
-        'size': DB_PATH.stat().st_size if DB_PATH.exists() else 0,
+        'mode': 'PostgreSQL' if USE_POSTGRES else 'SQLite',
+        'path': PG_URL if USE_POSTGRES else str(DB_PATH),
         'tables': result
     }
     
@@ -410,10 +637,7 @@ def debug_data():
     html += 'td,th{border:1px solid #ddd;padding:8px;text-align:left}'
     html += 'th{background:#f5f5f5}</style></head><body>'
     html += '<h2>データベース診断</h2>'
-    html += f'<p>DBパス: <code>{db_info["path"]}</code></p>'
-    cls = 'ok' if db_info['exists'] else 'error'
-    msg = '存在します' if db_info['exists'] else '存在しません！'
-    html += f'<p>DBファイル: <span class="{cls}">{msg}</span> ({db_info["size"]} bytes)</p>'
+    html += f'<p>DBモード: <strong>{db_info["mode"]}</strong></p>'
     
     html += '<table><tr><th>テーブル</th><th>レコード数</th></tr>'
     for t in result:
@@ -421,11 +645,7 @@ def debug_data():
         html += f'<tr><td>{t["table"]}</td><td class="{cls}">{t["count"]}</td></tr>'
     html += '</table>'
     
-    if not db_info['exists']:
-        html += '<p class="error"><strong>データベースが存在しません！ボリュームが正しくマウントされていない可能性があります。</strong></p>'
-    elif has_data:
-        html += '<p class="ok">データは正常に保存されています</p>'
-    else:
+    if not has_data:
         html += '<p class="warn"><strong>まだデータがありません。以下の手順で始めてください：</strong></p>'
         html += '<ol><li><a href="/import">仕入リスト管理</a> でExcelファイルをアップロード</li>'
         html += '<li><a href="/inbound">入庫管理</a> で商品を選択し入庫</li>'
@@ -707,14 +927,24 @@ def api_inventory_stats():
     stats['categories'] = [dict(row) for row in categories]
     
     # Monthly sales
-    monthly = db.execute("""
-        SELECT strftime('%Y-%m', sale_date) as month, 
-               COUNT(*) as cnt, COALESCE(SUM(total_amount),0) as revenue,
-               COALESCE(SUM(profit_amount),0) as profit
-        FROM sales_records 
-        WHERE sale_date >= date('now','-6 months')
-        GROUP BY month ORDER BY month
-    """).fetchall()
+    if USE_POSTGRES:
+        monthly = db.execute("""
+            SELECT TO_CHAR(sale_date, 'YYYY-MM') as month, 
+                   COUNT(*) as cnt, COALESCE(SUM(total_amount),0) as revenue,
+                   COALESCE(SUM(profit_amount),0) as profit
+            FROM sales_records 
+            WHERE sale_date >= NOW() - INTERVAL '6 months'
+            GROUP BY month ORDER BY month
+        """).fetchall()
+    else:
+        monthly = db.execute("""
+            SELECT strftime('%Y-%m', sale_date) as month, 
+                   COUNT(*) as cnt, COALESCE(SUM(total_amount),0) as revenue,
+                   COALESCE(SUM(profit_amount),0) as profit
+            FROM sales_records 
+            WHERE sale_date >= date('now','-6 months')
+            GROUP BY month ORDER BY month
+        """).fetchall()
     stats['monthly_sales'] = [dict(row) for row in monthly]
     
     return jsonify(stats)
@@ -967,13 +1197,19 @@ def api_sales_report():
     where = "1=1"
     params = []
     if start_date:
-        where += " AND date(s.sale_date) >= ?"
+        if USE_POSTGRES:
+            where += " AND s.sale_date >= %s"
+        else:
+            where += " AND date(s.sale_date) >= ?"
         params.append(start_date)
     if end_date:
-        where += " AND date(s.sale_date) <= ?"
+        if USE_POSTGRES:
+            where += " AND s.sale_date <= %s"
+        else:
+            where += " AND date(s.sale_date) <= ?"
         params.append(end_date)
     if platform:
-        where += " AND s.platform = ?"
+        where += " AND s.platform = %s" if USE_POSTGRES else " AND s.platform = ?"
         params.append(platform)
     
     # 按平台统计
@@ -991,19 +1227,34 @@ def api_sales_report():
     """, params).fetchall()
     
     # 按日期统计（最近30天）
-    daily_stats = db.execute(f"""
-        SELECT 
-            date(s.sale_date) as sale_date,
-            COALESCE(s.platform, '未分類') as platform,
-            COUNT(*) as sale_count,
-            COALESCE(SUM(s.total_amount),0) as total_revenue,
-            COALESCE(SUM(s.profit_amount),0) as total_profit
-        FROM sales_records s
-        WHERE {where}
-        GROUP BY date(s.sale_date), s.platform
-        ORDER BY sale_date DESC
-        LIMIT 90
-    """, params).fetchall()
+    if USE_POSTGRES:
+        daily_stats = db.execute(f"""
+            SELECT 
+                DATE(s.sale_date) as sale_date,
+                COALESCE(s.platform, '未分類') as platform,
+                COUNT(*) as sale_count,
+                COALESCE(SUM(s.total_amount),0) as total_revenue,
+                COALESCE(SUM(s.profit_amount),0) as total_profit
+            FROM sales_records s
+            WHERE {where}
+            GROUP BY DATE(s.sale_date), s.platform
+            ORDER BY sale_date DESC
+            LIMIT 90
+        """, params).fetchall()
+    else:
+        daily_stats = db.execute(f"""
+            SELECT 
+                date(s.sale_date) as sale_date,
+                COALESCE(s.platform, '未分類') as platform,
+                COUNT(*) as sale_count,
+                COALESCE(SUM(s.total_amount),0) as total_revenue,
+                COALESCE(SUM(s.profit_amount),0) as total_profit
+            FROM sales_records s
+            WHERE {where}
+            GROUP BY date(s.sale_date), s.platform
+            ORDER BY sale_date DESC
+            LIMIT 90
+        """, params).fetchall()
     
     return jsonify({
         'platform_stats': [dict(row) for row in platform_stats],
@@ -1304,11 +1555,14 @@ def api_sales_recent():
     params = []
     
     if platform:
-        query += " AND s.platform = ?"
+        query += " AND s.platform = ?" if not USE_POSTGRES else " AND s.platform = %s"
         params.append(platform)
     
     if date:
-        query += " AND date(s.sale_date) = ?"
+        if USE_POSTGRES:
+            query += " AND DATE(s.sale_date) = %s"
+        else:
+            query += " AND date(s.sale_date) = ?"
         params.append(date)
     
     query += " ORDER BY s.sale_date DESC LIMIT ?"
@@ -1323,12 +1577,20 @@ def api_sales_today():
     """本日销售汇总"""
     db = get_db()
     today = datetime.now().strftime('%Y-%m-%d')
-    summary = db.execute("""
-        SELECT COUNT(*) as count, 
-               COALESCE(SUM(total_amount),0) as revenue,
-               COALESCE(SUM(profit_amount),0) as profit
-        FROM sales_records WHERE date(sale_date) = ?
-    """, (today,)).fetchone()
+    if USE_POSTGRES:
+        summary = db.execute("""
+            SELECT COUNT(*) as count,
+                   COALESCE(SUM(total_amount),0) as revenue,
+                   COALESCE(SUM(profit_amount),0) as profit
+            FROM sales_records WHERE DATE(sale_date) = %s
+        """, (today,)).fetchone()
+    else:
+        summary = db.execute("""
+            SELECT COUNT(*) as count,
+                   COALESCE(SUM(total_amount),0) as revenue,
+                   COALESCE(SUM(profit_amount),0) as profit
+            FROM sales_records WHERE date(sale_date) = ?
+        """, (today,)).fetchone()
     return jsonify(dict(summary))
 
 
@@ -1454,10 +1716,16 @@ def api_scrap_report():
     """
     params = []
     if start_date:
-        query += " AND date(p.scrapped_at) >= ?"
+        if USE_POSTGRES:
+            query += " AND DATE(p.scrapped_at) >= %s"
+        else:
+            query += " AND date(p.scrapped_at) >= ?"
         params.append(start_date)
     if end_date:
-        query += " AND date(p.scrapped_at) <= ?"
+        if USE_POSTGRES:
+            query += " AND DATE(p.scrapped_at) <= %s"
+        else:
+            query += " AND date(p.scrapped_at) <= ?"
         params.append(end_date)
     query += " ORDER BY p.scrapped_at DESC"
     
@@ -1523,14 +1791,16 @@ def api_debug_data_check():
         except Exception as e:
             result[table] = f"ERROR: {e}"
     
-    # Also check DB path and file size
-    try:
-        result['db_path'] = str(DB_PATH)
-        result['db_exists'] = DB_PATH.exists()
-        if DB_PATH.exists():
-            result['db_size'] = DB_PATH.stat().st_size
-    except:
-        pass
+    result['db_mode'] = 'PostgreSQL' if USE_POSTGRES else 'SQLite'
+    
+    if not USE_POSTGRES:
+        try:
+            result['db_path'] = str(DB_PATH)
+            result['db_exists'] = DB_PATH.exists()
+            if DB_PATH.exists():
+                result['db_size'] = DB_PATH.stat().st_size
+        except:
+            pass
     
     return jsonify(result)
 
