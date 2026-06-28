@@ -71,7 +71,7 @@
                         <td class="text-center">
                             <span class="badge bg-primary fs-6 px-3 py-2">{{ imp.total_items }}<span data-i18n="unit_piece">件</span></span>
                         </td>
-                        <td>{{ imp.import_date[:19] }}</td>
+                        <td>{{ imp.import_date.strftime('%Y-%m-%d %H:%M:%S') if imp.import_date else '' }}</td>
                         <td class="text-end">
                             <button class="btn btn-success btn-lg view-items me-1" data-id="{{ imp.id }}" onclick="event.stopPropagation(); showItems({{ imp.id }})">
                                 <i class="bi bi-eye-fill"></i> 👁️ <span data-i18n="view_detail">查看明细</span>

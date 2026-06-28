@@ -72,7 +72,7 @@
                     {% for sale in recent_sales %}
                     <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
                         <div>
-                            <small class="text-muted d-block">{{ sale.sale_date[:16] }}</small>
+                            <small class="text-muted d-block">{{ sale.sale_date.strftime('%Y-%m-%d %H:%M') if sale.sale_date else '' }}</small>
                             <span>{{ (sale.product_name or '')[:30] }}</span>
                         </div>
                         <div class="text-end">
