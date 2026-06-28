@@ -289,27 +289,81 @@ async function updatePreview() {
     // Calculate profit margin
     const cost = currentProduct.unit_cost || 0;
     const commission = Math.floor(price * 0.1); // Mercari 10% fee
-    const shippingCost = (currentProduct.weight||0.5) <= 1 ? 210 : (currentProduct.weight||0.5) <= 2 ? 450 : 750;
+    const shippingCostMap = {
+        'らくらくメルカリ便（小）': 210,
+        'らくらくメルカリ便（大）': 450,
+        'ゆうゆうメルカリ便（小）': 210,
+        'ゆうゆうメルカリ便（大）': 450,
+        '匿名配送（らくらく）': 210,
+        '匿名配送（ゆうゆう）': 210,
+        '手渡し（同梱希望）': 0,
+        '着払い': 0
+    };
+    const shippingCost = shippingCostMap[shipping] || 210;
     const netProfit = price - cost - commission - shippingCost;
     const marginPct = price > 0 ? Math.round((netProfit / price) * 100) : 0;
     document.getElementById('profitMargin').value = marginPct + '%';
     document.getElementById('profitMargin').className = 
         'form-control form-control-sm ' + (marginPct >= 20 ? 'text-success' : marginPct >= 0 ? 'text-warning' : 'text-danger');
     
-    // Call API to generate listing
-    const postData = {
-        condition: condition,
-        brand: brand,
-        price: price,
-        shipping_method: shipping
-    };
-    const result = await API.post(`/api/mercari/generate/${currentProduct.id}`, postData);
+    // === 立即更新预览（不依赖API） ===
     
-    if (result.success && result.listing) {
-        document.getElementById('previewTitle').textContent = result.listing.title;
-        document.getElementById('previewPrice').textContent = formatJPY(price);
-        document.getElementById('previewDesc').textContent = result.listing.description;
-        document.getElementById('previewShippingInfo').textContent = '送料別（' + shipping + '）';
+    // 价格：直接用输入值
+    document.getElementById('previewPrice').textContent = formatJPY(price);
+    
+    // 运输信息：直接用选择值
+    document.getElementById('previewShippingInfo').textContent = '送料別（' + shipping + '）';
+    
+    // 标题：本地生成
+    const titleBrand = brand ? '[' + brand + '] ' : '';
+    const localTitle = titleBrand + (currentProduct.product_name_ja || currentProduct.product_name || '');
+    document.getElementById('previewTitle').textContent = localTitle.substring(0, 60);
+    
+    // 商品说明：本地生成（详细版）
+    const descLines = [
+        '【商品名】' + (currentProduct.product_name || ''),
+        '',
+        '【状態】' + condition,
+        '',
+        '【ブランド】' + (brand || 'なし'),
+        '',
+        '【サイズ・仕様】' + (currentProduct.dimensions || '記載あり'),
+        currentProduct.weight ? '【重量】約' + currentProduct.weight + 'kg' : '',
+        '',
+        '【発送方法】' + shipping,
+        '',
+        '【発送元】東京都',
+        '',
+        '【備考】',
+        '・未使用品、新品同様の状態です。',
+        '・迅速かつ丁寧な梱包で発送いたします。',
+        '・ご購入後の返品・返金はお受けできません。ご了承ください。',
+        '',
+        '※こちらの商品は他サイトでも販売しております。在庫状況によりキャンセルとなる場合がございます。予めご了承くださいませ。'
+    ].filter(Boolean).join('\n');
+    document.getElementById('previewDesc').textContent = descLines;
+    
+    // 尝试调用API增强数据（失败也不影响已显示的预览）
+    try {
+        const postData = {
+            condition: condition,
+            brand: brand,
+            price: price,
+            shipping_method: shipping
+        };
+        const result = await API.post(`/api/mercari/generate/${currentProduct.id}`, postData);
+        
+        if (result.success && result.listing) {
+            // 用API返回的数据覆盖本地生成的数据
+            if (result.listing.title) {
+                document.getElementById('previewTitle').textContent = result.listing.title;
+            }
+            if (result.listing.description) {
+                document.getElementById('previewDesc').textContent = result.listing.description;
+            }
+        }
+    } catch(apiErr) {
+        console.info('API增强数据获取失败，使用本地预览:', apiErr.message);
     }
 }
 
