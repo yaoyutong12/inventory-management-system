@@ -945,7 +945,7 @@ def api_inbound_create():
 @app.route('/api/inbound/unmatched')
 def api_inbound_unmatched():
     db = get_db()
-    items = db.execute("SELECT * FROM supplier_items WHERE matched=0 ORDER BY id").fetchall()
+    items = db.execute("SELECT * FROM supplier_items WHERE matched=FALSE ORDER BY id").fetchall()
     return jsonify([dict(row) for row in items])
 
 
@@ -1455,7 +1455,7 @@ def api_inbound_ai_recognize():
         db = get_db()
         unmatched = db.execute("""
             SELECT id, product_name, category, weight, dimensions, tracking_no
-            FROM supplier_items WHERE matched=0
+            FROM supplier_items WHERE matched=FALSE
             ORDER BY id
         """).fetchall()
         
