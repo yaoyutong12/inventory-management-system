@@ -82,7 +82,13 @@ let selectedIds = new Set();
 async function loadLabels() {
     try {
         const products = await API.get('/api/inventory/list');
-        allLabels = products.filter(p => p.status === 'in_stock' && p.current_stock > 0);
+        // 只显示有库存的商品（不依赖status字段，直接用current_stock判断）
+        allLabels = products.filter(p => (p.current_stock || 0) > 0);
+        
+        if (allLabels.length === 0) {
+            document.querySelector('#labelTable tbody').innerHTML = '<tr><td colspan="6" class="text-center py-5 text-muted">在庫商品がありません。先に入庫を行ってください。</td></tr>';
+            return;
+        }
         
         const categories = [...new Set(allLabels.map(p => p.category).filter(Boolean))];
         const catSelect = document.getElementById('labelCatFilter');
@@ -96,8 +102,12 @@ async function loadLabels() {
         renderLabelTable(allLabels);
     } catch(e) {
         console.error('Failed to load labels:', e);
-        showToast('データの読み込みに失敗しました: ' + e.message, 'error');
+        const tbody = document.querySelector('#labelTable tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-danger">データの読み込みに失敗しました: ' + e.message + '</td></tr>';
+        }
     }
+}
 }
 
 function renderLabelTable(products) {
