@@ -73,6 +73,9 @@ UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
 
 app.logger.info(f"DB mode: {'PostgreSQL' if USE_POSTGRES else f'SQLite ({DB_PATH})'}")
 
+# Initialize database tables (runs on both local & Railway/gunicorn)
+init_db()
+
 
 # ─── Database Connection ─────────────────────────────────────────
 class PostgresCursor:
