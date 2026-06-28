@@ -86,7 +86,7 @@
                             <label class="form-label small mb-1">販売価格</label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">¥</span>
-                                <input type="number" class="form-control" id="mercariPrice" onchange="updatePreview()">
+                                <input type="number" class="form-control" id="mercariPrice" oninput="updatePreview()">
                             </div>
                         </div>
                         <div class="col-3">
@@ -100,8 +100,17 @@
                             <input class="form-control form-control-sm" id="mercariBrand" placeholder="例: Nike, BMW..." oninput="updatePreview()">
                         </div>
                         <div class="col-6">
-                            <label class="form-label small mb-1">発送方法（自動判定）</label>
-                            <input class="form-control form-control-sm" id="mercariShipping" readonly>
+                            <label class="form-label small mb-1">発送方法</label>
+                            <select class="form-select form-select-sm" id="mercariShipping" onchange="updatePreview()">
+                                <option value="らくらくメルカリ便（小）">らくらくメルカリ便（小）〜1kg</option>
+                                <option value="らくらくメルカリ便（大）">らくらくメルカリ便（大）〜4kg</option>
+                                <option value="ゆうゆうメルカリ便（小）">ゆうゆうメルカリ便（小）〜1kg</option>
+                                <option value="ゆうゆうメルカリ便（大）">ゆうゆうメルカリ便（大）〜4kg</option>
+                                <option value="匿名配送（らくらく）">匿名配送（らくらくメルカリ便）</option>
+                                <option value="匿名配送（ゆうゆう）">匿名配送（ゆうゆうメルカリ便）</option>
+                                <option value="手渡し（同梱希望）">手渡し（同梱希望）</option>
+                                <option value="着払い">着払い（購入者負担）</option>
+                            </select>
                         </div>
                     </div>
                     
@@ -275,6 +284,7 @@ async function updatePreview() {
     const price = parseInt(document.getElementById('mercariPrice').value) || 1000;
     const condition = document.getElementById('mercariCondition').value;
     const brand = document.getElementById('mercariBrand').value.trim();
+    const shipping = document.getElementById('mercariShipping').value;
     
     // Calculate profit margin
     const cost = currentProduct.unit_cost || 0;
@@ -288,15 +298,14 @@ async function updatePreview() {
     
     // Call API to generate listing
     const result = await API.post(`/api/mercari/generate/${currentProduct.id}`, {
-        condition, brand, price
+        condition, brand, price, shipping_method: shipping
     });
     
     if (result.success && result.listing) {
         document.getElementById('previewTitle').textContent = result.listing.title;
         document.getElementById('previewPrice').textContent = formatJPY(price);
         document.getElementById('previewDesc').textContent = result.listing.description;
-        document.getElementById('previewShippingInfo').textContent = '送料別（' + (result.listing.shipping_info || 'らくらくメルカリ便') + '）';
-        document.getElementById('mercariShipping').value = result.listing.shipping_info || result.listing.shipping_method || 'らくらくメルカリ便';
+        document.getElementById('previewShippingInfo').textContent = '送料別（' + shipping + '）';
     }
 }
 

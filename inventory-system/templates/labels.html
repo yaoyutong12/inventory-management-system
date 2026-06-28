@@ -56,22 +56,48 @@
 
 {% block extra_js %}
 <script>
+// API helper
+const API = {
+    async get(url) {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+    },
+    async post(url, data) {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+    }
+};
+
+function formatJPY(n) { return '¥' + Number(n).toLocaleString('ja-JP'); }
+
 let allLabels = [];
 let selectedIds = new Set();
 
 async function loadLabels() {
-    const products = await API.get('/api/inventory/list');
-    allLabels = products.filter(p => p.status === 'in_stock' && p.current_stock > 0);
-    
-    const categories = [...new Set(allLabels.map(p => p.category).filter(Boolean))];
-    const catSelect = document.getElementById('labelCatFilter');
-    categories.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c; opt.textContent = c;
-        catSelect.appendChild(opt);
-    });
-    
-    renderLabelTable(allLabels);
+    try {
+        const products = await API.get('/api/inventory/list');
+        allLabels = products.filter(p => p.status === 'in_stock' && p.current_stock > 0);
+        
+        const categories = [...new Set(allLabels.map(p => p.category).filter(Boolean))];
+        const catSelect = document.getElementById('labelCatFilter');
+        catSelect.innerHTML = '<option value="">全カテゴリ</option>';
+        categories.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c; opt.textContent = c;
+            catSelect.appendChild(opt);
+        });
+        
+        renderLabelTable(allLabels);
+    } catch(e) {
+        console.error('Failed to load labels:', e);
+        showToast('データの読み込みに失敗しました: ' + e.message, 'error');
+    }
 }
 
 function renderLabelTable(products) {
