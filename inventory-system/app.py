@@ -131,6 +131,8 @@ class PostgresConnection:
     def __init__(self, url):
         self._conn = psycopg2.connect(url, connect_timeout=15)
         self._conn.autocommit = False
+        # Use RealDictCursor by default so queries return dict-like rows (supports .attr and [key])
+        self._cursor_factory = RealDictCursor
 
     def execute(self, sql, params=None):
         if params is None:
@@ -138,7 +140,7 @@ class PostgresConnection:
         # Replace ? placeholders with %s for psycopg2
         if '?' in sql:
             sql = sql.replace('?', '%s')
-        cur = self._conn.cursor()
+        cur = self._conn.cursor(cursor_factory=self._cursor_factory)
         # Check if this is an INSERT - we need to get back the lastrowid
         is_insert = sql.strip().upper().startswith('INSERT')
         if is_insert:
@@ -166,7 +168,7 @@ class PostgresConnection:
     def executemany(self, sql, params_list):
         if '?' in sql and '%s' not in sql:
             sql = sql.replace('?', '%s')
-        cur = self._conn.cursor()
+        cur = self._conn.cursor(cursor_factory=self._cursor_factory)
         cur.executemany(sql, params_list)
         return cur
 
@@ -174,7 +176,7 @@ class PostgresConnection:
         """Execute multiple SQL statements separated by semicolons"""
         # Split script into individual statements
         statements = [s.strip() for s in sql.split(';') if s.strip()]
-        cur = self._conn.cursor()
+        cur = self._conn.cursor(cursor_factory=self._cursor_factory)
         for stmt in statements:
             if stmt:
                 try:
