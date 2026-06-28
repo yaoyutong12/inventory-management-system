@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY inventory-system/ .
 
 # Ensure data & uploads directories exist (for persistent volume mount)
-RUN mkdir -p /app/data /app/uploads
+RUN mkdir -p /app/inventory-system/data /app/inventory-system/uploads
 
 EXPOSE 5000
 
