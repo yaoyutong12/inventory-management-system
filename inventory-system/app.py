@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, request, jsonify, render_template, send_file, g
+from flask import Flask, request, jsonify, render_template, send_file, g, send_from_directory
 import pandas as pd
 import qrcode
 from PIL import Image
@@ -160,6 +160,11 @@ def init_db():
         pass
     try:
         db.execute("ALTER TABLE products ADD COLUMN scrapped_at TIMESTAMP")
+    except:
+        pass
+    # Migrate: add photo column to inbound_records
+    try:
+        db.execute("ALTER TABLE inbound_records ADD COLUMN photo TEXT")
     except:
         pass
     
@@ -362,6 +367,7 @@ def api_inbound_create():
     selling_price = data.get('selling_price')
     location = data.get('location', '')
     inbound_date = data.get('inbound_date', '')  # 新增：可修改入库日期
+    photo_base64 = data.get('photo_base64', '')  # 新增：商品照片
     
     db = get_db()
     item = db.execute("SELECT * FROM supplier_items WHERE id=?", (supplier_item_id,)).fetchone()
@@ -386,13 +392,29 @@ def api_inbound_create():
               unit_cost or 0, selling_price or 0, 1 if is_high_value else 0, location))
         product_id = cur.lastrowid
     
+    # Save photo if provided
+    photo_filename = None
+    if photo_base64 and photo_base64.startswith('data:image/'):
+        try:
+            # Extract base64 data after comma
+            header, encoded = photo_base64.split(',', 1)
+            ext = header.split('/')[1].split(';')[0]  # e.g., 'jpeg' or 'png'
+            if ext == 'jpeg':
+                ext = 'jpg'
+            photo_filename = f"inbound_{product_id}_{uuid.uuid4().hex[:8]}.{ext}"
+            photo_path = UPLOAD_DIR / photo_filename
+            with open(photo_path, 'wb') as f:
+                f.write(base64.b64decode(encoded))
+        except Exception:
+            photo_filename = None  # silently fail on photo save error
+    
     # Record inbound (支持自定义入库日期)
     if inbound_date:
-        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, inbound_date) VALUES (?,?,?,?,?)",
-                  (product_id, supplier_item_id, qty, unit_cost or 0, inbound_date))
+        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, inbound_date, photo) VALUES (?,?,?,?,?,?)",
+                  (product_id, supplier_item_id, qty, unit_cost or 0, inbound_date, photo_filename))
     else:
-        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost) VALUES (?,?,?,?)",
-                  (product_id, supplier_item_id, qty, unit_cost or 0))
+        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, photo) VALUES (?,?,?,?,?)",
+                  (product_id, supplier_item_id, qty, unit_cost or 0, photo_filename))
     
     # Mark supplier item as matched
     db.execute("UPDATE supplier_items SET matched=1, matched_date=CURRENT_TIMESTAMP WHERE id=?", (supplier_item_id,))
@@ -401,12 +423,16 @@ def api_inbound_create():
     product = db.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
     qr_data = generate_qrcode_base64(product['internal_code'])
     
-    return jsonify({
+    result = {
         'success': True,
         'product': dict(product),
         'qr_code': qr_data,
         'is_new': not bool(existing)
-    })
+    }
+    if photo_filename:
+        result['photo_url'] = f'/uploads/{photo_filename}'
+    
+    return jsonify(result)
 
 
 @app.route('/api/inbound/unmatched')
@@ -1285,6 +1311,12 @@ def api_products_all():
         d['current_stock'] = d['total_in'] - d['total_out']
         result.append(d)
     return jsonify(result)
+
+
+# ─── Static files (uploads) ────────────────────────────────────
+@app.route('/uploads/<path:filename>')
+def serve_upload(filename):
+    return send_from_directory(str(UPLOAD_DIR), filename)
 
 
 # ─── Main ───────────────────────────────────────────────────────
