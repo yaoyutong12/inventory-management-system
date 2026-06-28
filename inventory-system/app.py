@@ -129,7 +129,7 @@ class DictRow(dict):
 class PostgresConnection:
     """Wrapper around psycopg2 connection to mimic sqlite3 interface"""
     def __init__(self, url):
-        self._conn = psycopg2.connect(url)
+        self._conn = psycopg2.connect(url, connect_timeout=15)
         self._conn.autocommit = False
 
     def execute(self, sql, params=None):
@@ -237,6 +237,18 @@ def close_db(e):
     db = g.pop('db', None)
     if db:
         db.close()
+
+
+@app.errorhandler(500)
+def handle_500(e):
+    app.logger.error(f"500 Error: {e}")
+    return jsonify({'error': f'Internal Server Error: {str(e)}'}), 500
+
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    app.logger.error(f"Unhandled exception: {type(e).__name__}: {e}", exc_info=True)
+    return jsonify({'error': f'Error: {type(e).__name__}: {str(e)}'}), 500
 
 
 def init_db():
@@ -370,9 +382,10 @@ def _init_sqlite():
 
 
 def _init_postgres():
-    conn = psycopg2.connect(PG_URL)
+    conn = psycopg2.connect(PG_URL, connect_timeout=15)
     cur = conn.cursor()
     pk = _get_pk_keyword()
+    app.logger.info(f"[PostgreSQL] Creating tables with pk={pk}...")
 
     statements = [
         f"""CREATE TABLE IF NOT EXISTS supplier_imports (
