@@ -1958,6 +1958,99 @@ def api_debug_data_check():
     return jsonify(result)
 
 
+@app.route('/debug-photos')
+def debug_photos():
+    """诊断端点：检查照片文件和URL"""
+    db = get_db()
+    
+    # 查询所有有照片的记录
+    photos = db.execute("""
+        SELECT p.id, p.internal_code, p.product_name, 
+               (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo
+        FROM products p
+        WHERE EXISTS (SELECT 1 FROM inbound_records WHERE product_id=p.id AND photo IS NOT NULL AND photo != '')
+    """).fetchall()
+    
+    result = {
+        'upload_dir': str(UPLOAD_DIR),
+        'upload_dir_exists': UPLOAD_DIR.exists(),
+        'photos': []
+    }
+    
+    if UPLOAD_DIR.exists():
+        result['files_in_upload_dir'] = [f.name for f in UPLOAD_DIR.iterdir() if f.is_file()]
+    
+        # 检查每个照片文件
+        for p in photos:
+            photo_info = dict(p)
+            photo_filename = photo_info.get('photo')
+            if photo_filename:
+                photo_path = UPLOAD_DIR / photo_filename
+                photo_info['photo_url'] = f'/uploads/{photo_filename}'
+                photo_info['file_exists'] = photo_path.exists()
+                if photo_path.exists():
+                    photo_info['file_size'] = photo_path.stat().st_size
+            result['photos'].append(photo_info)
+    
+    # 生成HTML报告
+    html = '''<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>写真诊断</title>
+<style>
+body{font-family:sans-serif;padding:20px;max-width:1200px;margin:0 auto}
+.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.ok{color:green}.error{color:red}.warn{color:orange}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{border:1px solid #e5e7eb;padding:8px 12px;text-align:left}
+th{background:#f9fafb;font-weight:600}
+</style>
+</head>
+<body>
+<h2>写真診断</h2>
+'''
+    
+    html += f'<div class="card"><h4>UPLOAD_DIR</h4>'
+    html += f'<p>路径: <code>{result["upload_dir"]}</code></p>'
+    html += f'<p>存在: <span class="{"ok" if result["upload_dir_exists"] else "error"}">{result["upload_dir_exists"]}</span></p>'
+    if result['upload_dir_exists'] and 'files_in_upload_dir' in result:
+        html += f'<p>文件数: {len(result["files_in_upload_dir"])}</p>'
+        if result['files_in_upload_dir']:
+            html += '<p>文件列表:</p><ul>'
+            for f in result['files_in_upload_dir'][:20]:
+                html += f'<li><code>{f}</code></li>'
+            if len(result['files_in_upload_dir']) > 20:
+                html += f'<li>... 还有 {len(result["files_in_upload_dir"]) - 20} 个文件</li>'
+            html += '</ul>'
+    html += '</div>'
+    
+    if result['photos']:
+        html += '<div class="card"><h4>有写真の商品</h4>'
+        html += '''<table>
+            <tr><th>ID</th><th>内部コード</th><th>商品名</th><th>写真ファイル</th><th>URL</th><th>ファイル存在</th><th>サイズ</th></tr>
+        '''
+        for p in result['photos']:
+            cls = 'ok' if p.get('file_exists') else 'error'
+            html += f'''<tr>
+                <td>{p.get('id')}</td>
+                <td><code>{p.get('internal_code')}</code></td>
+                <td>{(p.get('product_name') or '')[:50]}</td>
+                <td><code>{p.get('photo')}</code></td>
+                <td><a href="{p.get('photo_url')}" target="_blank">{p.get('photo_url')}</a></td>
+                <td class="{cls}">{p.get('file_exists', False)}</td>
+                <td>{p.get('file_size', '-')}</td>
+            </tr>'''
+        html += '</table></div>'
+    else:
+        html += '<div class="card"><p class="warn">写真がある商品がありません。入庫時に写真をアップロードしてください。</p></div>'
+    
+    html += '<p style="margin-top:20px"><a href="/inventory">在庫一覧に戻る</a></p>'
+    html += '</body></html>'
+    
+    return html
+
+
 # ─── Main ───────────────────────────────────────────────────────
 if __name__ == '__main__':
     init_db()
