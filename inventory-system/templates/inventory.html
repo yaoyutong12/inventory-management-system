@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}在庫一覧 - 托盘杂货进销存{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理</h4>
+    <div class="d-flex gap-2">
+        <select class="form-select form-select-sm" id="categoryFilter" onchange="filterInventory()">
+            <option value="">全カテゴリ</option>
+        </select>
+        <select class="form-select form-select-sm" id="statusFilter" onchange="filterInventory()">
+            <option value="">全ステータス</option>
+            <option value="in_stock">在庫あり</option>
+            <option value="sold_out">売切れ</option>
+        </select>
+        <input class="form-control form-control-sm" placeholder="検索..." id="inventorySearch" oninput="filterInventory()" style="width:200px">
+        <button class="btn btn-sm btn-outline-primary" onclick="exportCSV()"><i class="bi bi-download"></i> CSV</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="inventoryTable">
+                <thead>
+                    <tr>
+                        <th>内部コード</th><th>商品名</th><th>カテゴリ</th>
+                        <th>仕入単価</th><th>販売価格</th>
+                        <th>入庫数</th><th>販売数</th><th>在庫数</th>
+                        <th>売上</th><th>利益</th><th>状態</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-2">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-pie-chart me-2"></i>カテゴリ別商品数</h6>
+                <canvas id="categoryChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-bar-chart me-2"></i>在庫状況</h6>
+                <canvas id="stockChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allProducts = [];
+
+async function loadInventory() {
+    allProducts = await API.get('/api/inventory/list');
+    
+    // Populate category filter
+    const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
+    const catSelect = document.getElementById('categoryFilter');
+    categories.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        catSelect.appendChild(opt);
+    });
+    
+    renderTable(allProducts);
+    renderCharts(allProducts);
+}
+
+function renderTable(products) {
+    const tbody = document.querySelector('#inventoryTable tbody');
+    tbody.innerHTML = products.map(p => {
+        const profit = (p.selling_price||0) - (p.unit_cost||0);
+        const margin = p.selling_price ? ((profit/p.selling_price)*100).toFixed(0) : 0;
+        const stockClass = p.current_stock <= 0 ? 'danger' : p.current_stock <= 3 ? 'warning' : 'success';
+        const statusBadge = p.status === 'sold_out' ? '<span class="badge bg-secondary">売切れ</span>' 
+            : p.current_stock <= 3 ? '<span class="badge bg-warning">残りわずか</span>'
+            : '<span class="badge bg-success">在庫あり</span>';
+        
+        return `<tr>
+            <td><code>${p.internal_code}</code>${p.is_high_value?' <span class="badge bg-warning">高額</span>':''}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.product_name}">${(p.product_name||'')[:40]}</td>
+            <td><small>${p.category||'-'}</small></td>
+            <td class="text-end">${formatJPY(p.unit_cost||0)}</td>
+            <td class="text-end fw-bold">${formatJPY(p.selling_price||0)}</td>
+            <td class="text-center">${p.total_in}</td>
+            <td class="text-center">${p.total_out}</td>
+            <td class="text-center"><span class="badge bg-${stockClass}">${p.current_stock}</span></td>
+            <td class="text-end">${formatJPY(p.total_revenue||0)}</td>
+            <td class="text-end text-success">${formatJPY((p.total_revenue||0) - (p.unit_cost||0)*p.total_out)}</td>
+            <td>${statusBadge}</td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="window.open('/sales','_self')" title="販売"><i class="bi bi-cart"></i></button>
+                    <button class="btn btn-outline-info" onclick="viewDetail(${p.id})" title="詳細"><i class="bi bi-info-circle"></i></button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function filterInventory() {
+    const cat = document.getElementById('categoryFilter').value;
+    const status = document.getElementById('statusFilter').value;
+    const search = document.getElementById('inventorySearch').value.toLowerCase();
+    
+    let filtered = allProducts;
+    if (cat) filtered = filtered.filter(p => p.category === cat);
+    if (status === 'in_stock') filtered = filtered.filter(p => p.status === 'in_stock');
+    if (status === 'sold_out') filtered = filtered.filter(p => p.status === 'sold_out');
+    if (search) filtered = filtered.filter(p => 
+        (p.product_name||'').toLowerCase().includes(search) || 
+        (p.internal_code||'').toLowerCase().includes(search) ||
+        (p.category||'').toLowerCase().includes(search)
+    );
+    
+    renderTable(filtered);
+}
+
+function renderCharts(products) {
+    // Category chart
+    const catCount = {};
+    products.forEach(p => {
+        const c = p.category || '未分類';
+        catCount[c] = (catCount[c]||0) + 1;
+    });
+    const sorted = Object.entries(catCount).sort((a,b) => b[1]-a[1]).slice(0,10);
+    
+    new Chart(document.getElementById('categoryChart'), {
+        type: 'doughnut',
+        data: {
+            labels: sorted.map(s => s[0]),
+            datasets: [{ data: sorted.map(s => s[1]), backgroundColor: [
+                '#1a73e8','#0d904f','#f5a623','#d93025','#7c3aed',
+                '#059669','#dc2626','#2563eb','#d97706','#9333ea'
+            ]}]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'right', labels: { font: { size: 10 } } } } }
+    });
+    
+    // Stock chart
+    const inStock = products.filter(p => p.current_stock > 0).length;
+    const soldOut = products.length - inStock;
+    new Chart(document.getElementById('stockChart'), {
+        type: 'bar',
+        data: {
+            labels: ['在庫あり', '売切れ'],
+            datasets: [{ data: [inStock, soldOut], backgroundColor: ['#0d904f', '#d93025'], borderRadius: 6 }]
+        },
+        options: { 
+            responsive: true, 
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { ticks: { stepSize: 1 } } }
+        }
+    });
+}
+
+function exportCSV() {
+    const rows = [['内部コード','商品名','カテゴリ','仕入単価','販売価格','入庫数','販売数','在庫数','売上','利益']];
+    allProducts.forEach(p => {
+        rows.push([p.internal_code, p.product_name, p.category, p.unit_cost, p.selling_price,
+                  p.total_in, p.total_out, p.current_stock, p.total_revenue,
+                  (p.total_revenue||0) - (p.unit_cost||0)*p.total_out]);
+    });
+    const csv = rows.map(r => r.map(v => '"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `inventory_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+}
+
+async function viewDetail(id) {
+    const p = allProducts.find(p => p.id === id);
+    if (!p) return;
+    alert(`商品詳細\n======\nコード: ${p.internal_code}\n商品名: ${p.product_name}\n仕入単価: ${formatJPY(p.unit_cost||0)}\n販売価格: ${formatJPY(p.selling_price||0)}\n在庫: ${p.current_stock}個\n売上: ${formatJPY(p.total_revenue||0)}`);
+}
+
+loadInventory();
+</script>
+{% endblock %}

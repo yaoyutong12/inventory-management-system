@@ -1,0 +1,712 @@
+{% extends "base.html" %}
+{% block title %}入库 - 托盘杂货进销存{% endblock %}
+
+{% block extra_css %}
+<style>
+    .method-card {
+        transition: all 0.3s ease;
+    }
+    .method-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .method-card.active {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+    <!-- Left Panel: Input Mode -->
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="bi bi-box-arrow-in-down me-2"></i><span data-i18n="select_method">选择入库方法</span>
+                </h5>
+                
+                <!-- Method Selection Cards -->
+                <div class="row g-2 mb-4">
+                    <div class="col-4">
+                        <div class="card h-100 method-card active" id="scanCard" onclick="switchMethod('scan')" 
+                             style="cursor:pointer;border:3px solid #0d6efd;transition:all 0.3s;border-color:#0d6efd !important">
+                            <div class="card-body text-center p-3">
+                                <i class="bi bi-camera-video" style="font-size:2.5rem;color:#0d6efd"></i>
+                                <div class="fw-bold mt-2" style="font-size:0.9rem">📷 <span data-i18n="scan_camera">扫码</span></div>
+                                <div class="small text-muted mt-1"><span data-i18n="scan_mode_short">摄像头读取</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card h-100 method-card" id="photoCard" onclick="switchMethod('photo')" 
+                             style="cursor:pointer;border:3px solid #198754;transition:all 0.3s;border-color:#dee2e6">
+                            <div class="card-body text-center p-3">
+                                <i class="bi bi-camera" style="font-size:2.5rem;color:#198754"></i>
+                                <div class="fw-bold mt-2" style="font-size:0.9rem">📸 <span data-i18n="photo_recog">拍照识别</span></div>
+                                <div class="small text-muted mt-1"><span data-i18n="photo_mode_short">上传照片</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card h-100 method-card" id="manualCard" onclick="switchMethod('manual')" 
+                             style="cursor:pointer;border:3px solid #6c757d;transition:all 0.3s;border-color:#dee2e6">
+                            <div class="card-body text-center p-3">
+                                <i class="bi bi-keyboard" style="font-size:2.5rem;color:#6c757d"></i>
+                                <div class="fw-bold mt-2" style="font-size:0.9rem">⌨️ <span data-i18n="manual_input">手动输入</span></div>
+                                <div class="small text-muted mt-1"><span data-i18n="manual_mode_short">输入号码</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scan Mode Panel -->
+                <div id="scanPanel" class="method-panel">
+                    <div class="alert alert-primary" id="scanModeHint">
+                        <i class="bi bi-info-circle-fill"></i> 
+                        <strong><span data-i18n="scan_mode_label">扫码模式</span>：</strong><span data-i18n="scan_mode_desc">用手机摄像头扫描条形码</span>
+                    </div>
+                    <div id="scanner-view" style="width:100%;min-height:250px" class="border rounded d-flex align-items-center justify-content-center bg-light mb-3">
+                        <div class="text-center text-muted">
+                            <i class="bi bi-camera-video" style="font-size:4rem"></i>
+                            <div class="mt-2"><span data-i18n="camera_preview">摄像头预览</span></div>
+                            <div class="small"><span data-i18n="click_start_scan">点击"扫码开始"</span></div>
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary btn-lg" id="startScanBtn" onclick="startScanner()">
+                            <i class="bi bi-camera-video"></i> <span data-i18n="scan_start">扫码开始</span>
+                        </button>
+                        <button class="btn btn-outline-secondary" id="stopScanBtn" onclick="stopScanner()" disabled>
+                            <i class="bi bi-stop-circle"></i> <span data-i18n="stop">停止</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Photo Mode Panel -->
+                <div id="photoPanel" class="method-panel d-none">
+                    <div class="alert alert-success" id="photoModeHint">
+                        <i class="bi bi-info-circle-fill"></i> 
+                        <strong><span data-i18n="photo_mode_label">拍照识别模式</span>：</strong><span data-i18n="photo_mode_desc">给商品拍照或上传图片，自动检测条形码</span>
+                    </div>
+                    <div class="border rounded p-4 bg-light text-center" id="photoDropZone" style="min-height:200px">
+                        <i class="bi bi-cloud-upload" style="font-size:4rem;color:#999"></i>
+                        <p class="mt-3 mb-1"><span data-i18n="drop_image_here">拖放图片到此处</span></p>
+                        <p class="text-muted small"><span data-i18n="or_click_btn">或点击下方按钮</span></p>
+                        <input type="file" id="photoInput" accept="image/*" capture="environment" 
+                               class="form-control" onchange="uploadPhoto()" style="display:none">
+                        <button class="btn btn-success btn-lg mt-2" onclick="document.getElementById('photoInput').click()">
+                            <i class="bi bi-camera"></i> <span data-i18n="take_photo_select">拍照 / 选择图片</span>
+                        </button>
+                        <div class="mt-3">
+                            <div id="photoPreview" class="d-none">
+                                <img id="photoImg" class="border rounded shadow" style="max-width:100%;max-height:250px">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="photoResult" class="mt-3"></div>
+                </div>
+
+                <!-- Manual Mode Panel -->
+                <div id="manualPanel" class="method-panel d-none">
+                    <div class="alert alert-secondary" id="manualModeHint">
+                        <i class="bi bi-info-circle-fill"></i> 
+                        <strong><span data-i18n="manual_mode_label">手动输入模式</span>：</strong><span data-i18n="manual_mode_desc">键盘输入条形码号码（当摄像头无法使用时）</span>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" data-i18n-html="tracking_no">追踪号码（条形码号码）<span class="text-danger">*</span></label>
+                        <input class="form-control form-control-lg" id="manualBarcodeInput" data-i18n-ph="tracking_placeholder" placeholder="例: 5277279290092310244234">
+                        <div class="form-text" data-i18n-hint="enter_tracking_hint">输入外包装条形码下方的号码</div>
+                    </div>
+                    <button class="btn btn-secondary btn-lg w-100" onclick="manualInbound()">
+                        <i class="bi bi-search"></i> <span data-i18n="match_inbound">号码匹配并入库</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel: Match Result & Entry -->
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-box-arrow-in-down me-2"></i><span data-i18n="inbound_register">入库登记</span></h5>
+                
+                <div id="matchResult" class="d-none">
+                    <div class="alert alert-success" id="matchAlert">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        <span id="matchMsg" data-i18n="matched_list">与进货清单匹配成功！</span>
+                    </div>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small"><span data-i18n="tracking_num">追踪号码</span></label>
+                            <input class="form-control" id="trackingNo" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small"><span data-i18n="location_code">库位号</span></label>
+                            <input class="form-control" id="locationCode" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label small"><span data-i18n="product_name">商品名</span></label>
+                        <textarea class="form-control" id="productName" rows="2" readonly></textarea>
+                    </div>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small"><span data-i18n="category">分类</span></label>
+                            <input class="form-control" id="category" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small"><span data-i18n="weight_kg">重量 (kg)</span></label>
+                            <input class="form-control" id="weight" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small"><span data-i18n="size_cm">尺寸 (cm)</span></label>
+                            <input class="form-control" id="dimensions" readonly>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <h6 class="mb-3"><span data-i18n="inbound_info">入库信息输入</span></h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small" data-i18n-html="unit_cost_yen">进货单价 (¥) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="unitCost" placeholder="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small"><span data-i18n="selling_price_yen">销售价格 (¥)</span></label>
+                            <input type="number" class="form-control" id="sellingPrice" placeholder="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small"><span data-i18n="qty">入库数量</span></label>
+                            <input type="number" class="form-control" id="qty" value="1" min="1">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small" data-i18n-html="inbound_date">入库日期 <span class="text-muted small">（默认今天）</span></label>
+                            <input type="date" class="form-control" id="inboundDate" value="">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small"><span data-i18n="storage_location">保管位置</span></label>
+                            <input class="form-control" id="location" placeholder="例: 1F-货架A">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="isHighValue" onchange="toggleHighValue()">
+                                <label class="form-check-label" for="isHighValue">
+                                    <span class="badge bg-warning"><span data-i18n="high_value_item">高价商品</span></span> <span data-i18n="mercari_target">煤炉上架对象</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="highValueReason" class="mb-3 d-none">
+                        <label class="form-label small"><span data-i18n="high_value_reason">高价理由</span></label>
+                        <select class="form-select" id="highReason">
+                            <option value=""><span data-i18n="select_reason">选择...</span></option>
+                            <option><span data-i18n="brand_item">品牌商品</span></option>
+                            <option><span data-i18n="electronics">家电产品</span></option>
+                            <option><span data-i18n="auto_parts">汽车配件</span></option>
+                            <option><span data-i18n="collector">收藏品</span></option>
+                            <option><span data-i18n="price_over_3000">价格3000日元以上</span></option>
+                            <option><span data-i18n="other">其他</span></option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn btn-success btn-lg w-100 mt-2" id="inboundBtn" onclick="doInbound()">
+                        <i class="bi bi-box-arrow-in-down me-1"></i> <span data-i18n="inbound_register_print">入库登记 & 标签生成</span>
+                    </button>
+                    <button class="btn btn-warning btn-lg w-100 mt-2" onclick="openScrapModal()">
+                        <i class="bi bi-exclamation-triangle"></i> 标记问题商品（损坏/仿品/过期）
+                    </button>
+                </div>
+                
+                <!-- Scrap Modal -->
+                <div class="modal fade" id="scrapModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">标记问题商品</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="text-muted small">此商品无法上架销售，请选择原因：</p>
+                                <div class="d-flex flex-wrap gap-2 mb-3">
+                                    <button class="btn btn-outline-warning" onclick="markAsScrap('damaged')">
+                                        🔧 损坏（运输/保管中损坏）
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="markAsScrap('counterfeit')">
+                                        🚫 仿品（侵权或假冒商品）
+                                    </button>
+                                    <button class="btn btn-outline-info" onclick="markAsScrap('expired')">
+                                        ⏰ 过期（已超过保质期）
+                                    </button>
+                                    <button class="btn btn-outline-secondary" onclick="markAsScrap('other')">
+                                        📦 其他（无法销售）
+                                    </button>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small">备注（选填）</label>
+                                    <textarea class="form-control" id="scrapNote" rows="2" placeholder="可输入详细说明..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="noMatch" class="d-none">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <span id="noMatchMsg"></span>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm" onclick="createManualEntry()">
+                        <i class="bi bi-plus-circle"></i> <span data-i18n="register_new_product">注册为新商品</span>
+                    </button>
+                </div>
+                
+                <div id="qrResult" class="d-none text-center mt-4">
+                    <h6 class="mb-3"><span data-i18n="internal_code">内部管理码（将此二维码贴在商品上）</span></h6>
+                    <div class="bg-light p-3 rounded d-inline-block">
+                        <img id="qrImage" src="" alt="QR Code" style="width:200px;height:200px">
+                    </div>
+                    <div class="mt-2">
+                        <strong><code id="internalCode" class="fs-5"></code></strong>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-outline-primary" onclick="printLabel()">
+                            <i class="bi bi-printer me-1"></i> <span data-i18n="label_print">标签打印</span>
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="resetInbound()">
+                            <i class="bi bi-arrow-repeat me-1"></i> <span data-i18n="next_item">下一个商品</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Initial state -->
+                <div id="initialState" class="text-center py-5">
+                    <i class="bi bi-upc-scan" style="font-size:3rem;color:#ccc"></i>
+                    <p class="text-muted mt-3"><span data-i18n="scan_or_input">请扫描条形码或输入追踪号码</span></p>
+                    <div class="mt-2 small text-muted">
+                        <div class="d-flex justify-content-center gap-3">
+                            <span><i class="bi bi-camera-video"></i> <span data-i18n="scan_camera">扫码</span></span>
+                            <span><i class="bi bi-camera"></i> <span data-i18n="photo_recog">拍照识别</span></span>
+                            <span><i class="bi bi-keyboard"></i> <span data-i18n="manual_input">手动输入</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recently Inbound -->
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-clock-history me-2"></i><span data-i18n="recent_inbound">最近入库</span></h6>
+                <div id="recentInbound" class="small"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let scanner = null;
+let currentSupplierItem = null;
+let currentMethod = 'scan';
+
+// ─── Method Switching (Card-based) ─────────────
+function switchMethod(method) {
+    currentMethod = method;
+    
+    // Update card styles
+    ['scan', 'photo', 'manual'].forEach(m => {
+        const card = document.getElementById(m + 'Card');
+        if (card) {
+            if (m === method) {
+                card.style.borderColor = getMethodColor(m);
+                card.classList.add('shadow');
+                card.classList.add('active');
+            } else {
+                card.style.borderColor = '#dee2e6';
+                card.classList.remove('shadow');
+                card.classList.remove('active');
+            }
+        }
+    });
+    
+    // Show/hide panels
+    document.getElementById('scanPanel').classList.toggle('d-none', method !== 'scan');
+    document.getElementById('photoPanel').classList.toggle('d-none', method !== 'photo');
+    document.getElementById('manualPanel').classList.toggle('d-none', method !== 'manual');
+}
+
+function getMethodColor(method) {
+    return { scan: '#0d6efd', photo: '#198754', manual: '#6c757d' }[method] || '#6c757d';
+}
+
+// ─── Helper: get translation string ──────────────
+function t(key) {
+    const lang = translations[currentLang] || translations.ja;
+    return lang[key] || key;
+}
+
+// ─── Mode 1: Camera Scanner ────────────────────
+function startScanner() {
+    document.getElementById('startScanBtn').disabled = true;
+    document.getElementById('stopScanBtn').disabled = false;
+    document.getElementById('manualBarcodeInput').value = '';
+    
+    scanner = new Html5Qrcode("scanner-view");
+    scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        (decodedText) => {
+            stopScanner();
+            lookupBarcode(decodedText);
+        },
+        () => {}
+    ).catch(err => {
+        const scanView = document.getElementById('scanner-view');
+        scanView.innerHTML = `<div class="alert alert-warning m-2">
+            <i class="bi bi-exclamation-triangle"></i> 
+            ${t('camera_not_available')}
+        </div>`;
+        document.getElementById('startScanBtn').disabled = false;
+        document.getElementById('stopScanBtn').disabled = true;
+    });
+}
+
+async function stopScanner() {
+    if (scanner) {
+        await scanner.stop();
+        scanner = null;
+    }
+    document.getElementById('startScanBtn').disabled = false;
+    document.getElementById('stopScanBtn').disabled = true;
+}
+
+// ─── Mode 2: Photo Upload ──────────────────────
+async function uploadPhoto() {
+    const fileInput = document.getElementById('photoInput');
+    const file = fileInput.files[0];
+    if (!file) return;
+    
+    // Preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('photoPreview').classList.remove('d-none');
+        document.getElementById('photoImg').src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    
+    // Upload for barcode detection
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    const resultDiv = document.getElementById('photoResult');
+    resultDiv.innerHTML = `<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span> ${t('barcode_detecting')}</div>`;
+    
+    try {
+        const res = await fetch('/api/inbound/photo', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.error) {
+            resultDiv.innerHTML = `<div class="alert alert-warning small">${data.error}</div>`;
+            if (data.type === 'no_barcode') {
+                resultDiv.innerHTML += `<button class="btn btn-outline-secondary btn-sm w-100" onclick="switchMethod('manual')">
+                    <i class="bi bi-keyboard"></i> ${t('switch_manual')}
+                </button>`;
+            }
+            return;
+        }
+        
+        if (data.codes && data.codes.length > 0) {
+            const code = data.codes[0];
+            resultDiv.innerHTML = `
+                <div class="alert alert-success small">
+                    <i class="bi bi-check-circle"></i> ${t('barcode_detected')}: <strong>${code.code}</strong>
+                    ${code.matched ? '<span class="badge bg-success ms-1">' + t('list_match') + '</span>' : '<span class="badge bg-warning ms-1">' + t('new_item') + '</span>'}
+                </div>`;
+            lookupBarcode(code.code);
+        }
+    } catch (err) {
+        resultDiv.innerHTML = `<div class="alert alert-danger small">${t('error')}: ${err.message}</div>`;
+    }
+}
+
+// Drop zone support
+document.getElementById('photoDropZone').addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.currentTarget.style.borderColor = '#0d6efd';
+});
+document.getElementById('photoDropZone').addEventListener('dragleave', (e) => {
+    e.currentTarget.style.borderColor = '';
+});
+document.getElementById('photoDropZone').addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.currentTarget.style.borderColor = '';
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+        document.getElementById('photoInput').files = e.dataTransfer.files;
+        uploadPhoto();
+    }
+});
+
+// ─── Mode 3: Manual Entry ──────────────────────
+async function manualInbound() {
+    const barcode = document.getElementById('manualBarcodeInput').value.trim();
+    if (!barcode) {
+        showToast(t('input_tracking_first'), 'warning');
+        return;
+    }
+    lookupBarcode(barcode);
+}
+
+async function createManualEntry() {
+    const barcode = document.getElementById('manualBarcodeInput').value.trim() 
+                 || document.getElementById('trackingNo').value.trim();
+    if (!barcode) {
+        switchMethod('manual');
+        return;
+    }
+    
+    const data = {
+        barcode: barcode,
+        product_name: document.getElementById('productName').value || '',
+        category: document.getElementById('category').value || '',
+        weight: parseFloat(document.getElementById('weight').value) || null,
+        dimensions: document.getElementById('dimensions').value || '',
+        unit_cost: parseInt(document.getElementById('unitCost').value) || 0,
+        selling_price: parseInt(document.getElementById('sellingPrice').value) || 0,
+        qty: parseInt(document.getElementById('qty').value) || 1,
+        is_high_value: document.getElementById('isHighValue').checked,
+        location: document.getElementById('location').value
+    };
+    
+    const result = await API.post('/api/inbound/manual', data);
+    handleInboundResult(result);
+}
+
+// ─── Common: Barcode Lookup ────────────────────
+async function lookupBarcode(barcode) {
+    if (!barcode) return;
+    
+    const data = await API.get(`/api/lookup/${encodeURIComponent(barcode)}`);
+    
+    document.getElementById('matchResult').classList.add('d-none');
+    document.getElementById('noMatch').classList.add('d-none');
+    document.getElementById('qrResult').classList.add('d-none');
+    document.getElementById('initialState').classList.add('d-none');
+    
+    if (data.error) {
+        document.getElementById('noMatch').classList.remove('d-none');
+        let msg;
+        if (data.type === 'product') {
+            msg = `「${barcode}」` + t('already_inbound');
+        } else {
+            msg = `「${barcode}」` + t('not_found_list');
+        }
+        document.getElementById('noMatchMsg').textContent = msg;
+        document.getElementById('manualBarcodeInput').value = barcode;
+        document.getElementById('trackingNo').value = barcode;
+        return;
+    }
+    
+    if (data.type === 'supplier_item') {
+        currentSupplierItem = data;
+        document.getElementById('matchResult').classList.remove('d-none');
+        document.getElementById('matchAlert').className = 'alert alert-success';
+        document.getElementById('matchMsg').textContent = t('matched_list');
+        fillSupplierData(data);
+    } else if (data.type === 'product') {
+        currentSupplierItem = data;
+        document.getElementById('matchResult').classList.remove('d-none');
+        document.getElementById('matchAlert').className = 'alert alert-info';
+        document.getElementById('matchMsg').textContent = `${t('existing_product')}: 库存 ${data.current_stock}件`;
+        fillProductData(data);
+    }
+}
+
+function fillSupplierData(data) {
+    document.getElementById('trackingNo').value = data.tracking_no || '';
+    document.getElementById('locationCode').value = data.location_code || '';
+    document.getElementById('productName').value = data.product_name || '';
+    document.getElementById('category').value = data.category || '';
+    document.getElementById('weight').value = data.weight || '';
+    document.getElementById('dimensions').value = data.dimensions || '';
+    document.getElementById('unitCost').value = '';
+    document.getElementById('sellingPrice').value = '';
+    document.getElementById('qty').value = data.expected_qty || 1;
+    document.getElementById('location').value = '';
+    document.getElementById('isHighValue').checked = false;
+    document.getElementById('highValueReason').classList.add('d-none');
+}
+
+function fillProductData(data) {
+    document.getElementById('trackingNo').value = data.internal_code || '';
+    document.getElementById('locationCode').value = '';
+    document.getElementById('productName').value = data.product_name || '';
+    document.getElementById('category').value = data.category || '';
+    document.getElementById('weight').value = '';
+    document.getElementById('dimensions').value = '';
+    document.getElementById('sellingPrice').value = data.selling_price || '';
+}
+
+// ─── Common Actions ────────────────────────────
+function toggleHighValue() {
+    const div = document.getElementById('highValueReason');
+    div.classList.toggle('d-none', !document.getElementById('isHighValue').checked);
+}
+
+async function doInbound() {
+    if (!currentSupplierItem) return;
+    
+    const unitCost = parseInt(document.getElementById('unitCost').value) || 0;
+    if (!unitCost) {
+        showToast(t('input_cost_first'), 'warning');
+        return;
+    }
+    
+    const btn = document.getElementById('inboundBtn');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${t('processing')}...`;
+    
+    const data = {
+        supplier_item_id: currentSupplierItem.id,
+        unit_cost: unitCost,
+        selling_price: parseInt(document.getElementById('sellingPrice').value) || 0,
+        qty: parseInt(document.getElementById('qty').value) || 1,
+        is_high_value: document.getElementById('isHighValue').checked,
+        location: document.getElementById('location').value,
+        inbound_date: document.getElementById('inboundDate').value || null
+    };
+    
+    const result = await API.post('/api/inbound/create', data);
+    handleInboundResult(result, btn);
+}
+
+function handleInboundResult(result, btn) {
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-box-arrow-in-down me-1"></i> ${t('inbound_register_print')}`;
+    }
+    
+    if (result.success) {
+        document.getElementById('qrResult').classList.remove('d-none');
+        document.getElementById('qrImage').src = 'data:image/png;base64,' + result.qr_code;
+        document.getElementById('internalCode').textContent = result.product.internal_code;
+        showToast(`${t('inbound_complete')}: ${result.product.internal_code}`, 'success');
+        loadRecentInbound();
+    } else {
+        showToast(result.error || t('error'), 'error');
+    }
+}
+
+function resetInbound() {
+    currentSupplierItem = null;
+    document.getElementById('matchResult').classList.add('d-none');
+    document.getElementById('qrResult').classList.add('d-none');
+    document.getElementById('noMatch').classList.add('d-none');
+    document.getElementById('initialState').classList.remove('d-none');
+    document.getElementById('manualBarcodeInput').value = '';
+    document.getElementById('photoInput').value = '';
+    document.getElementById('photoPreview').classList.add('d-none');
+    document.getElementById('photoResult').innerHTML = '';
+    document.getElementById('manualBarcodeInput').focus();
+}
+
+async function printLabel() {
+    const code = document.getElementById('internalCode').textContent;
+    const name = document.getElementById('productName').value;
+    const price = document.getElementById('sellingPrice').value;
+    
+    const win = window.open('', '_blank', 'width=400,height=400');
+    win.document.write(`
+        <html><head><title>标签打印</title>
+        <style>
+            @page { size: 62mm 40mm; margin: 3mm; }
+            body { font-family: 'Microsoft YaHei', 'MS Gothic', sans-serif; margin: 0; padding: 0; }
+            .label { text-align: center; page-break-after: always; }
+            .label img { width: 100px; height: 100px; margin: 5px 0; }
+            .label .code { font-size: 14px; font-weight: bold; margin: 3px 0; }
+            .label .price { font-size: 20px; font-weight: bold; color: #c00; }
+            .label .name { font-size: 8px; margin: 2px 0; word-break: break-all; }
+            @media print { body { -webkit-print-color-adjust: exact; } }
+        </style></head><body>
+        <div class="label">
+            <img src="${document.getElementById('qrImage').src}">
+            <div class="code">${code}</div>
+            <div class="name">${(name||'').substring(0,60)}</div>
+            <div class="price">¥${Number(price).toLocaleString()}</div>
+        </div>
+        <script>window.onload=function(){window.print();window.close();}<\/script>
+    `);
+}
+
+async function loadRecentInbound() {
+    const data = await API.get('/api/inventory/list');
+    const recent = data.filter(p => p.total_in > 0).slice(0, 10);
+    const stockLabel = t('stock');
+    const noDataMsg = t('no_inbound_yet');
+    document.getElementById('recentInbound').innerHTML = recent.map(p => `
+        <div class="d-flex justify-content-between py-1 border-bottom">
+            <span><code>${p.internal_code}</code> ${(p.product_name||'').substring(0,30)}</span>
+            <span>${stockLabel}: <strong>${p.current_stock}</strong></span>
+        </div>`).join('') || `<span class="text-muted">${noDataMsg}</span>`;
+}
+
+// Initialize
+loadRecentInbound();
+(function() {
+    const today = new Date().toISOString().slice(0,10);
+    const dateInput = document.getElementById('inboundDate');
+    if (dateInput) dateInput.value = today;
+})();
+
+// ─── Scrap Functions ─────────────────────
+function openScrapModal() {
+    if (!currentSupplierItem && !window.currentProduct) {
+        showToast('请先扫描或输入商品条码', 'warning');
+        return;
+    }
+    document.getElementById('scrapNote').value = '';
+    new bootstrap.Modal(document.getElementById('scrapModal')).show();
+}
+
+async function markAsScrap(reason) {
+    // Get product ID from current context
+    let productId = null;
+    if (window.currentProduct && window.currentProduct.id) {
+        productId = window.currentProduct.id;
+    } else if (currentSupplierItem && currentSupplierItem.id) {
+        // Need to find the product for this supplier item
+        const data = await API.get(`/api/lookup/${encodeURIComponent(currentSupplierItem.tracking_no || currentSupplierItem.barcode || '')}`);
+        if (data && data.type === 'product') {
+            productId = data.id;
+        }
+    }
+    
+    if (!productId) {
+        showToast('无法找到对应商品，请先完成入库操作', 'warning');
+        return;
+    }
+    
+    const note = document.getElementById('scrapNote').value;
+    const result = await API.post(`/api/products/${productId}/scrap`, {
+        reason: reason,
+        note: note
+    });
+    
+    if (result.success) {
+        showToast(`已标记为报废 (${reason})`, 'success');
+        bootstrap.Modal.getInstance(document.getElementById('scrapModal')).hide();
+        resetInbound();
+    } else {
+        showToast(result.error || '标记失败', 'error');
+    }
+}
+</script>
+{% endblock %}

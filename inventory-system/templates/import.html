@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+{% block title %}进货清单 - 托盘杂货进销存{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-file-earmark-arrow-up me-2"></i><span data-i18n="import_page_title">进货清单管理</span></h4>
+    <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#uploadModal">
+        <i class="bi bi-upload me-1"></i> <span data-i18n="upload_excel">上传Excel文件</span>
+    </button>
+</div>
+
+<!-- Import summary cards -->
+<div id="importSummaryCards" class="row g-3 mb-4 d-none">
+    <div class="col-md-3">
+        <div class="card stat-card bg-primary text-white">
+            <div class="card-body text-center">
+                <div class="value" id="summaryTotal">0</div>
+                <div class="label"><span data-i18n="total_items">总商品数</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-success text-white">
+            <div class="card-body text-center">
+                <div class="value" id="summaryInbound">0</div>
+                <div class="label"><span data-i18n="inbound_count">已入库</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-warning text-dark">
+            <div class="card-body text-center">
+                <div class="value" id="summaryPending">0</div>
+                <div class="label"><span data-i18n="pending_count">待入库</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card" style="background:var(--danger);color:white">
+            <div class="card-body text-center">
+                <div class="value" id="summaryImports">0</div>
+                <div class="label"><span data-i18n="import_count">导入批次</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4 border-primary" style="border-width:2px !important">
+    <div class="card-header bg-primary text-white py-3">
+        <i class="bi bi-list-check me-2"></i>
+        <strong><span data-i18n="import_list_title">已导入的进货清单</span></strong>
+        <small class="ms-2 opacity-75"><span data-i18n="import_list_hint">点击"查看明细"可看到所有商品的完整列表</span></small>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0" id="importsTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th><span data-i18n="file_name">文件名</span></th>
+                        <th class="text-center"><span data-i18n="item_count">商品数</span></th>
+                        <th><span data-i18n="import_time">导入时间</span></th>
+                        <th class="text-end"><span data-i18n="action">操作</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for imp in imports %}
+                    <tr style="cursor:pointer" onclick="showItems({{ imp.id }})" class="clickable-row">
+                        <td>{{ imp.id }}</td>
+                        <td><i class="bi bi-filetype-xlsx me-1"></i>{{ imp.filename }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-primary fs-6 px-3 py-2">{{ imp.total_items }}<span data-i18n="unit_piece">件</span></span>
+                        </td>
+                        <td>{{ imp.import_date[:19] }}</td>
+                        <td class="text-end">
+                            <button class="btn btn-success btn-lg view-items me-1" data-id="{{ imp.id }}" onclick="event.stopPropagation(); showItems({{ imp.id }})">
+                                <i class="bi bi-eye-fill"></i> 👁️ <span data-i18n="view_detail">查看明细</span>
+                            </button>
+                            <button class="btn btn-primary check-items" data-id="{{ imp.id }}" onclick="event.stopPropagation()">
+                                <i class="bi bi-box-arrow-in-down"></i> 📦 <span data-i18n="go_inbound">去入库</span>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center py-5">
+                        <i class="bi bi-cloud-upload" style="font-size:3rem;color:#ccc;display:block;margin-bottom:.5rem"></i>
+                        <p class="text-muted mb-2"><span data-i18n="no_import_yet">还没有导入任何进货清单</span></p>
+                        <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                            <i class="bi bi-upload me-1"></i> <span data-i18n="upload_first_excel">点击此处上传第一个Excel文件</span>
+                        </button>
+                    </td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal fade" id="itemsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-list-ul me-2"></i>📋 <span data-i18n="item_detail_title">商品明细列表</span> <span id="detailCount" class="badge bg-light text-dark ms-2"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Search & Filter Bar -->
+                <div class="row g-2 mb-3 align-items-center">
+                    <div class="col-md-8">
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input class="form-control" id="itemSearch" placeholder="搜索商品名或追踪号码..." type="text"
+                                   data-i18n-ph="search_placeholder">
+                            <button class="btn btn-outline-secondary" onclick="document.getElementById('itemSearch').value='';document.getElementById('itemSearch').dispatchEvent(new Event('input'))">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <span id="filteredInfo" class="text-muted small"></span>
+                    </div>
+                </div>
+                
+                <!-- Items Table -->
+                <div class="border rounded" style="max-height:55vh;overflow-y:auto">
+                    <table class="table table-sm table-bordered table-hover mb-0" id="itemsTable">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>#</th>
+                                <th><span data-i18n="tracking_no_col">追踪号码</span></th>
+                                <th><span data-i18n="location_code_col">库位号</span></th>
+                                <th class="d-none d-md-table-cell"><span data-i18n="weight_col">重量(kg)</span></th>
+                                <th class="d-none d-lg-table-cell"><span data-i18n="size_col">尺寸</span></th>
+                                <th><span data-i18n="product_name_col">商品名称</span></th>
+                                <th class="text-center"><span data-i18n="qty_col">数量</span></th>
+                                <th class="d-none d-md-table-cell"><span data-i18n="category_col">分类</span></th>
+                                <th class="text-center"><span data-i18n="status_col">状态</span></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div id="emptyItemsMsg" class="text-center text-muted py-4 d-none">
+                    <i class="bi bi-inbox" style="font-size:2rem"></i>
+                    <p class="mt-2"><span data-i18n="no_items_match">没有匹配的商品</span></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="close">关闭</span></button>
+                <button type="button" class="btn btn-success" id="gotoInboundFromDetail" onclick="goToInbound()">
+                    <i class="bi bi-box-arrow-in-down"></i> <span data-i18n="go_inbound_from_detail">去入库页面</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white"><h5 class="modal-title"><i class="bi bi-upload me-1"></i> <span data-i18n="upload_modal_title">上传供应商Excel清单</span></h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <form id="uploadForm">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><span data-i18n="select_file_label">选择Excel文件</span></label>
+                        <input type="file" class="form-control form-control-lg" name="file" accept=".xlsx,.xls" required>
+                    </div>
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle-fill me-1"></i> 
+                        <span data-i18n="column_hint">需要的列名：跟踪号、库位号、包裹重量、包裹尺寸、货品名称、预报数量、品名</span>
+                    </div>
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <span data-i18n="format_hint">支持 .xlsx 和 .xls 格式，每行一件商品</span>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 btn-lg" id="uploadBtn">
+                        <i class="bi bi-cloud-upload me-1"></i> <span data-i18n="start_upload">开始上传</span>
+                    </button>
+                </form>
+                <div id="uploadProgress" class="d-none mt-3">
+                    <div class="progress" style="height:25px"><div class="progress-bar progress-bar-striped progress-bar-animated fw-bold" style="width:100%">⏳ 上传处理中...</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentImportId = null;
+
+// Show items detail
+async function showItems(id) {
+    currentImportId = id;
+    const items = await API.get(`/api/import/${id}/items`);
+    const tbody = document.querySelector('#itemsTable tbody');
+    const emptyMsg = document.getElementById('emptyItemsMsg');
+    
+    document.getElementById('detailCount').textContent = `${items.length}件`;
+    
+    if (items.length === 0) {
+        tbody.innerHTML = '';
+        emptyMsg.classList.remove('d-none');
+        return;
+    }
+    
+    emptyMsg.classList.add('d-none');
+    
+    const statusLabelInbound = (currentLang === 'zh') ? '已入库' : '入庫済';
+    const statusLabelPending = (currentLang === 'zh') ? '待入库' : '未入庫';
+    const categoryDefault = (currentLang === 'zh') ? '-' : '-';
+    
+    tbody.innerHTML = items.map((item, idx) => `
+        <tr>
+            <td>${idx + 1}</td>
+            <td><code class="fs-6">${item.tracking_no || '-'}</code></td>
+            <td>${item.location_code || '-'}</td>
+            <td class="d-none d-md-table-cell">${item.weight || '-'}</td>
+            <td class="d-none d-lg-table-cell">${item.dimensions || '-'}</td>
+            <td style="max-width:400px;word-wrap:break-word;white-space:normal" title="${(item.product_name||'')}">${item.product_name||'-'}</td>
+            <td class="text-center"><span class="fw-bold">${item.expected_qty}</span></td>
+            <td class="d-none d-md-table-cell"><span class="badge bg-secondary">${item.category || categoryDefault}</span></td>
+            <td class="text-center">${item.matched ? '<span class="badge bg-success fs-7">' + statusLabelInbound + '</span>' : '<span class="badge bg-warning text-dark fs-7">' + statusLabelPending + '</span>'}</td>
+        </tr>`).join('');
+    
+    updateFilteredInfo(items.length);
+    new bootstrap.Modal('#itemsModal').show();
+}
+
+function goToInbound() {
+    bootstrap.Modal.getInstance(document.getElementById('itemsModal')).hide();
+    window.location.href = '/inbound';
+}
+
+// Upload
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('uploadBtn');
+    const progress = document.getElementById('uploadProgress');
+    btn.disabled = true;
+    progress.classList.remove('d-none');
+    
+    const formData = new FormData();
+    formData.append('file', this.file.files[0]);
+    
+    try {
+        const r = await fetch('/api/import/upload', { method:'POST', body:formData });
+        const data = await r.json();
+        if (data.success) {
+            const msg = (currentLang === 'zh')
+                ? `成功导入 ${data.total_items} 件商品！`
+                : `${data.total_items}件の商品をインポートしました`;
+            showToast(msg, 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast(data.error || (currentLang==='zh'?'错误':'エラー'), 'error');
+        }
+    } catch(e) {
+        showToast(((currentLang==='zh'?'上传失败':'アップロード失敗') + ': ') + e.message, 'error');
+    }
+    btn.disabled = false;
+    progress.classList.add('d-none');
+});
+
+// View detail buttons
+document.querySelectorAll('.view-items').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        showItems(this.dataset.id);
+    });
+});
+document.querySelectorAll('.check-items').forEach(btn => {
+    btn.addEventListener('click', function(e) { e.stopPropagation(); window.location.href = '/inbound'; });
+});
+
+// Row click also shows detail
+document.querySelectorAll('.clickable-row').forEach(row => {
+    row.addEventListener('click', () => showItems(row.querySelector('.view-items').dataset.id));
+});
+
+// Search filter
+document.getElementById('itemSearch').addEventListener('input', function() {
+    const q = this.value.toLowerCase().trim();
+    let visibleCount = 0;
+    const totalRows = document.querySelectorAll('#itemsTable tbody tr');
+    
+    totalRows.forEach(tr => {
+        const match = tr.textContent.toLowerCase().includes(q);
+        tr.style.display = match ? '' : 'none';
+        if (match) visibleCount++;
+    });
+    
+    updateFilteredInfo(visibleCount);
+    document.getElementById('emptyItemsMsg').classList.toggle('d-none', visibleCount > 0);
+});
+
+function updateFilteredInfo(count) {
+    const total = parseInt(document.getElementById('detailCount').textContent) || 0;
+    const label = (currentLang === 'zh') ? `显示 ${count} / ${total} 件` : `表示中: ${count}/${total}`;
+    document.getElementById('filteredInfo').textContent = count !== total ? label : '';
+}
+</script>
+{% endblock %}

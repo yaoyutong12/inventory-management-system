@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}ラベル印刷 - 托盘杂货进销存{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="bi bi-upc-scan me-2"></i>ラベル印刷</h4>
+    <div>
+        <button class="btn btn-outline-primary" id="selectAllBtn" onclick="selectAll()"><i class="bi bi-check-all"></i> 全選択</button>
+        <button class="btn btn-primary" onclick="printSelected()"><i class="bi bi-printer"></i> 選択したラベルを印刷</button>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <input class="form-control" id="labelSearch" placeholder="商品名・コード検索..." oninput="filterLabels()">
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" id="labelCatFilter" onchange="filterLabels()">
+            <option value="">全カテゴリ</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" onchange="filterLabels()">
+            <option value="all">全商品</option>
+            <option value="in_stock">在庫ありのみ</option>
+            <option value="unlabeled">ラベル未発行</option>
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="labelTable">
+                <thead>
+                    <tr>
+                        <th style="width:40px"><input type="checkbox" id="selectAllCB" onchange="toggleAll(this)"></th>
+                        <th>内部コード</th><th>商品名</th><th>販売価格</th><th>状態</th><th>プレビュー</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="mt-3 text-center" id="labelPagination"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allLabels = [];
+let selectedIds = new Set();
+
+async function loadLabels() {
+    const products = await API.get('/api/inventory/list');
+    allLabels = products.filter(p => p.status === 'in_stock' && p.current_stock > 0);
+    
+    const categories = [...new Set(allLabels.map(p => p.category).filter(Boolean))];
+    const catSelect = document.getElementById('labelCatFilter');
+    categories.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        catSelect.appendChild(opt);
+    });
+    
+    renderLabelTable(allLabels);
+}
+
+function renderLabelTable(products) {
+    const tbody = document.querySelector('#labelTable tbody');
+    tbody.innerHTML = products.map(p => `
+        <tr>
+            <td><input type="checkbox" class="label-cb" value="${p.id}" ${selectedIds.has(p.id)?'checked':''} onchange="toggleLabel(${p.id},this)"></td>
+            <td><code>${p.internal_code}</code></td>
+            <td>${(p.product_name||'')[:50]}</td>
+            <td class="fw-bold">${formatJPY(p.selling_price||0)}</td>
+            <td><span class="badge bg-${p.current_stock>3?'success':'warning'}">${p.current_stock}個</span></td>
+            <td><button class="btn btn-sm btn-outline-secondary" onclick="previewLabel(${p.id})"><i class="bi bi-eye"></i></button></td>
+        </tr>`).join('');
+}
+
+function toggleAll(cb) {
+    document.querySelectorAll('.label-cb').forEach(c => {
+        c.checked = cb.checked;
+        toggleLabel(parseInt(c.value), c);
+    });
+}
+
+function toggleLabel(id, cb) {
+    if (cb.checked) selectedIds.add(id);
+    else selectedIds.delete(id);
+}
+
+function selectAll() {
+    document.getElementById('selectAllCB').checked = true;
+    document.querySelectorAll('.label-cb').forEach(c => {
+        c.checked = true;
+        selectedIds.add(parseInt(c.value));
+    });
+}
+
+function filterLabels() {
+    const search = document.getElementById('labelSearch').value.toLowerCase();
+    const cat = document.getElementById('labelCatFilter').value;
+    let filtered = allLabels;
+    if (cat) filtered = filtered.filter(p => p.category === cat);
+    if (search) filtered = filtered.filter(p => 
+        (p.product_name||'').toLowerCase().includes(search) || 
+        (p.internal_code||'').toLowerCase().includes(search)
+    );
+    renderLabelTable(filtered);
+}
+
+async function previewLabel(id) {
+    const result = await API.post('/api/labels/generate', {product_ids: [id]});
+    if (result.labels.length > 0) {
+        const l = result.labels[0];
+        const win = window.open('', '_blank', 'width=400,height=450');
+        win.document.write(`
+            <html><head><title>ラベルプレビュー</title>
+            <style>
+                @page { size: 62mm 40mm; margin: 3mm; }
+                body { font-family: 'MS Gothic', sans-serif; margin: 20px; display:flex; justify-content:center; }
+                .label { text-align: center; border: 2px dashed #ccc; padding: 20px; border-radius: 12px; width: 250px; }
+                .label img { width: 150px; height: 150px; }
+                .label .code { font-size: 16px; font-weight: bold; margin: 8px 0; }
+                .label .name { font-size: 9px; margin: 4px 0; word-break: break-all; }
+                .label .price { font-size: 24px; font-weight: bold; color: #c00; }
+            </style></head><body>
+            <div class="label">
+                <img src="data:image/png;base64,${l.qr_code}">
+                <div class="code">${l.internal_code}</div>
+                <div class="name">${l.product_name}</div>
+                <div class="price">¥${Number(l.selling_price||0).toLocaleString()}</div>
+            </div>
+        `);
+    }
+}
+
+async function printSelected() {
+    if (selectedIds.size === 0) {
+        showToast('印刷するラベルを選択してください', 'warning');
+        return;
+    }
+    
+    const result = await API.post('/api/labels/generate', {product_ids: [...selectedIds]});
+    if (result.labels.length === 0) return;
+    
+    const win = window.open('', '_blank', 'width=800,height=600');
+    win.document.write(`
+        <html><head><title>ラベル印刷 (${result.labels.length}枚)</title>
+        <style>
+            @page { size: A4; margin: 10mm; }
+            body { font-family: 'MS Gothic', sans-serif; margin: 0; padding: 0; }
+            .labels { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-start; padding: 10px; }
+            .label { width: 170px; height: 110px; border: 1px solid #ccc; padding: 5px; text-align: center; 
+                     page-break-inside: avoid; border-radius: 6px; display: flex; flex-direction: column; align-items: center; }
+            .label img { width: 60px; height: 60px; }
+            .label .code { font-size: 11px; font-weight: bold; margin: 2px 0; }
+            .label .name { font-size: 7px; margin: 1px 0; overflow: hidden; max-height: 2em; }
+            .label .price { font-size: 13px; font-weight: bold; color: #c00; }
+            @media print { .label { border-color: #ddd; } }
+        </style></head><body>
+        <div class="labels">
+            ${result.labels.map(l => `
+                <div class="label">
+                    <img src="data:image/png;base64,${l.qr_code}">
+                    <div class="code">${l.internal_code}</div>
+                    <div class="name">${l.product_name}</div>
+                    <div class="price">¥${Number(l.selling_price||0).toLocaleString()}</div>
+                </div>
+            `).join('')}
+        </div>
+        <script>window.onload=function(){window.print();}<\/script>
+    `);
+    
+    showToast(`${result.labels.length}枚のラベルを印刷します`, 'info');
+}
+
+loadLabels();
+</script>
+{% endblock %}

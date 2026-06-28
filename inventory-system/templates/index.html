@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}ダッシュボード - 托盘杂货进销存{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card stat-card bg-white">
+            <div class="value text-primary">{{ total_products }}</div>
+            <div class="label">登録商品数</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card bg-white">
+            <div class="value text-success">{{ total_in_stock }}</div>
+            <div class="label">在庫あり</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card bg-white">
+            <div class="value text-warning">{{ total_sold }}</div>
+            <div class="label">販売数</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card bg-white">
+            <div class="value text-success" id="totalRevenue">{{ "¥{:,.0f}".format(total_revenue) }}</div>
+            <div class="label">売上合計</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4 col-6">
+        <div class="card stat-card bg-white">
+            <div class="value text-info">{{ "¥{:,.0f}".format(total_profit) }}</div>
+            <div class="label">利益合計</div>
+        </div>
+    </div>
+    <div class="col-md-4 col-6">
+        <div class="card stat-card bg-white">
+            <div class="value">
+                {% if total_revenue > 0 %}
+                {{ "{:.0f}%".format(total_profit/total_revenue*100) }}
+                {% else %}0%{% endif %}
+            </div>
+            <div class="label">利益率</div>
+        </div>
+    </div>
+    <div class="col-md-4 col-6">
+        <div class="card stat-card bg-white" id="stockAlertCard" style="cursor:pointer" onclick="document.location='/inventory'">
+            <div class="value text-danger" id="lowStockCount">{{ low_stock|length }}</div>
+            <div class="label">低在庫アラート (5個以下)</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><i class="bi bi-graph-up me-2"></i>月別売上推移</h5>
+                <canvas id="monthlyChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><i class="bi bi-clock-history me-2"></i>最近の販売</h5>
+                <div style="max-height:300px;overflow-y:auto">
+                    {% if recent_sales %}
+                    {% for sale in recent_sales %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                        <div>
+                            <small class="text-muted d-block">{{ sale.sale_date[:16] }}</small>
+                            <span>{{ (sale.product_name or '')[:30] }}</span>
+                        </div>
+                        <div class="text-end">
+                            <strong>{{ "¥{:,.0f}".format(sale.total_amount) }}</strong>
+                            <small class="text-success d-block">+{{ "¥{:,.0f}".format(sale.profit_amount) }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-muted text-center py-3">まだ販売記録がありません</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if low_stock %}
+<div class="card mt-3">
+    <div class="card-body">
+        <h5 class="card-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>低在庫アラート</h5>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>商品コード</th><th>商品名</th><th>在庫数</th><th>販売価格</th></tr></thead>
+                <tbody>
+                    {% for item in low_stock %}
+                    <tr>
+                        <td><code>{{ item.internal_code }}</code></td>
+                        <td>{{ (item.product_name or '')[:50] }}</td>
+                        <td><span class="badge bg-danger">{{ item.current_stock }}</span></td>
+                        <td>{{ "¥{:,.0f}".format(item.selling_price) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(async function() {
+    const stats = await API.get('/api/inventory/stats');
+    
+    // Monthly chart
+    const months = stats.monthly_sales.map(s => s.month);
+    const revenues = stats.monthly_sales.map(s => s.revenue);
+    const profits = stats.monthly_sales.map(s => s.profit);
+    
+    new Chart(document.getElementById('monthlyChart'), {
+        type: 'bar',
+        data: {
+            labels: months.length ? months : ['データなし'],
+            datasets: [
+                { label: '売上', data: revenues, backgroundColor: '#1a73e8', borderRadius: 6 },
+                { label: '利益', data: profits, backgroundColor: '#0d904f', borderRadius: 6 }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                y: { ticks: { callback: v => '¥'+v.toLocaleString() } }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

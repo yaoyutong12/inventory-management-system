@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}报废商品报告 - 托盘杂货进销存{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="card-title mb-0"><i class="bi bi-trash me-2"></i>报废商品列表</h5>
+                    <button class="btn btn-outline-primary btn-sm" onclick="exportCSV()">
+                        <i class="bi bi-download"></i> 导出CSV
+                    </button>
+                </div>
+                
+                <!-- Filters -->
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-4">
+                        <label class="form-label small">开始日期</label>
+                        <input type="date" class="form-control form-control-sm" id="startDate" onchange="loadReport()">
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small">结束日期</label>
+                        <input type="date" class="form-control form-control-sm" id="endDate" onchange="loadReport()">
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label small">报废原因</label>
+                        <select class="form-select form-select-sm" id="reasonFilter" onchange="loadReport()">
+                            <option value="">全部</option>
+                            <option value="damaged">损坏</option>
+                            <option value="counterfeit">仿品</option>
+                            <option value="expired">过期</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Summary Cards -->
+                <div class="row g-2 mb-3" id="summaryCards"></div>
+                
+                <!-- Table -->
+                <div style="max-height:500px;overflow-y:auto">
+                    <table class="table table-sm table-hover">
+                        <thead class="sticky-top bg-white">
+                            <tr>
+                                <th>内部码</th>
+                                <th>追踪号</th>
+                                <th>商品名</th>
+                                <th>报废原因</th>
+                                <th>入库日期</th>
+                                <th>报废日期</th>
+                                <th>进价</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scrapTableBody">
+                            <tr><td colspan="7" class="text-center text-muted py-4">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right: Stats -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-pie-chart me-2"></i>报废统计</h6>
+                <canvas id="scrapChart" style="width:100%;height:250px"></canvas>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-info-circle me-2"></i>说明</h6>
+                <p class="small text-muted mb-2">报废商品是指在入库或库存管理过程中发现：</p>
+                <ul class="small text-muted">
+                    <li>🔧 <strong>损坏</strong>：商品在运输或存储过程中损坏</li>
+                    <li>🚫 <strong>仿品</strong>：侵权或假冒商品，不能销售</li>
+                    <li>⏰ <strong>过期</strong>：已超过保质期的商品</li>
+                    <li>📦 <strong>其他</strong>：其他原因导致无法销售</li>
+                </ul>
+                <p class="small text-muted mb-0 mt-2">报废商品不会出现在销售页面，也不会计入可售库存。</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let scrapChart = null;
+
+function loadReport() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const reason = document.getElementById('reasonFilter').value;
+    
+    let url = '/api/scrap/report';
+    const params = [];
+    if (startDate) params.push(`start_date=${startDate}`);
+    if (endDate) params.push(`end_date=${endDate}`);
+    if (reason) params.push(`reason=${reason}`);
+    if (params.length > 0) url += '?' + params.join('&');
+    
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            renderTable(data.items || []);
+            renderSummary(data.summary || {});
+            renderChart(data.summary || {});
+        })
+        .catch(err => console.error('加载报废报告失败:', err));
+}
+
+function renderTable(items) {
+    const tbody = document.getElementById('scrapTableBody');
+    if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">暂无报废商品</td></tr>';
+        return;
+    }
+    
+    const reasonLabels = {
+        'damaged': '🔧 损坏',
+        'counterfeit': '🚫 仿品',
+        'expired': '⏰ 过期',
+        'other': '📦 其他'
+    };
+    
+    tbody.innerHTML = items.map(item => `
+        <tr>
+            <td><code class="small">${item.internal_code || '--'}</code></td>
+            <td class="small">${item.tracking_no || '--'}</td>
+            <td class="small" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.product_name || ''}">
+                ${(item.product_name || '').substring(0, 30)}
+            </td>
+            <td><span class="badge bg-warning text-dark" style="font-size:10px">${reasonLabels[item.scrap_reason] || item.scrap_reason || '--'}</span></td>
+            <td class="small">${item.inbound_date ? item.inbound_date.substring(0, 10) : '--'}</td>
+            <td class="small">${item.scrapped_at ? item.scrapped_at.substring(0, 10) : '--'}</td>
+            <td class="small">¥${Number(item.unit_cost || 0).toLocaleString()}</td>
+        </tr>
+    `).join('');
+}
+
+function renderSummary(summary) {
+    const cards = document.getElementById('summaryCards');
+    const total = Object.values(summary).reduce((a, b) => a + b, 0);
+    
+    const reasonLabels = {
+        'damaged': '🔧 损坏',
+        'counterfeit': '🚫 仿品',
+        'expired': '⏰ 过期',
+        'other': '📦 其他'
+    };
+    
+    let html = `
+        <div class="col">
+            <div class="card bg-light">
+                <div class="card-body text-center py-2">
+                    <div class="fs-5 fw-bold text-danger">${total}</div>
+                    <small class="text-muted">总报废数</small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    for (const [reason, cnt] of Object.entries(summary)) {
+        html += `
+            <div class="col">
+                <div class="card bg-light">
+                    <div class="card-body text-center py-2">
+                        <div class="fs-6 fw-bold">${cnt}</div>
+                        <small class="text-muted">${reasonLabels[reason] || reason}</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    cards.innerHTML = html;
+}
+
+function renderChart(summary) {
+    const ctx = document.getElementById('scrapChart').getContext('2d');
+    
+    if (scrapChart) scrapChart.destroy();
+    
+    const reasonLabels = {
+        'damaged': '损坏',
+        'counterfeit': '仿品',
+        'expired': '过期',
+        'other': '其他'
+    };
+    
+    const labels = Object.keys(summary).map(r => reasonLabels[r] || r);
+    const data = Object.values(summary);
+    const colors = ['#f39c12', '#e74c3c', '#95a5a6', '#3498db'];
+    
+    scrapChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors.slice(0, labels.length)
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { font: { size: 10 } } }
+            }
+        }
+    });
+}
+
+function exportCSV() {
+    const rows = document.querySelectorAll('#scrapTableBody tr');
+    if (rows.length === 0 || rows[0].cells.length < 7) {
+        showToast('没有数据可导出', 'warning');
+        return;
+    }
+    
+    let csv = '\uFEFF内部码,追踪号,商品名,报废原因,入库日期,报废日期,进价\n';
+    for (const row of rows) {
+        const cells = row.cells;
+        if (cells.length >= 7) {
+            csv += [cells[0].textContent, cells[1].textContent, cells[2].textContent, 
+                     cells[3].textContent, cells[4].textContent, cells[5].textContent, 
+                     cells[6].textContent].map(v => `"${v.replace(/"/g, '""')}"`).join(',') + '\n';
+        }
+    }
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `报废商品_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV已导出', 'success');
+}
+
+// Init
+loadReport();
+</script>
+{% endblock %}

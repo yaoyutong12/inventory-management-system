@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% block title %}販売レポート - 托盘杂货进销存{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <h4><i class="bi bi-graph-up me-2"></i>販売レポート</h4>
+        <p class="text-muted small mb-0">販売チャネル別の売上・利益を確認できます</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-auto">
+                <label class="form-label small mb-0">期間</label>
+                <div class="input-group input-group-sm">
+                    <input type="date" class="form-control" id="startDate" style="width:130px">
+                    <span class="input-group-text">〜</span>
+                    <input type="date" class="form-control" id="endDate" style="width:130px">
+                </div>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-0">チャネル</label>
+                <select class="form-select form-select-sm" id="platformFilter" style="width:140px">
+                    <option value="">全チャネル</option>
+                    <option value="physical">🏪 实体店</option>
+                    <option value="mercari">🛒 メルカリ</option>
+                    <option value="yahoo">🟨 ヤフオク</option>
+                    <option value="rakuten">🛍️ 楽天</option>
+                    <option value="other">📦 その他</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" onclick="loadReport()">
+                    <i class="bi bi-search"></i> 表示
+                </button>
+                <button class="btn btn-outline-secondary btn-sm ms-1" onclick="exportReportCSV()">
+                    <i class="bi bi-download"></i> CSV
+                </button>
+            </div>
+            <div class="col-auto ms-auto">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="setPeriod('month')">今月</button>
+                    <button class="btn btn-outline-primary" onclick="setPeriod('last30')">30日</button>
+                    <button class="btn btn-outline-primary" onclick="setPeriod('all')">全期間</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body py-2 px-3">
+                <div class="small opacity-75">総販売件数</div>
+                <div class="fs-4 fw-bold" id="sumCount">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body py-2 px-3">
+                <div class="small opacity-75">総売上</div>
+                <div class="fs-4 fw-bold" id="sumRevenue">¥0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body py-2 px-3">
+                <div class="small opacity-75">総利益</div>
+                <div class="fs-4 fw-bold" id="sumProfit">¥0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body py-2 px-3">
+                <div class="small opacity-75">利益率</div>
+                <div class="fs-4 fw-bold" id="sumMargin">0%</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Platform Breakdown -->
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-pie-chart me-2"></i>チャネル別売上比率</h6>
+                <canvas id="platformChart" height="280"></canvas>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-bar-chart me-2"></i>チャネル別利益</h6>
+                <canvas id="profitChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">チャネル別明細</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>チャネル</th>
+                                <th class="text-end">件数</th>
+                                <th class="text-end">売上</th>
+                                <th class="text-end">利益</th>
+                                <th class="text-end">利益率</th>
+                                <th class="text-end">平均単価</th>
+                            </tr>
+                        </thead>
+                        <tbody id="platformTableBody">
+                            <tr><td colspan="6" class="text-center text-muted py-3">読み込み中...</td></tr>
+                        </tbody>
+                        <tfoot id="platformTableFoot"></tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-calendar3 me-2"></i>日別販売推移</h6>
+                <div style="max-height:350px;overflow-y:auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>日付</th>
+                                <th>チャネル</th>
+                                <th class="text-end">件数</th>
+                                <th class="text-end">売上</th>
+                                <th class="text-end">利益</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dailyTableBody">
+                            <tr><td colspan="5" class="text-center text-muted py-3">読み込み中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let platformChart = null;
+let profitChart = null;
+
+const platformLabels = {
+    'physical': '🏪 实体店（物理店舗）',
+    'mercari': '🛒 メルカリ',
+    'yahoo': '🟨 ヤフオク',
+    'rakuten': '🛍️ 楽天',
+    'other': '📦 その他',
+    '': '未分類'
+};
+
+function setPeriod(type) {
+    const today = new Date();
+    const end = today.toISOString().slice(0,10);
+    let start;
+    
+    if (type === 'month') {
+        start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
+    } else if (type === 'last30') {
+        start = new Date(today.getTime() - 30*86400000).toISOString().slice(0,10);
+    } else {
+        start = '';
+    }
+    
+    document.getElementById('startDate').value = start;
+    document.getElementById('endDate').value = type === 'all' ? '' : end;
+    loadReport();
+}
+
+async function loadReport() {
+    const start = document.getElementById('startDate').value;
+    const end = document.getElementById('endDate').value;
+    const platform = document.getElementById('platformFilter').value;
+    
+    let url = '/api/sales/report?';
+    if (start) url += `start_date=${start}&`;
+    if (end) url += `end_date=${end}&`;
+    if (platform) url += `platform=${platform}&`;
+    
+    try {
+        const data = await (await fetch(url)).json();
+        renderReport(data);
+    } catch (err) {
+        showToast('レポート読み込みエラー', 'error');
+    }
+}
+
+function renderReport(data) {
+    const platformStats = data.platform_stats || [];
+    const dailyStats = data.daily_stats || [];
+    
+    // Summary
+    let totalCount = 0, totalRevenue = 0, totalProfit = 0;
+    platformStats.forEach(p => {
+        totalCount += p.sale_count;
+        totalRevenue += p.total_revenue;
+        totalProfit += p.total_profit;
+    });
+    
+    document.getElementById('sumCount').textContent = totalCount;
+    document.getElementById('sumRevenue').textContent = formatJPY(totalRevenue);
+    document.getElementById('sumProfit').textContent = formatJPY(totalProfit);
+    document.getElementById('sumMargin').textContent = totalRevenue > 0 
+        ? Math.round(totalProfit / totalRevenue * 100) + '%' : '0%';
+    
+    // Platform Table
+    document.getElementById('platformTableBody').innerHTML = platformStats.length === 0
+        ? '<tr><td colspan="6" class="text-center text-muted py-3">データがありません</td></tr>'
+        : platformStats.map(p => {
+            const margin = p.total_revenue > 0 ? Math.round(p.total_profit / p.total_revenue * 100) : 0;
+            const label = platformLabels[p.platform] || p.platform || '未分類';
+            return `<tr>
+                <td><strong>${label}</strong></td>
+                <td class="text-end">${p.sale_count}件</td>
+                <td class="text-end fw-bold">${formatJPY(p.total_revenue)}</td>
+                <td class="text-end text-success">${formatJPY(p.total_profit)}</td>
+                <td class="text-end">${margin}%</td>
+                <td class="text-end">${formatJPY(Math.round(p.avg_price))}</td>
+            </tr>`;
+        }).join('');
+    
+    // Platform Table Foot (total)
+    document.getElementById('platformTableFoot').innerHTML = platformStats.length > 1 ? `
+        <tr class="table-primary fw-bold">
+            <td>合計</td>
+            <td class="text-end">${totalCount}件</td>
+            <td class="text-end">${formatJPY(totalRevenue)}</td>
+            <td class="text-end text-success">${formatJPY(totalProfit)}</td>
+            <td class="text-end">${totalRevenue > 0 ? Math.round(totalProfit / totalRevenue * 100) : 0}%</td>
+            <td class="text-end">-</td>
+        </tr>` : '';
+    
+    // Daily Table
+    document.getElementById('dailyTableBody').innerHTML = dailyStats.length === 0
+        ? '<tr><td colspan="5" class="text-center text-muted py-3">データがありません</td></tr>'
+        : dailyStats.slice(0, 60).map(d => {
+            const label = platformLabels[d.platform] || d.platform || '未分類';
+            return `<tr>
+                <td><small>${d.sale_date}</small></td>
+                <td><small>${label}</small></td>
+                <td class="text-end"><small>${d.sale_count}件</small></td>
+                <td class="text-end"><small>${formatJPY(d.total_revenue)}</small></td>
+                <td class="text-end text-success"><small>${formatJPY(d.total_profit)}</small></td>
+            </tr>`;
+        }).join('');
+    
+    // Charts
+    renderPlatformChart(platformStats);
+    renderProfitChart(platformStats);
+}
+
+function renderPlatformChart(stats) {
+    if (platformChart) platformChart.destroy();
+    
+    const labels = stats.map(p => {
+        const l = platformLabels[p.platform] || p.platform || '未分類';
+        return l.replace(/^./, '');  // Remove emoji for chart
+    });
+    const data = stats.map(p => p.total_revenue);
+    const colors = ['#1a73e8', '#e47111', '#ff0033', '#bf0000', '#6c757d', '#28a745'];
+    
+    platformChart = new Chart(document.getElementById('platformChart'), {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{ data: data, backgroundColor: colors, borderWidth: 2 }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'right', labels: { font: { size: 11 } } },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${formatJPY(ctx.raw)}` } }
+            }
+        }
+    });
+}
+
+function renderProfitChart(stats) {
+    if (profitChart) profitChart.destroy();
+    
+    const labels = stats.map(p => {
+        const l = platformLabels[p.platform] || p.platform || '未分類';
+        return l.replace(/^./, '');
+    });
+    
+    profitChart = new Chart(document.getElementById('profitChart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: '売上', data: stats.map(p => p.total_revenue), backgroundColor: '#1a73e8', borderRadius: 4 },
+                { label: '利益', data: stats.map(p => p.total_profit), backgroundColor: '#0d904f', borderRadius: 4 }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+            scales: { y: { beginAtZero: true, ticks: { callback: (v) => '¥' + (v/1000>0 ? v/1000+'k' : v) } } }
+        }
+    });
+}
+
+function exportReportCSV() {
+    const rows = [['チャネル','件数','売上','利益','利益率','平均単価']];
+    const tbody = document.getElementById('platformTableBody');
+    const platforms = [];
+    tbody.querySelectorAll('tr').forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 5) {
+            rows.push([
+                cells[0].textContent,
+                cells[1].textContent,
+                cells[2].textContent,
+                cells[3].textContent,
+                cells[4].textContent,
+                cells[5].textContent
+            ]);
+        }
+    });
+    
+    const csv = rows.map(r => r.map(v => '"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sales_report_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+}
+
+// Init
+setPeriod('month');
+</script>
+{% endblock %}
