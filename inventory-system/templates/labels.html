@@ -6,8 +6,16 @@
     <h4><i class="bi bi-upc-scan me-2"></i>ラベル印刷</h4>
     <div>
         <button class="btn btn-outline-primary" id="selectAllBtn" onclick="selectAll()"><i class="bi bi-check-all"></i> 全選択</button>
-        <button class="btn btn-primary" onclick="printSelected()"><i class="bi bi-printer"></i> 選択したラベルを印刷</button>
+        <div class="btn-group">
+            <button class="btn btn-primary" onclick="printSelected('normal')"><i class="bi bi-printer"></i> 普通打印 (A4)</button>
+            <button class="btn btn-success" onclick="printSelected('thermal')"><i class="bi bi-receipt"></i> 热敏打印 (48mm)</button>
+        </div>
     </div>
+</div>
+
+<div class="alert alert-info small mb-3">
+    <i class="bi bi-info-circle"></i> 
+    <strong>📱 印臣B21等热敏打印机：</strong>选择商品 → 点击「热敏打印」→ 在打印对话框中选择纸张尺寸为 48mm x 35mm。也可以点击「预览」→ 右键保存二维码图片 → 手机打开印臣APP打印。
 </div>
 
 <div class="row g-3 mb-3">
@@ -137,7 +145,7 @@ async function previewLabel(id) {
     }
 }
 
-async function printSelected() {
+async function printSelected(mode = 'normal') {
     if (selectedIds.size === 0) {
         showToast('印刷するラベルを選択してください', 'warning');
         return;
@@ -146,35 +154,88 @@ async function printSelected() {
     const result = await API.post('/api/labels/generate', {product_ids: [...selectedIds]});
     if (result.labels.length === 0) return;
     
-    const win = window.open('', '_blank', 'width=800,height=600');
-    win.document.write(`
-        <html><head><title>ラベル印刷 (${result.labels.length}枚)</title>
-        <style>
-            @page { size: A4; margin: 10mm; }
-            body { font-family: 'MS Gothic', sans-serif; margin: 0; padding: 0; }
-            .labels { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-start; padding: 10px; }
-            .label { width: 170px; height: 110px; border: 1px solid #ccc; padding: 5px; text-align: center; 
-                     page-break-inside: avoid; border-radius: 6px; display: flex; flex-direction: column; align-items: center; }
-            .label img { width: 60px; height: 60px; }
-            .label .code { font-size: 11px; font-weight: bold; margin: 2px 0; }
-            .label .name { font-size: 7px; margin: 1px 0; overflow: hidden; max-height: 2em; }
-            .label .price { font-size: 13px; font-weight: bold; color: #c00; }
-            @media print { .label { border-color: #ddd; } }
-        </style></head><body>
-        <div class="labels">
+    const isThermal = mode === 'thermal';
+    const win = window.open('', '_blank', `width=${isThermal ? 400 : 800},height=600`);
+    
+    if (isThermal) {
+        // Thermal print - one label per page, 48mm width
+        win.document.write(`
+            <html><head><title>热敏标签印刷 (${result.labels.length}枚)</title>
+            <style>
+                @page { size: 48mm 35mm; margin: 1mm; }
+                body { 
+                    font-family: 'MS Gothic', 'Microsoft YaHei', sans-serif; 
+                    margin: 0; padding: 0;
+                }
+                .thermal-label { 
+                    text-align: center; 
+                    padding: 1mm; 
+                    page-break-after: always;
+                    width: 46mm;
+                }
+                .thermal-label img { 
+                    width: 28mm; height: 28mm; 
+                    display: block; margin: 0 auto;
+                }
+                .thermal-label .code { 
+                    font-size: 9px; font-weight: bold; 
+                    margin: 1mm 0; letter-spacing: 0.5px;
+                }
+                .thermal-label .name { 
+                    font-size: 6px; margin: 0.5mm 0; 
+                    word-break: break-all; line-height: 1.2;
+                    max-height: 9mm; overflow: hidden;
+                }
+                .thermal-label .price { 
+                    font-size: 12px; font-weight: bold; 
+                    color: #000; margin: 0.5mm 0;
+                }
+                @media print { 
+                    body { -webkit-print-color-adjust: exact; }
+                }
+            </style></head><body>
             ${result.labels.map(l => `
-                <div class="label">
+                <div class="thermal-label">
                     <img src="data:image/png;base64,${l.qr_code}">
                     <div class="code">${l.internal_code}</div>
                     <div class="name">${l.product_name}</div>
                     <div class="price">¥${Number(l.selling_price||0).toLocaleString()}</div>
                 </div>
             `).join('')}
-        </div>
-        <script>window.onload=function(){window.print();}<\/script>
-    `);
+            <script>window.onload=function(){window.print();}<\/script>
+        `);
+    } else {
+        // Normal A4 print
+        win.document.write(`
+            <html><head><title>ラベル印刷 (${result.labels.length}枚)</title>
+            <style>
+                @page { size: A4; margin: 10mm; }
+                body { font-family: 'MS Gothic', sans-serif; margin: 0; padding: 0; }
+                .labels { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-start; padding: 10px; }
+                .label { width: 170px; height: 110px; border: 1px solid #ccc; padding: 5px; text-align: center; 
+                         page-break-inside: avoid; border-radius: 6px; display: flex; flex-direction: column; align-items: center; }
+                .label img { width: 60px; height: 60px; }
+                .label .code { font-size: 11px; font-weight: bold; margin: 2px 0; }
+                .label .name { font-size: 7px; margin: 1px 0; overflow: hidden; max-height: 2em; }
+                .label .price { font-size: 13px; font-weight: bold; color: #c00; }
+                @media print { .label { border-color: #ddd; } }
+            </style></head><body>
+            <div class="labels">
+                ${result.labels.map(l => `
+                    <div class="label">
+                        <img src="data:image/png;base64,${l.qr_code}">
+                        <div class="code">${l.internal_code}</div>
+                        <div class="name">${l.product_name}</div>
+                        <div class="price">¥${Number(l.selling_price||0).toLocaleString()}</div>
+                    </div>
+                `).join('')}
+            </div>
+            <script>window.onload=function(){window.print();}<\/script>
+        `);
+    }
     
-    showToast(`${result.labels.length}枚のラベルを印刷します`, 'info');
+    const modeLabel = isThermal ? '热敏 (48mm)' : 'A4';
+    showToast(`${result.labels.length}枚のラベルを${modeLabel}で印刷します`, 'info');
 }
 
 loadLabels();

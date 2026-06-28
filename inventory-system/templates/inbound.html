@@ -279,13 +279,24 @@
                         <p class="small text-muted mb-1">📸 入库商品照片</p>
                         <img id="inboundPhoto" src="" alt="商品照片" style="max-width:200px;max-height:200px;border-radius:8px;border:1px solid #ddd">
                     </div>
-                    <div class="mt-3">                        
-                        <button class="btn btn-outline-primary" onclick="printLabel()">                        
-                            <i class="bi bi-printer me-1"></i> <span data-i18n="label_print">标签打印</span>
+                    <div class="mt-3 d-flex flex-wrap justify-content-center gap-2">
+                        <button class="btn btn-primary" onclick="printLabel()">
+                            <i class="bi bi-printer me-1"></i> 🖨️ 普通打印机打印
+                        </button>
+                        <button class="btn btn-success" onclick="printThermalLabel()">
+                            <i class="bi bi-receipt me-1"></i> 🏷️ 热敏标签打印 (48mm)
+                        </button>
+                        <button class="btn btn-info" onclick="downloadQR()">
+                            <i class="bi bi-download me-1"></i> 📱 下载二维码到手机
                         </button>
                         <button class="btn btn-outline-secondary" onclick="resetInbound()">
                             <i class="bi bi-arrow-repeat me-1"></i> <span data-i18n="next_item">下一个商品</span>
                         </button>
+                    </div>
+                    <div class="mt-3 p-2 bg-light rounded small text-muted">
+                        <i class="bi bi-info-circle"></i> 
+                        <strong>💡 提示：</strong>如果现在没有打印机，以后可以在 <a href="/labels" class="text-primary fw-bold">📋 ラベル印刷（标签打印）</a> 页面随时补打。<br>
+                        <span class="text-secondary">📱 印臣B21热敏打印机：点击「下载二维码到手机」保存图片 → 手机打开印臣APP → 选择图片打印</span>
                     </div>
                 </div>
                 
@@ -871,6 +882,106 @@ async function printLabel() {
         </div>
         <script>window.onload=function(){window.print();window.close();}<\/script>
     `);
+}
+
+// ─── Thermal Label Print (48mm, for 印臣B21 etc.) ───
+function printThermalLabel() {
+    const code = document.getElementById('internalCode').textContent;
+    const name = document.getElementById('productName').value;
+    const price = document.getElementById('sellingPrice').value;
+    const qrSrc = document.getElementById('qrImage').src;
+    
+    const win = window.open('', '_blank', 'width=350,height=500');
+    win.document.write(`
+        <html><head><title>热敏标签打印 (48mm)</title>
+        <style>
+            @page { size: 48mm 35mm; margin: 1mm; }
+            body { 
+                font-family: 'MS Gothic', 'Microsoft YaHei', sans-serif; 
+                margin: 0; padding: 0; 
+                width: 46mm;
+            }
+            .thermal-label { 
+                text-align: center; 
+                padding: 1mm;
+                border: 1px dashed #ccc;
+            }
+            .thermal-label img { 
+                width: 30mm; height: 30mm; 
+                display: block; margin: 0 auto;
+            }
+            .thermal-label .code { 
+                font-size: 10px; font-weight: bold; 
+                margin: 1mm 0; letter-spacing: 0.5px;
+            }
+            .thermal-label .name { 
+                font-size: 7px; margin: 0.5mm 0; 
+                word-break: break-all; line-height: 1.2;
+            }
+            .thermal-label .price { 
+                font-size: 14px; font-weight: bold; 
+                color: #000; margin: 1mm 0;
+            }
+            @media print { 
+                body { -webkit-print-color-adjust: exact; }
+                .thermal-label { border: none; }
+            }
+        </style></head><body>
+        <div class="thermal-label">
+            <img src="${qrSrc}">
+            <div class="code">${code}</div>
+            <div class="name">${(name||'').substring(0,50)}</div>
+            <div class="price">¥${Number(price).toLocaleString()}</div>
+        </div>
+        <script>window.onload=function(){window.print();}<\/script>
+    `);
+}
+
+// ─── Download QR Code as image (for phone print via 印臣APP) ───
+function downloadQR() {
+    const qrSrc = document.getElementById('qrImage').src;
+    const code = document.getElementById('internalCode').textContent;
+    
+    // Create a canvas to add product info below QR
+    const img = new Image();
+    img.onload = function() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Canvas size: QR + text below
+        const padding = 20;
+        const textHeight = 60;
+        canvas.width = img.width + padding * 2;
+        canvas.height = img.height + padding * 2 + textHeight;
+        
+        // White background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw QR code
+        ctx.drawImage(img, padding, padding, img.width, img.height);
+        
+        // Draw product info below QR
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 18px "MS Gothic", "Microsoft YaHei", sans-serif';
+        ctx.textAlign = 'center';
+        const textY = img.height + padding + 5;
+        ctx.fillText(code, canvas.width / 2, textY);
+        
+        const name = document.getElementById('productName').value || '';
+        ctx.font = '11px "MS Gothic", "Microsoft YaHei", sans-serif';
+        ctx.fillStyle = '#555555';
+        ctx.fillText(name.substring(0, 40), canvas.width / 2, textY + 22);
+        
+        // Download
+        const link = document.createElement('a');
+        link.download = `QR_${code}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        
+        showToast(`二维码已下载: QR_${code}.png`, 'success');
+    };
+    img.src = qrSrc;
 }
 
 async function loadRecentInbound() {
