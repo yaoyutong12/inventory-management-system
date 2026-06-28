@@ -982,13 +982,20 @@ def api_inbound_ai_recognize():
             'description': raw_text if 'raw_text' in dir() else '',
             'candidates': [],
             'fallback': True,
-            'message': 'AIレスポンスの解���に失敗しました。手動選択��利用ください。'
+            'message': 'AIレスポンスの解析に失敗しました。手動選択をご利用ください。'
         })
     except Exception as e:
-        return jsonify({'error': f'AI認識エラー: {str(e)}'}), 500
+        err_str = str(e)
+        # Check for quota/exhausted errors (429)
+        if '429' in err_str or 'ResourceExhausted' in err_str or 'quota' in err_str.lower():
+            return jsonify({
+                'error': 'AIの無料枠の利用制限に達しました。しばらく待つか、手動で選択してください。',
+                'type': 'quota_exceeded',
+                'message': 'AI無料枠制限中 - 手動で商品を選択できます'
+            }), 429
+        return jsonify({'error': f'AI認識エラー: {err_str}'}), 500
 
 
-# ─── API: Manual Inbound (手动输入条码入库) ────────────────────
 @app.route('/api/inbound/manual', methods=['POST'])
 def api_inbound_manual():
     """手动输入条码入库，不需要扫描"""
