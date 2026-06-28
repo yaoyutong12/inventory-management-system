@@ -504,7 +504,10 @@ def inventory_page():
         
         # Pre-fetch data server-side for SSR (table rendered by Jinja2, not JS)
         try:
-            products = db.execute("SELECT * FROM products ORDER BY updated_at DESC").fetchall()
+            # 关联查询照片（取最近一次入库的照片）
+            products = db.execute("""SELECT p.*, 
+                (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo 
+                FROM products p ORDER BY p.updated_at DESC""").fetchall()
         except Exception as e:
             app.logger.error(f"Inventory query failed: {e}")
             products = []
@@ -523,6 +526,11 @@ def inventory_page():
                 p_dict['total_in'] = total_in
                 p_dict['total_out'] = total_out
                 p_dict['total_revenue'] = total_revenue
+                # 添加照片URL
+                if p_dict.get('photo'):
+                    p_dict['photo_url'] = f'/uploads/{p_dict["photo"]}'
+                else:
+                    p_dict['photo_url'] = None
                 inventory_data.append(p_dict)
             except Exception as e:
                 app.logger.error(f"Error processing product {p}: {e}")
@@ -550,7 +558,10 @@ def inventory_page():
 def inventory_simple_page():
     """Simple server-side rendered inventory - no JS needed"""
     db = get_db()
-    products = db.execute("SELECT * FROM products ORDER BY updated_at DESC").fetchall()
+    # 关联查询照片（取最近一次入库的照片）
+    products = db.execute("""SELECT p.*, 
+        (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo 
+        FROM products p ORDER BY p.updated_at DESC""").fetchall()
 
     html = '''<!DOCTYPE html>
 <html lang="ja">
@@ -938,6 +949,11 @@ def api_inventory_list():
         d['total_in'] = total_in
         d['total_out'] = total_out
         d['total_revenue'] = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        # 添加照片URL
+        if d.get('photo'):
+            d['photo_url'] = f'/uploads/{d["photo"]}'
+        else:
+            d['photo_url'] = None
         result.append(d)
     return jsonify(result)
 
