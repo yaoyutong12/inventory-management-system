@@ -427,12 +427,16 @@ async function uploadAIPhoto() {
                 <button class="btn btn-outline-secondary btn-sm w-100" onclick="switchMethod('manual')">
                     ⌨️ 手动输入に切り替える
                 </button>`;
+            } else if (data.type === 'quota_exceeded') {
+                // 429 quota exceeded - show manual fallback
+                showAIFallbackWithManual(data.message || 'AIの利用制限に達しました', resultDiv);
             } else if (data.type === 'no_unmatched') {
                 resultDiv.innerHTML = `<div class="alert alert-info">
                     <i class="bi bi-info-circle"></i> ${data.error}
                 </div>`;
             } else {
-                resultDiv.innerHTML = `<div class="alert alert-danger small">${data.error}</div>`;
+                // Generic error - also show manual fallback
+                showAIFallbackWithManual(data.error, resultDiv);
             }
             return;
         }
@@ -543,6 +547,45 @@ async function showAllUnmatched() {
         </div>`;
     });
     html += `</div></div></div>`;
+    resultDiv.innerHTML = html;
+}
+
+async function showAIFallbackWithManual(message, resultDiv) {
+    // When AI fails (quota exceeded, etc.), show manual selection directly
+    let html = `<div class="alert alert-warning small">
+        <i class="bi bi-exclamation-triangle"></i> ${message}<br>
+        <small>AI認識が利用できないため、手動で選択してください。</small>
+    </div>`;
+    
+    try {
+        const items = await (await fetch('/api/inbound/unmatched')).json();
+        if (items.length === 0) {
+            html += `<div class="alert alert-info">未入库商品はありません</div>`;
+        } else {
+            html += `<div class="card"><div class="card-body p-2">
+                <h6 class="mb-2">📋 未入库商品一覧から選択（${items.length}件）</h6>
+                <div style="max-height:300px;overflow-y:auto">`;
+            items.forEach(item => {
+                html += `<div class="border-bottom py-2 px-1 ai-candidate" style="cursor:pointer"
+                             onclick="selectAICandidate(0, ${item.id})">
+                    <div class="fw-bold small">${escapeHtml(item.product_name || '不明')}</div>
+                    <div class="text-muted" style="font-size:0.75rem">
+                        ${item.tracking_no ? '📦 ' + escapeHtml(item.tracking_no) : ''}
+                        ${item.category ? '<span class="badge bg-light text-dark ms-1">' + escapeHtml(item.category) + '</span>' : ''}
+                        ${item.weight ? ' <span class="ms-1">' + item.weight + 'kg</span>' : ''}
+                    </div>
+                </div>`;
+            });
+            html += `</div></div></div>`;
+        }
+    } catch (err) {
+        html += `<div class="alert alert-danger small">リスト取得エラー: ${err.message}</div>`;
+    }
+    
+    html += `<button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="switchMethod('manual')">
+        ⌨️ 手动输入に切り替える
+    </button>`;
+    
     resultDiv.innerHTML = html;
 }
 
