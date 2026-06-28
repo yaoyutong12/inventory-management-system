@@ -1033,7 +1033,7 @@ def api_inventory_stats():
         'total_revenue': db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records").fetchone()[0],
         'total_profit': db.execute("SELECT COALESCE(SUM(profit_amount),0) FROM sales_records").fetchone()[0],
         'total_sales_count': db.execute("SELECT COUNT(*) FROM sales_records").fetchone()[0],
-        'high_value_count': db.execute("SELECT COUNT(*) FROM products WHERE is_high_value=1").fetchone()[0],
+        'high_value_count': db.execute("SELECT COUNT(*) FROM products WHERE is_high_value=TRUE").fetchone()[0],
     }
     
     # By category
@@ -1274,7 +1274,7 @@ def api_mercari_draft(product_id):
 @app.route('/api/mercari/high-value')
 def api_mercari_high_value():
     db = get_db()
-    products = db.execute("SELECT * FROM products WHERE is_high_value=1 AND status='in_stock' ORDER BY selling_price DESC").fetchall()
+    products = db.execute("SELECT * FROM products WHERE is_high_value=TRUE AND status='in_stock' ORDER BY selling_price DESC").fetchall()
     result = []
     for p in products:
         total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]
