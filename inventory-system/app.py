@@ -23,6 +23,13 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
+
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 BASE_DIR = Path(__file__).parent
@@ -838,6 +845,147 @@ def api_inbound_photo():
         })
     except Exception as e:
         return jsonify({'error': f'画像処理エラー: {str(e)}'}), 500
+
+
+# ─── API: AI Photo Recognition (Gemini) ────────────────────────
+@app.route('/api/inbound/ai-recognize', methods=['POST'])
+def api_inbound_ai_recognize():
+    """AI拍照识别实物（Gemini Vision），匹配进货清单中未入库商品"""
+    if not GEMINI_AVAILABLE:
+        return jsonify({'error': 'AI recognition not configured', 'type': 'not_configured'}), 503
+    
+    api_key = os.environ.get('GEMINI_API_KEY', '')
+    if not api_key:
+        return jsonify({'error': 'Gemini API key not set', 'type': 'no_api_key'}), 503
+    
+    file = request.files.get('image')
+    if not file:
+        return jsonify({'error': '画像がありません'}), 400
+    
+    try:
+        # Read image and convert to base64
+        img = Image.open(file.stream)
+        
+        # Get all unmatched supplier items (not yet matched to products)
+        db = get_db()
+        unmatched = db.execute("""
+            SELECT id, product_name, category, weight, dimensions, tracking_no
+            FROM supplier_items WHERE matched=0
+            ORDER BY id
+        """).fetchall()
+        
+        if not unmatched:
+            return jsonify({
+                'error': '没有未入库的商品。请先上传进货清单。',
+                'type': 'no_unmatched'
+            })
+        
+        # Build product list for Gemini prompt
+        product_names = []
+        for item in unmatched:
+            name = item['product_name'] or ''
+            if name and len(name) > 5:
+                product_names.append(f"- {name[:80]}")
+        
+        if not product_names:
+            # If all names are too short or empty, use all names
+            product_names = [f"- {item['product_name'] or '不明商品'}" for item in unmatched[:50]]
+        
+        products_text = '\n'.join(product_names)
+        
+        # Configure Gemini
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        
+        # Convert image to bytes for Gemini
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=80)
+        buf.seek(0)
+        image_bytes = buf.getvalue()
+        
+        # Prompt Gemini
+        prompt = f"""你是仓库入库助手。我拍了一张商品的照片。
+
+请先描述这张照片里的商品是什么（用日语简短描述，比如「白いワイヤレスイヤホン」「青いTシャツ」等）。
+
+然后，从下面的进货清单中，找出最可能是这个商品的3个候选项（按相似度排列）：
+
+进货清单：
+{products_text}
+
+请用JSON格式回答，不要任何其他文字：
+{{
+  "description": "商品描述（日语）",
+  "candidates": [
+    {{"index": 序号(1开始), "name": "商品名", "reason": "匹配理由（简短日语）"}},
+    {{"index": 序号, "name": "商品名", "reason": "匹配理由"}},
+    {{"index": 序号, "name": "商品名", "reason": "匹配理由"}}
+  ]
+}}
+注意：只输出JSON，不要markdown代码块。"""
+        
+        # Generate content
+        response = model.generate_content([
+            {'mime_type': 'image/jpeg', 'data': image_bytes},
+            prompt
+        ])
+        
+        raw_text = response.text.strip()
+        # Clean up markdown code fences if present
+        if raw_text.startswith('```'):
+            raw_text = raw_text.split('\n', 1)[1]
+            if raw_text.endswith('```'):
+                raw_text = raw_text[:-3]
+        
+        ai_result = json.loads(raw_text)
+        
+        # Match AI candidates to actual supplier item IDs
+        candidates = []
+        for c in ai_result.get('candidates', []):
+            candidate_name = c.get('name', '')
+            # Find matching supplier items by name (fuzzy)
+            matched_item = None
+            for item in unmatched:
+                item_name = item['product_name'] or ''
+                if candidate_name in item_name or item_name in candidate_name:
+                    matched_item = dict(item)
+                    break
+            
+            # If no exact match, do keyword matching
+            if not matched_item and candidate_name:
+                keywords = candidate_name.split()
+                best_score = 0
+                for item in unmatched:
+                    item_name = item['product_name'] or ''
+                    score = sum(1 for kw in keywords if kw in item_name)
+                    if score > best_score:
+                        best_score = score
+                        matched_item = dict(item)
+            
+            candidates.append({
+                'rank': c.get('index', len(candidates) + 1),
+                'name': candidate_name,
+                'reason': c.get('reason', ''),
+                'matched_item': matched_item
+            })
+        
+        return jsonify({
+            'success': True,
+            'description': ai_result.get('description', ''),
+            'candidates': candidates,
+            'total_unmatched': len(unmatched)
+        })
+        
+    except json.JSONDecodeError:
+        return jsonify({
+            'success': True,
+            'description': raw_text if 'raw_text' in dir() else '',
+            'candidates': [],
+            'fallback': True,
+            'message': 'AIレスポンスの解���に失敗しました。手動選択��利用ください。'
+        })
+    except Exception as e:
+        return jsonify({'error': f'AI認識エラー: {str(e)}'}), 500
 
 
 # ─── API: Manual Inbound (手动输入条码入库) ────────────────────
