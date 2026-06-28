@@ -97,33 +97,55 @@ def ensure_db_initialized():
 
 
 # ─── Database Connection ─────────────────────────────────────────
-class PostgresCursor:
-    """Cursor-like wrapper that mimics sqlite3.Cursor interface"""
-    def __init__(self, real_cursor):
-        self._cur = real_cursor
-        self.lastrowid = None
-
-    def fetchone(self):
-        row = self._cur.fetchone()
-        if row is not None and isinstance(row, dict):
-            # Convert dict to a dict-like object that supports both [] and .get()
-            return DictRow(row)
-        return row
-
-    def fetchall(self):
-        rows = self._cur.fetchall()
-        if rows and isinstance(rows[0], dict):
-            return [DictRow(r) for r in rows]
-        return rows
-
-
 class DictRow(dict):
-    """Dict that supports attribute-style access like sqlite3.Row"""
+    """dict that supports BOTH key access AND integer indexing like sqlite3.Row"""
+    def __init__(self, d, columns=None):
+        super().__init__(d)
+        # Store column order for integer indexing
+        self._columns = list(d.keys()) if d else (columns or [])
+    
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            # Integer index: return by column position
+            return self[self._columns[key]]
+        return super().__getitem__(key)
+    
     def __getattr__(self, key):
         try:
             return self[key]
         except KeyError:
             raise AttributeError(f"'DictRow' has no attribute '{key}'")
+
+
+class PostgresCursor:
+    """Cursor-like wrapper that mimics sqlite3.Cursor interface"""
+    def __init__(self, real_cursor):
+        self._cur = real_cursor
+        self.lastrowid = None
+        self._columns = None  # Store column names after execute
+    
+    def _store_columns(self):
+        """Store column names from cursor description"""
+        if self._cur.description:
+            self._columns = [desc[0] for desc in self._cur.description]
+    
+    def fetchone(self):
+        self._store_columns()
+        row = self._cur.fetchone()
+        if row is not None:
+            if isinstance(row, dict):
+                return DictRow(row, columns=self._columns)
+            elif hasattr(row, '__getitem__'):
+                # DictRow or tuple - convert to DictRow
+                return DictRow(dict(row), columns=self._columns)
+        return row
+    
+    def fetchall(self):
+        self._store_columns()
+        rows = self._cur.fetchall()
+        if rows and self._columns:
+            return [DictRow(dict(r), columns=self._columns) for r in rows]
+        return rows
 
 
 class PostgresConnection:
