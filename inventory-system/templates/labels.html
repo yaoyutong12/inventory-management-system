@@ -81,12 +81,34 @@ let selectedIds = new Set();
 
 async function loadLabels() {
     try {
-        const products = await API.get('/api/inventory/list');
-        // 只显示有库存的商品（不依赖status字段，直接用current_stock判断）
-        allLabels = products.filter(p => (p.current_stock || 0) > 0);
+        const allProducts = await API.get('/api/inventory/list');
+        
+        // 调试：在控制台输出所有商品和库存
+        console.log('=== ラベルデータデバッグ ===');
+        console.log('全商品数:', allProducts.length);
+        allProducts.forEach(p => {
+            console.log(`ID:${p.id} | ${p.internal_code} | 在庫:${p.current_stock} | 入庫合計:${p.total_in} | 出庫合計:${p.total_out}`);
+        });
+        
+        // 默认显示有库存的商品（可以切换）
+        allLabels = allProducts.filter(p => (p.current_stock || 0) > 0);
+        
+        const noStockProducts = allProducts.filter(p => (p.current_stock || 0) <= 0);
         
         if (allLabels.length === 0) {
-            document.querySelector('#labelTable tbody').innerHTML = '<tr><td colspan="6" class="text-center py-5 text-muted">在庫商品がありません。<br><a href="/inbound" class="btn btn-sm btn-primary mt-2">入庫を行う</a><br><small class="text-muted">先に入庫を行ってください。入庫後、在庫数が1以上の商品が表示されます。</small></td></tr>';
+            let msg = '<tr><td colspan="6" class="text-center py-5 text-muted">';
+            if (allProducts.length === 0) {
+                msg += '商品がありません。<br><a href="/import" class="btn btn-sm btn-primary mt-2">仕入リストをアップロード</a>';
+            } else if (noStockProducts.length > 0) {
+                msg += `在庫のある商品がありません（全${noStockProducts.length}件は在庫切れ）。<br>`;
+                msg += `<small class="text-muted">デバッグ情報: 全${allProducts.length}件の商品のうち、`;
+                msg += `${noStockProducts.length}件が在庫0、${allLabels.length}件に在庫あり</small><br><br>`;
+                msg += `<button class="btn btn-sm btn-warning mt-2" onclick="showAllProducts()">在庫0の商品も含めて表示</button>`;
+            } else {
+                msg += '在庫商品がありません。<br><a href="/inbound" class="btn btn-sm btn-primary mt-2">入庫を行う</a>';
+            }
+            msg += '</td></tr>';
+            document.querySelector('#labelTable tbody').innerHTML = msg;
             return;
         }
         
@@ -139,6 +161,15 @@ function selectAll() {
     document.querySelectorAll('.label-cb').forEach(c => {
         c.checked = true;
         selectedIds.add(parseInt(c.value));
+    });
+}
+
+function showAllProducts() {
+    // 重新加载并显示所有商品（包括库存为0的）
+    API.get('/api/inventory/list').then(allProducts => {
+        allLabels = allProducts; // 不过滤，显示所有
+        renderLabelTable(allLabels);
+        showToast(`全${allProducts.length}件の商品を表示しました`, 'info');
     });
 }
 
