@@ -32,14 +32,20 @@ except ImportError:
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
-BASE_DIR = Path(__file__).parent
-# Railway Volume: data lives in a subdirectory of the app
-DATA_DIR = BASE_DIR / 'data'
-DB_PATH = DATA_DIR / 'inventory.db'
-UPLOAD_DIR = BASE_DIR / 'uploads'
 
-for d in [DATA_DIR, UPLOAD_DIR]:
-    d.mkdir(exist_ok=True)
+# Railway Volume: /app/data (mounted at runtime)
+# Local dev: use ./data
+RAILWAY_DATA = Path('/app/data')
+BASE_DIR = Path(__file__).parent
+DATA_DIR = RAILWAY_DATA if RAILWAY_DATA.exists() else (BASE_DIR / 'data')
+DB_PATH = DATA_DIR / 'inventory.db'
+UPLOAD_DIR = RAILWAY_DATA / 'uploads' if RAILWAY_DATA.exists() else (BASE_DIR / 'uploads')
+
+# Ensure directories exist
+DATA_DIR.mkdir(exist_ok=True)
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+app.logger.info(f"DB_PATH={DB_PATH}, exists={DB_PATH.exists()}")
 
 
 # ─── Database ───────────────────────────────────────────────────

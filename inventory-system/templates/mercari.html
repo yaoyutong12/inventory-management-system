@@ -297,9 +297,13 @@ async function updatePreview() {
         'form-control form-control-sm ' + (marginPct >= 20 ? 'text-success' : marginPct >= 0 ? 'text-warning' : 'text-danger');
     
     // Call API to generate listing
-    const result = await API.post(`/api/mercari/generate/${currentProduct.id}`, {
-        condition, brand, price, shipping_method: shipping
-    });
+    const postData = {
+        condition: condition,
+        brand: brand,
+        price: price,
+        shipping_method: shipping
+    };
+    const result = await API.post(`/api/mercari/generate/${currentProduct.id}`, postData);
     
     if (result.success && result.listing) {
         document.getElementById('previewTitle').textContent = result.listing.title;
