@@ -1,5 +1,15 @@
 FROM python:3.11-slim
 
+# Install system dependencies needed for Python packages
+# libzbar0: required by pyzbar (barcode scanning)
+# libjpeg62-turbo, zlib1g: required by Pillow (image processing)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libzbar0 \
+        libjpeg62-turbo \
+        zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY requirements.txt .
