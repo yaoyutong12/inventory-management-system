@@ -74,7 +74,26 @@ UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
 app.logger.info(f"DB mode: {'PostgreSQL' if USE_POSTGRES else f'SQLite ({DB_PATH})'}")
 
 # Initialize database tables (runs on both local & Railway/gunicorn)
-init_db()
+_db_initialized = False
+try:
+    init_db()
+    _db_initialized = True
+    app.logger.info("Database initialized successfully")
+except Exception as e:
+    app.logger.error(f"Failed to initialize database: {e}")
+    # Don't crash the app - tables will be created on first request if needed
+
+# Ensure database is initialized on first request (backup for Railway/gunicorn)
+@app.before_request
+def ensure_db_initialized():
+    global _db_initialized
+    if not _db_initialized:
+        try:
+            init_db()
+            _db_initialized = True
+            app.logger.info("Database initialized on first request")
+        except Exception as e:
+            app.logger.error(f"Failed to initialize DB on request: {e}")
 
 
 # ─── Database Connection ─────────────────────────────────────────
