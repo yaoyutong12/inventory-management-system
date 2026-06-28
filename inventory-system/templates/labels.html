@@ -81,14 +81,35 @@ let selectedIds = new Set();
 
 async function loadLabels() {
     try {
-        const allProducts = await API.get('/api/inventory/list');
+        // 显示加载状态
+        const tbody = document.querySelector('#labelTable tbody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">読み込み中...</p></td></tr>';
+        }
+
+        const resp = await fetch('/api/inventory/list?_t=' + Date.now()); // 破坏缓存
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        const allProducts = await resp.json();
         
-        // 调试：在控制台输出所有商品和库存
+        // 调试：在页面上显示调试信息
         console.log('=== ラベルデータデバッグ ===');
         console.log('全商品数:', allProducts.length);
-        allProducts.forEach(p => {
-            console.log(`ID:${p.id} | ${p.internal_code} | 在庫:${p.current_stock} | 入庫合計:${p.total_in} | 出庫合計:${p.total_out}`);
-        });
+        
+        // 在页面顶部显示数据状态（临时，方便排查）
+        let debugDiv = document.getElementById('labelsDebugInfo');
+        if (!debugDiv) {
+            debugDiv = document.createElement('div');
+            debugDiv.id = 'labelsDebugInfo';
+            debugDiv.className = 'alert alert-secondary small';
+            debugDiv.style.fontSize = '11px';
+            const cardBody = document.querySelector('.card-body');
+            if (cardBody) cardBody.insertBefore(debugDiv, cardBody.firstChild);
+        }
+        
+        debugDiv.innerHTML = `<strong>デバッグ:</strong> APIから ${allProducts.length}件の商品を取得しました。` +
+            (allProducts.length > 0 ? ` 先頭: ${allProducts[0].internal_code} - ${(allProducts[0].product_name||'')[:30]}` : '');
         
         // 默认加载全部商品（不过滤），由下拉框控制是否过滤
         allLabels = allProducts;

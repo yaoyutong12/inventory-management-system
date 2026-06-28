@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo">(v20260628-4)</small></h4>
+    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo">(v20260629-1)</small></h4>
     <div class="d-flex gap-2">
         <select class="form-select form-select-sm" id="categoryFilter" onchange="filterInventory()">
             <option value="">全カテゴリ</option>
@@ -27,7 +27,7 @@
             <table class="table table-hover mb-0" id="inventoryTable">
                 <thead>
                     <tr>
-                        <th>写真</th><th>内部コード</th><th>商品名</th><th>カテゴリ</th>
+                        <th>写真</th><th>追跡番号</th><th>内部コード</th><th>商品名</th><th>カテゴリ</th>
                         <th>仕入単価</th><th>販売価格</th>
                         <th>入庫数</th><th>販売数</th><th>在庫数</th>
                         <th>売上</th><th>利益</th><th>状態</th><th>操作</th>
@@ -56,6 +56,7 @@
                                     <div style="width:50px;height:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:bold;letter-spacing:-1px">{{ (p.product_name or '品')[0] }}</div>
                                 {% endif %}
                             </td>
+                            <td><small class="text-muted">{{ p.tracking_no or '-' }}</small></td>
                             <td><code>{{ p.internal_code }}{% if p.is_high_value %} <span class="badge bg-warning">高額</span>{% endif %}</code></td>
                             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ p.product_name }}">{{ (p.product_name or '')[:40] }}</td>
                             <td><small>{{ p.category or '-' }}</small></td>
@@ -76,7 +77,7 @@
                         </tr>
                         {% endfor %}
                     {% else %}
-                        <tr><td colspan="12" class="text-center py-5 text-muted">
+                        <tr><td colspan="13" class="text-center py-5 text-muted">
                             <i class="bi bi-inbox" style="font-size:3rem;display:block;margin-bottom:1rem"></i>
                             <p class="mb-2"><strong>まだ商品が登録されていません</strong></p>
                             <p class="small mb-3">手順：<br>

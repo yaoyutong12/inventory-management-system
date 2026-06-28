@@ -600,9 +600,10 @@ def inventory_page():
         
         # Pre-fetch data server-side for SSR (table rendered by Jinja2, not JS)
         try:
-            # 关联查询照片（取最近一次入库的照片）
-            products = db.execute("""SELECT p.*, 
-                (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo 
+            # 关联查询照片和跟踪号
+            products = db.execute("""SELECT p.*,
+                (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo,
+                (SELECT si.tracking_no FROM supplier_items si WHERE si.id=p.supplier_item_id LIMIT 1) as tracking_no
                 FROM products p ORDER BY p.updated_at DESC""").fetchall()
         except Exception as e:
             app.logger.error(f"Inventory query failed: {e}")
@@ -941,10 +942,26 @@ def api_inbound_create():
                 ext = 'jpg'
             photo_filename = f"inbound_{product_id}_{uuid.uuid4().hex[:8]}.{ext}"
             photo_path = UPLOAD_DIR / photo_filename
+
+            # 确保目录存在且可写
+            UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+            
+            # 写入文件并验证
             with open(photo_path, 'wb') as f:
                 f.write(base64.b64decode(encoded))
-        except Exception:
-            photo_filename = None  # silently fail on photo save error
+
+            # 验证文件确实写入成功
+            if photo_path.exists() and photo_path.stat().st_size > 0:
+                app.logger.info(f"[Photo] OK: saved {photo_filename} ({photo_path.stat().st_size} bytes) to {photo_path}")
+            else:
+                app.logger.error(f"[Photo] FAIL: file exists={photo_path.exists()}, path={photo_path}, UPLOAD_DIR={UPLOAD_DIR}, dir_exists={UPLOAD_DIR.exists()}")
+                photo_filename = None
+
+        except Exception as e:
+            app.logger.error(f"[Photo] ERROR saving photo: {e}, path={UPLOAD_DIR}, dir_exists={UPLOAD_DIR.exists()}")
+            import traceback
+            app.logger.error(f"[Photo] TRACEBACK: {traceback.format_exc()}")
+            photo_filename = None
     
     # Record inbound (支持自定义入库日期)
     if inbound_date:
@@ -1035,11 +1052,12 @@ def api_sales_create():
 @app.route('/api/inventory/list')
 def api_inventory_list():
     db = get_db()
-    # 关联查询照片（取最近一次入库的照片）
+    # 关联查询照片和跟踪号（取最近一次入库的照片）
     products = db.execute("""
-        SELECT p.*, 
-               (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo 
-        FROM products p 
+        SELECT p.*,
+               (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo,
+               (SELECT si.tracking_no FROM supplier_items si WHERE si.id=p.supplier_item_id LIMIT 1) as tracking_no
+        FROM products p
         ORDER BY p.updated_at DESC
     """).fetchall()
     result = []
@@ -1965,6 +1983,71 @@ def api_debug_data_check():
             pass
     
     return jsonify(result)
+
+
+@app.route('/api/debug/fs-test')
+def api_debug_fs_test():
+    """诊断端点：测试文件系统是否可写（照片保存的前提条件）"""
+    import tempfile
+    results = {
+        'UPLOAD_DIR': str(UPLOAD_DIR),
+        'UPLOAD_dir_exists': UPLOAD_DIR.exists(),
+    }
+
+    # 测试1: 目录是否存在且可访问
+    if UPLOAD_DIR.exists():
+        try:
+            results['UPLOAD_dir_readable'] = os.access(str(UPLOAD_DIR), os.R_OK)
+            results['UPLOAD_dir_writable'] = os.access(str(UPLOAD_DIR), os.W_OK)
+            # 列出现有文件
+            try:
+                files = list(UPLOAD_DIR.iterdir())
+                results['existing_files'] = [{'name': f.name, 'size': f.stat().st_size} for f in files if f.is_file()][:10]
+            except:
+                results['existing_files'] = []
+        except Exception as e:
+            results['UPLOAD_access_error'] = str(e)
+
+    # 测试2: 尝试创建目录
+    try:
+        UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+        results['mkdir_ok'] = True
+    except Exception as e:
+        results['mkdir_ok'] = False
+        results['mkdir_error'] = str(e)
+
+    # 测试3: 尝试写入测试文件
+    test_filename = f"fs_test_{uuid.uuid4().hex[:6]}.txt"
+    test_path = UPLOAD_DIR / test_filename
+    try:
+        with open(test_path, 'w') as f:
+            f.write('filesystem write test')
+        results['write_test'] = 'OK'
+        results['test_file_exists'] = test_path.exists()
+        if test_path.exists():
+            results['test_file_size'] = test_path.stat().st_size
+        # 清理测试文件
+        try:
+            test_path.unlink()
+            results['cleanup'] = 'OK'
+        except:
+            results['cleanup'] = 'FAILED (test file left behind)'
+    except PermissionError as e:
+        results['write_test'] = 'PERMISSION_DENIED'
+        results['write_error'] = str(e)
+    except OSError as e:
+        results['write_test'] = 'OS_ERROR'
+        results['write_error'] = str(e)
+    except Exception as e:
+        results['write_test'] = 'ERROR'
+        results['write_error'] = f"{type(e).__name__}: {e}"
+
+    # 测试4: 检查Railway volume挂载
+    for check_path in ['/data', '/app/data', '/tmp', '/app/uploads']:
+        p = Path(check_path)
+        results[f'path_{check_path}_exists'] = p.exists()
+
+    return jsonify(results)
 
 
 @app.route('/debug-photos')
