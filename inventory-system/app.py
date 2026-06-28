@@ -128,11 +128,32 @@ class DictRow(dict):
 
 class PostgresConnection:
     """Wrapper around psycopg2 connection to mimic sqlite3 interface"""
+    # Columns that are BOOLEAN in PostgreSQL but INTEGER in SQLite
+    BOOL_COLUMNS = {'matched', 'is_high_value'}
+
     def __init__(self, url):
         self._conn = psycopg2.connect(url, connect_timeout=15)
         self._conn.autocommit = False
         # Use RealDictCursor by default so queries return dict-like rows (supports .attr and [key])
         self._cursor_factory = RealDictCursor
+
+    def _fix_bool_params(self, sql, params):
+        """Convert integer 0/1 to FALSE/TRUE for boolean columns in PostgreSQL"""
+        if not params or not isinstance(params, (tuple, list)):
+            return sql, params
+        new_params = list(params)
+        # Find patterns like "colname = ?" or "colname=?" and check if col is boolean
+        import re
+        for i, val in enumerate(new_params):
+            if val in (0, 0.0, 1, 1.0):
+                # Look for this parameter's column name in the SQL
+                pattern = r'\b(\w+)\s*=\s*%s'
+                matches = list(re.finditer(pattern, sql))
+                if i < len(matches):
+                    col_name = matches[i].group(1).lower()
+                    if col_name in self.BOOL_COLUMNS:
+                        new_params[i] = bool(val)
+        return sql, tuple(new_params)
 
     def execute(self, sql, params=None):
         if params is None:
@@ -140,6 +161,8 @@ class PostgresConnection:
         # Replace ? placeholders with %s for psycopg2
         if '?' in sql:
             sql = sql.replace('?', '%s')
+        # Fix boolean parameters for PostgreSQL (0/1 -> FALSE/TRUE)
+        sql, params = self._fix_bool_params(sql, params)
         cur = self._conn.cursor(cursor_factory=self._cursor_factory)
         # Check if this is an INSERT - we need to get back the lastrowid
         is_insert = sql.strip().upper().startswith('INSERT')
@@ -168,8 +191,10 @@ class PostgresConnection:
     def executemany(self, sql, params_list):
         if '?' in sql and '%s' not in sql:
             sql = sql.replace('?', '%s')
+        # Fix boolean parameters for each row
+        fixed_params = [self._fix_bool_params(sql, params)[1] for params in params_list]
         cur = self._conn.cursor(cursor_factory=self._cursor_factory)
-        cur.executemany(sql, params_list)
+        cur.executemany(sql, fixed_params)
         return cur
 
     def executescript(self, sql):
