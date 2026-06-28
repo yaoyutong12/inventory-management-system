@@ -249,8 +249,9 @@ def sales_page():
 
 @app.route('/inventory')
 def inventory_page():
+    from time import time
     db = get_db()
-    # Pre-fetch data server-side for SSR fallback
+    # Pre-fetch data server-side for SSR (table rendered by Jinja2, not JS)
     products = db.execute("SELECT * FROM products ORDER BY updated_at DESC").fetchall()
     inventory_data = []
     for p in products:
@@ -264,7 +265,15 @@ def inventory_page():
         d['total_revenue'] = total_revenue
         inventory_data.append(d)
 
-    response = make_response(render_template('inventory.html', ssr_data=inventory_data))
+    # Unique categories for filter dropdown
+    categories = sorted(set(d.get('category') or '' for d in inventory_data))
+
+    response = make_response(render_template(
+        'inventory.html',
+        ssr_data=inventory_data,
+        ssr_categories=categories,
+        now_ts=int(time())
+    ))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
