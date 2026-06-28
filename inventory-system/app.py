@@ -1026,7 +1026,13 @@ def api_sales_create():
 @app.route('/api/inventory/list')
 def api_inventory_list():
     db = get_db()
-    products = db.execute("SELECT * FROM products ORDER BY updated_at DESC").fetchall()
+    # 关联查询照片（取最近一次入库的照片）
+    products = db.execute("""
+        SELECT p.*, 
+               (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo 
+        FROM products p 
+        ORDER BY p.updated_at DESC
+    """).fetchall()
     result = []
     for p in products:
         total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]
@@ -1312,7 +1318,10 @@ def api_mercari_high_value():
 def api_mercari_stock():
     """获取所有在库商品供煤炉上架（不限高额）"""
     db = get_db()
-    products = db.execute("SELECT * FROM products WHERE status='in_stock' ORDER BY updated_at DESC").fetchall()
+    # 关联查询照片
+    products = db.execute("""SELECT p.*, 
+        (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo 
+        FROM products p WHERE p.status='in_stock' ORDER BY p.updated_at DESC""").fetchall()
     result = []
     for p in products:
         total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]
@@ -1320,6 +1329,11 @@ def api_mercari_stock():
         d = dict(p)
         d['current_stock'] = total_in - total_out
         d['has_listing'] = bool(db.execute("SELECT id FROM mercari_listings WHERE product_id=?", (p['id'],)).fetchone())
+        # 添加照片URL
+        if d.get('photo'):
+            d['photo_url'] = f'/uploads/{d["photo"]}'
+        else:
+            d['photo_url'] = None
         result.append(d)
     return jsonify(result)
 

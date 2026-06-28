@@ -69,6 +69,16 @@
                         <span class="badge bg-secondary" id="listingCategory"></span>
                     </div>
                     
+                    <!-- Photo Preview -->
+                    <div class="mb-3 text-center" id="photoPreviewContainer" style="display:none;">
+                        <small class="text-muted d-block mb-1">【商品写真】</small>
+                        <img id="previewPhoto" src="" alt="商品写真" style="max-width:200px;max-height:200px;border-radius:8px;border:1px solid #ddd;">
+                        <br>
+                        <button class="btn btn-sm btn-outline-primary mt-1" onclick="downloadPhoto()">
+                            <i class="bi bi-download"></i> 写真をダウンロード
+                        </button>
+                    </div>
+                    
                     <!-- Quick Settings -->
                     <div class="row g-2 mb-3">
                         <div class="col-6">
@@ -257,6 +267,14 @@ async function selectProduct(id) {
     document.getElementById('listingStock').textContent = currentProduct.current_stock || 0;
     document.getElementById('listingCategory').textContent = currentProduct.category || '未分類';
     
+    // 加载商品照片
+    if (currentProduct.photo_url) {
+        document.getElementById('previewPhoto').src = currentProduct.photo_url;
+        document.getElementById('photoPreviewContainer').style.display = 'block';
+    } else {
+        document.getElementById('photoPreviewContainer').style.display = 'none';
+    }
+    
     // Suggest price: max(1.1x selling_price, 1.5x unit_cost)
     const suggestedPrice = Math.max(
         parseInt((currentProduct.selling_price||1000) * 1.1),
@@ -320,12 +338,15 @@ async function updatePreview() {
     document.getElementById('previewTitle').textContent = localTitle.substring(0, 60);
     
     // 商品说明：本地生成（详细版）
+    const categoryText = currentProduct.category ? '【カテゴリ】' + currentProduct.category + '\n\n' : '';
     const descLines = [
         '【商品名】' + (currentProduct.product_name || ''),
         '',
         '【状態】' + condition,
         '',
         '【ブランド】' + (brand || 'なし'),
+        '',
+        '【カテゴリ】' + (currentProduct.category || '未分類'),
         '',
         '【サイズ・仕様】' + (currentProduct.dimensions || '記載あり'),
         currentProduct.weight ? '【重量】約' + currentProduct.weight + 'kg' : '',
@@ -420,6 +441,19 @@ async function saveListing() {
     showToast('出品情報を保存しました ✅', 'success');
     // Refresh to update badges
     await loadAllProducts();
+}
+
+function downloadPhoto() {
+    const photoUrl = document.getElementById('previewPhoto').src;
+    if (!photoUrl) return;
+    
+    const link = document.createElement('a');
+    link.href = photoUrl;
+    link.download = (currentProduct.internal_code || 'product') + '.jpg';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('写真をダウンロードしました 📷', 'success');
 }
 
 loadAllProducts();
