@@ -32,28 +32,41 @@ except ImportError:
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
-# ─── Database: Auto-detect PostgreSQL (Railway) or SQLite (local) ──
+# ─── Database: Auto-detect PostgreSQL (Railway) or SQLite (local) ───
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
-USE_POSTGRES = bool(DATABASE_URL)
+USE_POSTGRES = False
+PG_URL = ''
+DB_PATH = None
+
+if DATABASE_URL:
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        # Railway provides postgres://user:pass@host:port/dbname
+        # psycopg2 needs postgresql:// scheme
+        PG_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+        # Test connection immediately
+        test_conn = psycopg2.connect(PG_URL, connect_timeout=5)
+        test_conn.close()
+        USE_POSTGRES = True
+    except Exception as e:
+        app.logger.warning(f"PostgreSQL not available, falling back to SQLite: {e}")
+        USE_POSTGRES = False
+        import sqlite3
+
+BASE_DIR = Path(__file__).parent
 
 if USE_POSTGRES:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-    # Railway provides postgres://user:pass@host:port/dbname
-    # psycopg2 needs postgresql:// scheme
-    PG_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-    BASE_DIR = Path(__file__).parent
     UPLOAD_DIR = Path('/app/data/uploads') if Path('/app/data').exists() else (BASE_DIR / 'uploads')
-    UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
 else:
     import sqlite3
     RAILWAY_DATA = Path('/app/data')
-    BASE_DIR = Path(__file__).parent
     DATA_DIR = RAILWAY_DATA if RAILWAY_DATA.exists() else (BASE_DIR / 'data')
     DB_PATH = DATA_DIR / 'inventory.db'
     UPLOAD_DIR = RAILWAY_DATA / 'uploads' if RAILWAY_DATA.exists() else (BASE_DIR / 'uploads')
     DATA_DIR.mkdir(exist_ok=True, parents=True)
-    UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+
+UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
 
 app.logger.info(f"DB mode: {'PostgreSQL' if USE_POSTGRES else f'SQLite ({DB_PATH})'}")
 
@@ -184,9 +197,13 @@ class SqliteConnection:
 def get_db():
     if 'db' not in g:
         if USE_POSTGRES:
-            g.db = PostgresConnection(PG_URL)
+            try:
+                g.db = PostgresConnection(PG_URL)
+            except Exception as e:
+                app.logger.error(f"PostgreSQL connection failed: {e}, falling back to SQLite")
+                g.db = SqliteConnection(DB_PATH) if DB_PATH else None
         else:
-            g.db = SqliteConnection(DB_PATH)
+            g.db = SqliteConnection(DB_PATH) if DB_PATH else None
     return g.db
 
 
