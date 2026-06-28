@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, request, jsonify, render_template, send_file, g, send_from_directory
+from flask import Flask, request, jsonify, render_template, send_file, g, send_from_directory, make_response
 import pandas as pd
 import qrcode
 from PIL import Image
@@ -249,7 +249,11 @@ def sales_page():
 
 @app.route('/inventory')
 def inventory_page():
-    return render_template('inventory.html')
+    response = make_response(render_template('inventory.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @app.route('/labels')

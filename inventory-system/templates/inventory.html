@@ -61,11 +61,19 @@
 let allProducts = [];
 
 async function loadInventory() {
-    allProducts = await API.get('/api/inventory/list');
+    try {
+        const resp = await fetch('/api/inventory/list');
+        allProducts = await resp.json();
+        console.log('[Inventory] Loaded', allProducts.length, 'products');
+    } catch(e) {
+        console.error('[Inventory] Failed to load:', e);
+        allProducts = [];
+    }
     
     // Populate category filter
     const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
     const catSelect = document.getElementById('categoryFilter');
+    catSelect.innerHTML = '<option value="">全カテゴリ</option>';
     categories.forEach(c => {
         const opt = document.createElement('option');
         opt.value = c; opt.textContent = c;
@@ -73,7 +81,7 @@ async function loadInventory() {
     });
     
     renderTable(allProducts);
-    renderCharts(allProducts);
+    if (allProducts.length > 0) renderCharts(allProducts);
 }
 
 function renderTable(products) {
