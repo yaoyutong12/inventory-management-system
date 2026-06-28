@@ -78,7 +78,19 @@ async function loadInventory() {
 
 function renderTable(products) {
     const tbody = document.querySelector('#inventoryTable tbody');
-    tbody.innerHTML = products.map(p => {
+    
+    if (products.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-5 text-muted">
+            <i class="bi bi-inbox" style="font-size:3rem;display:block;margin-bottom:1rem"></i>
+            <p class="mb-2"><strong>まだ商品が登録されていません</strong></p>
+            <p class="small mb-3">手順：<br>
+            ① <a href="/import">仕入リスト管理</a> でExcelファイルをアップロード<br>
+            ② <a href="/inbound">入庫管理</a> で商品を選択 → 販売価格を入力 → 入庫実行<br>
+            ③ このページに在庫が表示されます</p>
+            <p><a href="/debug-data" class="btn btn-sm btn-outline-secondary">データの状態を確認</a></p>
+        </td></tr>`;
+        return;
+    }
         const profit = (p.selling_price||0) - (p.unit_cost||0);
         const margin = p.selling_price ? ((profit/p.selling_price)*100).toFixed(0) : 0;
         const stockClass = p.current_stock <= 0 ? 'danger' : p.current_stock <= 3 ? 'warning' : 'success';

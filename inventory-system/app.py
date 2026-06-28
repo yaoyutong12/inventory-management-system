@@ -264,6 +264,59 @@ def mercari_page():
 def guide_page():
     return render_template('guide.html')
 
+@app.route('/debug-data')
+def debug_data():
+    """调试页面：显示数据库状态"""
+    db = get_db()
+    tables = ['supplier_imports', 'supplier_items', 'products', 'inbound_records', 'sales_records', 'mercari_listings']
+    result = []
+    for table in tables:
+        try:
+            count = db.execute(f"SELECT COUNT(*) as cnt FROM {table}").fetchone()['cnt']
+            result.append({'table': table, 'count': count})
+        except:
+            result.append({'table': table, 'count': 'ERROR'})
+    
+    db_info = {
+        'path': str(DB_PATH),
+        'exists': DB_PATH.exists(),
+        'size': DB_PATH.stat().st_size if DB_PATH.exists() else 0,
+        'tables': result
+    }
+    
+    has_data = any(isinstance(t['count'], int) and t['count'] > 0 for t in result)
+    
+    html = '<html><head><meta charset="utf-8"><title>データベース診断</title>'
+    html += '<style>body{font-family:sans-serif;padding:20px;max-width:600px;margin:0 auto}'
+    html += '.ok{color:green}.warn{color:orange}.error{color:red}'
+    html += 'table{width:100%;border-collapse:collapse;margin:10px 0}'
+    html += 'td,th{border:1px solid #ddd;padding:8px;text-align:left}'
+    html += 'th{background:#f5f5f5}</style></head><body>'
+    html += '<h2>データベース診断</h2>'
+    html += f'<p>DBパス: <code>{db_info["path"]}</code></p>'
+    cls = 'ok' if db_info['exists'] else 'error'
+    msg = '存在します' if db_info['exists'] else '存在しません！'
+    html += f'<p>DBファイル: <span class="{cls}">{msg}</span> ({db_info["size"]} bytes)</p>'
+    
+    html += '<table><tr><th>テーブル</th><th>レコード数</th></tr>'
+    for t in result:
+        cls = 'ok' if isinstance(t['count'], int) and t['count'] > 0 else 'warn'
+        html += f'<tr><td>{t["table"]}</td><td class="{cls}">{t["count"]}</td></tr>'
+    html += '</table>'
+    
+    if not db_info['exists']:
+        html += '<p class="error"><strong>データベースが存在しません！ボリュームが正しくマウントされていない可能性があります。</strong></p>'
+    elif has_data:
+        html += '<p class="ok">データは正常に保存されています</p>'
+    else:
+        html += '<p class="warn"><strong>まだデータがありません。以下の手順で始めてください：</strong></p>'
+        html += '<ol><li><a href="/import">仕入リスト管理</a> でExcelファイルをアップロード</li>'
+        html += '<li><a href="/inbound">入庫管理</a> で商品を選択し入庫</li>'
+        html += '<li><a href="/inventory">在庫一覧</a> で確認</li></ol>'
+    
+    html += '<p style="margin-top:20px"><a href="/inventory">在庫一覧に戻る</a></p></body></html>'
+    return html
+
 
 @app.route('/report')
 def report_page():
@@ -1338,6 +1391,31 @@ def api_products_all():
 @app.route('/uploads/<path:filename>')
 def serve_upload(filename):
     return send_from_directory(str(UPLOAD_DIR), filename)
+
+
+@app.route('/api/debug/data-check')
+def api_debug_data_check():
+    """诊断端点：检查数据库各表含有多少数据"""
+    db = get_db()
+    tables = ['supplier_imports', 'supplier_items', 'products', 'inbound_records', 'sales_records', 'mercari_listings']
+    result = {}
+    for table in tables:
+        try:
+            count = db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            result[table] = count
+        except Exception as e:
+            result[table] = f"ERROR: {e}"
+    
+    # Also check DB path and file size
+    try:
+        result['db_path'] = str(DB_PATH)
+        result['db_exists'] = DB_PATH.exists()
+        if DB_PATH.exists():
+            result['db_size'] = DB_PATH.stat().st_size
+    except:
+        pass
+    
+    return jsonify(result)
 
 
 # ─── Main ───────────────────────────────────────────────────────
