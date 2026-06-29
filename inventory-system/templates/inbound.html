@@ -64,7 +64,8 @@
                 <div id="scanPanel" class="method-panel">
                     <div class="alert alert-primary" id="scanModeHint">
                         <i class="bi bi-info-circle-fill"></i> 
-                        <strong><span data-i18n="scan_mode_label">扫码模式</span>：</strong><span data-i18n="scan_mode_desc">用手机摄像头扫描条形码</span>
+                        <strong>バーコード/QR対応：</strong>
+                        <span class="small">JAN / CODE-128 / QR / EAN-13 など自動判別｜緑枠の中にバーコードを入れてください</span>
                     </div>
                     <div id="scanner-view" style="width:100%;min-height:250px" class="border rounded d-flex align-items-center justify-content-center bg-light mb-3">
                         <div class="text-center text-muted">
@@ -393,10 +394,32 @@ function startScanner() {
     document.getElementById('manualBarcodeInput').value = '';
     
     scanner = new Html5Qrcode("scanner-view");
+    
+    // 扫码配置：支持二维码 + 常见1D条形码格式
+    const scanConfig = {
+        fps: 15,
+        qrbox: { width: 350, height: 180 },  // 条形码横长，加宽扫描框
+        formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.QR_CODE,
+        ],
+        // 笔记本前置摄像头通常离条码远，降低最小识别尺寸要求
+        aspectRatio: 1.777,
+        disableFlip: false,
+    };
+    
     scanner.start(
-        { facingMode: "user" },  // "user" = 前置摄像头（笔记本/手机通用）; "environment" = 后置
-        { fps: 10, qrbox: { width: 250, height: 150 } },
+        { facingMode: "user" },
+        scanConfig,
         (decodedText) => {
+            console.log('✅ 扫码成功:', decodedText);
             stopScanner();
             lookupBarcode(decodedText);
         },
@@ -405,9 +428,10 @@ function startScanner() {
         // user 模式失败，尝试不指定 facingMode
         console.warn('facingMode "user" 失败，尝试默认摄像头:', err);
         scanner.start(
-            {},  // 不限制摄像头方向
-            { fps: 10, qrbox: { width: 250, height: 150 } },
+            {},
+            scanConfig,
             (decodedText) => {
+                console.log('✅ 扫码成功:', decodedText);
                 stopScanner();
                 lookupBarcode(decodedText);
             },
