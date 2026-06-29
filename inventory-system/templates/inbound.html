@@ -403,7 +403,46 @@ function t(key) {
     return lang[key] || key;
 }
 
-// ─── Mode 1: Camera Scanner ────────────────────
+// ─── 内部：摄像头启动（蓝色/绿色按钮共用） ───
+// 返回 { scanner, config } 成功后设置全局 scanner
+async function _ensureCameraStarted() {
+    if (scanner) return; // 已经启动了
+    
+    const scanView = document.getElementById('scanner-view');
+    scanView.innerHTML = '';
+    
+    scanner = new Html5Qrcode("scanner-view");
+    
+    const cameraConfigs = [
+        { facingMode: "user" },
+        { facingMode: "environment" },
+        {},
+    ];
+    
+    for (const cfg of cameraConfigs) {
+        try {
+            await scanner.start(
+                cfg,
+                { fps: 10, qrbox: { width: 380, height: 200 } },
+                () => {},  // onScanSuccess — 绿色按钮不需要连续识别回调
+                () => {}   // onScanFailure
+            );
+            console.log('✅ 摄像头启动成功:', JSON.stringify(cfg));
+            return;
+        } catch(e) {
+            console.warn('摄像头配置失敗:', JSON.stringify(cfg), e.message);
+            try { await scanner.clear(); } catch(_) {}
+            scanView.innerHTML = '';
+            scanner = new Html5Qrcode("scanner-view");
+        }
+    }
+    
+    // 全部失败
+    scanner = null;
+    throw new Error('カメラを起動できませんでした');
+}
+
+// ─── Mode 1: Camera Scanner (蓝色按钮) ──────
 async function startScanner() {
     const startBtn = document.getElementById('startScanBtn');
     const stopBtn = document.getElementById('stopScanBtn');
@@ -423,8 +462,6 @@ async function startScanner() {
         try { await scanner.clear(); } catch(e) {}
         scanner = null;
     }
-    
-    // 清空扫描区域，确保没有残留 DOM
     scanView.innerHTML = '';
     
     scanner = new Html5Qrcode("scanner-view");
@@ -449,11 +486,10 @@ async function startScanner() {
     
     let scanAttempts = 0;
     
-    // 依次尝试不同摄像头配置
     const cameraConfigs = [
         { facingMode: "user" },
         { facingMode: "environment" },
-        {},  // 默认
+        {},
     ];
     
     let started = false;
@@ -480,7 +516,6 @@ async function startScanner() {
             break;
         } catch(e) {
             console.warn('摄像头配置失敗:', JSON.stringify(cfg), e.message);
-            // 失败后重建 scanner（html5-qrcode 失败后实例状态可能污染）
             try { await scanner.clear(); } catch(_) {}
             scanView.innerHTML = '';
             scanner = new Html5Qrcode("scanner-view");
@@ -488,6 +523,7 @@ async function startScanner() {
     }
     
     if (!started) {
+        scanner = null;
         scanView.innerHTML = `<div class="alert alert-danger m-2">
             <i class="bi bi-camera-video-off"></i> 
             <strong>カメラを起動できませんでした</strong><br>
@@ -518,80 +554,69 @@ async function stopScanner() {
 
 // ─── 撮影して識別（備用モード） ──────────────
 async function captureAndDetect() {
+    const statusText = document.getElementById('scanStatusText');
+    document.getElementById('captureScanBtn').disabled = true;
+    
+    // 如果 scanner 还没启动，先快速启动摄像头
     if (!scanner) {
-        // 先启动扫描仪
-        document.getElementById('scanIndicator').classList.remove('d-none');
-        document.getElementById('scanStatusText').textContent = '📸 カメラ起動中...';
+        statusText.textContent = '📸 カメラ起動中...';
         document.getElementById('startScanBtn').disabled = true;
         document.getElementById('stopScanBtn').disabled = false;
+        document.getElementById('scanIndicator').classList.remove('d-none');
         
-        scanner = new Html5Qrcode("scanner-view");
-        
-        let started = false;
-        for (const cfg of [{ facingMode: "user" }, { facingMode: "environment" }, {}]) {
-            try {
-                await scanner.start(cfg, { fps: 10 }, () => {}, () => {});
-                started = true;
-                break;
-            } catch(e) {
-                try { await scanner.clear(); } catch(_) {}
-                document.getElementById('scanner-view').innerHTML = '';
-                scanner = new Html5Qrcode("scanner-view");
-            }
-        }
-        
-        if (!started) {
-            showToast('カメラ起動できません', 'danger');
+        try {
+            await _ensureCameraStarted();
+        } catch(e) {
+            showToast('カメラ起動できません: ' + e.message, 'danger');
             stopScanner();
+            document.getElementById('captureScanBtn').disabled = false;
             return;
         }
     }
     
-    document.getElementById('scanStatusText').textContent = '📸 撮影中...';
-    document.getElementById('captureScanBtn').disabled = true;
+    statusText.textContent = '📸 撮影 & 解析中...';
     
     try {
-        // 从视频流捕获一帧图片
-        const captureCanvas = document.createElement('canvas');
         const videoEl = document.querySelector('#scanner-view video');
-        
-        if (!videoEl) {
-            showToast('ビデオ要素が見つかりません', 'danger');
+        if (!videoEl || videoEl.readyState < 2) {
+            showToast('ビデオ準備ができていません。もう一度お試しください', 'warning');
+            document.getElementById('captureScanBtn').disabled = false;
+            statusText.textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
             return;
         }
         
-        captureCanvas.width = videoEl.videoWidth;
-        captureCanvas.height = videoEl.videoHeight;
-        const ctx = captureCanvas.getContext('2d');
-        ctx.drawImage(videoEl, 0, 0, captureCanvas.width, captureCanvas.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = videoEl.videoWidth;
+        canvas.height = videoEl.videoHeight;
+        const ctx = canvas.getContext('2d');
+        // 笔记本前置摄像头画面是镜像的，翻转以正确识别条码
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(videoEl, 0, 0);
         
-        const imageDataUrl = captureCanvas.toDataURL('image/png');
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) {
+            showToast('画像取得失敗', 'danger');
+            document.getElementById('captureScanBtn').disabled = false;
+            return;
+        }
         
-        document.getElementById('scanStatusText').textContent = '🔍 画像解析中...';
-        
-        // 先用独立方式扫描（不依赖连续扫码实例）
-        // dataURL → Blob → File
-        const blob = await (await fetch(imageDataUrl)).blob();
         const file = new File([blob], 'capture.png', { type: 'image/png' });
-        
-        // Html5Qrcode.scanFile 是静态方法，独立解析图片
         const decodedText = await Html5Qrcode.scanFile(file, false);
-        console.log('✅ 撮影識別成功:', decodedText);
         
-        stopScanner();
         if (decodedText) {
+            console.log('✅ 撮影識別成功:', decodedText);
+            stopScanner();
             showToast('✅ 識別成功: ' + decodedText, 'success');
             lookupBarcode(decodedText);
         } else {
-            showToast('❌ 条码が見つかりませんでした。もう一度試してください', 'warning');
+            showToast('❌ 条码が見つかりません。条码をカメラに近づけてもう一度', 'warning');
             document.getElementById('captureScanBtn').disabled = false;
-            document.getElementById('scanStatusText').textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
+            statusText.textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
         }
     } catch(e) {
         console.error('撮影識別エラー:', e);
-        showToast('識別失敗: ' + e.message, 'danger');
-        stopScanner();
-    } finally {
+        showToast('識別失敗: ' + (e.message || e), 'danger');
         document.getElementById('captureScanBtn').disabled = false;
     }
 }
