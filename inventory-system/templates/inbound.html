@@ -425,6 +425,7 @@ function isMobileDevice() {
 
 // ─── 手电筒控制 ─────────────────────────────
 let _videoStream = null;
+let _bdLoopTimer = null;  // BarcodeDetector 并行扫描循环定时器
 async function toggleTorch() {
     if (!_videoStream) return;
     try {
@@ -445,6 +446,67 @@ async function toggleTorch() {
     } catch(e) {
         showToast('ライト制御エラー: ' + e.message, 'danger');
     }
+}
+
+// ─── BarcodeDetector 并行连续扫描循环（蓝色按钮专用）──
+// html5-qrcode 对1D条码识别率低，Chrome原生BarcodeDetector更强
+// 两个引擎同时运行，谁先识别到就停止
+let _bdDetector = null;
+function _startBDLoop(videoEl) {
+    try {
+        _bdDetector = new BarcodeDetector({
+            formats: ['code_128', 'ean_13', 'ean_8', 'code_39', 'code_93',
+                      'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code', 'data_matrix']
+        });
+    } catch(e) {
+        console.warn('BarcodeDetector 初始化失敗:', e.message);
+        return;
+    }
+    
+    let bdFrameCount = 0;
+    const canvas = document.createElement('canvas');
+    let lastCode = ''; // 防止重复识别
+    
+    _bdLoopTimer = setInterval(async () => {
+        if (!videoEl || videoEl.readyState < 2 || !_bdDetector) return;
+        
+        try {
+            canvas.width = videoEl.videoWidth || 1280;
+            canvas.height = videoEl.videoHeight || 720;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(videoEl, 0, 0);
+            
+            const results = await _bdDetector.detect(canvas);
+            bdFrameCount++;
+            
+            if (results && results.length > 0) {
+                const code = results[0].rawValue;
+                if (code && code !== lastCode) {
+                    console.log('✅ [BD循环] 第' + bdFrameCount + '帧识别成功:', code);
+                    lastCode = code;
+                    _stopBDLoop();
+                    stopScanner();
+                    lookupBarcode(code);
+                }
+            } else if (bdFrameCount % 20 === 0) {
+                console.log('🔍 [BD循环] 扫描中...(' + bdFrameCount + '帧)');
+            }
+        } catch(e) {
+            // 静默忽略单帧错误（视频流可能暂时不可用）
+            if (bdFrameCount % 30 === 0) console.warn('[BD循环] 帧错误:', e.message);
+        }
+    }, 400); // 每400ms检测一帧（比html5-qrcode的15fps更节省资源）
+    
+    console.log('🚀 BarcodeDetector 循环已启动 (间隔: 400ms)');
+}
+
+function _stopBDLoop() {
+    if (_bdLoopTimer) {
+        clearInterval(_bdLoopTimer);
+        _bdLoopTimer = null;
+        console.log('⏹️ BarcodeDetector 循环已停止');
+    }
+    _bdDetector = null;
 }
 
 function getCameraConfigs() {
@@ -536,19 +598,26 @@ async function startScanner() {
     statusText.textContent = '📷 カメラ起動中...';
     document.getElementById('manualBarcodeInput').value = '';
     
-    // 先停止旧实例
+    // 停止旧实例和BarcodeDetector循环
+    if (_bdLoopTimer) { clearInterval(_bdLoopTimer); _bdLoopTimer = null; }
     if (scanner) {
         try { await scanner.stop(); } catch(e) {}
         try { await scanner.clear(); } catch(e) {}
         scanner = null;
     }
+    _videoStream = null;
+    _activeCameraConfig = null;
     scanView.innerHTML = '';
+    
+    // 动态计算扫描框宽度（手机要宽一些，长条码需要更多空间）
+    const isMobile = isMobileDevice();
+    const qrboxWidth = isMobile ? Math.min(340, window.innerWidth - 30) : 380;
     
     scanner = new Html5Qrcode("scanner-view");
     
     const scanConfig = {
         fps: 15,
-        qrbox: { width: 320, height: 180 },
+        qrbox: { width: qrboxWidth, height: 180 },
         formatsToSupport: [
             Html5QrcodeSupportedFormats.CODE_128,
             Html5QrcodeSupportedFormats.EAN_13,
@@ -575,7 +644,8 @@ async function startScanner() {
                 cfg,
                 scanConfig,
                 (decodedText) => {
-                    console.log('✅ 扫码成功:', decodedText);
+                    console.log('✅ [Html5Q] 扫码成功:', decodedText);
+                    _stopBDLoop();
                     stopScanner();
                     lookupBarcode(decodedText);
                 },
@@ -590,16 +660,27 @@ async function startScanner() {
             statusText.textContent = '🔍 スキャン中... 条码を枠内に合わせてください';
             console.log('✅ 摄像头启动成功:', JSON.stringify(cfg));
             _activeCameraConfig = cfg;
-            // 显示手电筒按钮
+            
+            // 获取视频流引用
             const videoEl2 = scanView.querySelector('video');
             if (videoEl2 && videoEl2.srcObject) {
                 _videoStream = videoEl2.srcObject;
+                
+                // 手电筒按钮
                 const torchBtn2 = document.getElementById('torchBtn');
                 torchBtn2.classList.remove('d-none');
                 try {
                     const t = _videoStream.getVideoTracks()[0];
                     if (!t.getCapabilities().torch) torchBtn2.classList.add('d-none');
                 } catch(_) { torchBtn2.classList.add('d-none'); }
+                
+                // ★★★ 关键修复：启动 BarcodeDetector 并行扫描循环 ★★★
+                if ('BarcodeDetector' in window && !_bdLoopTimer) {
+                    console.log('🚀 启动 BarcodeDetector 并行扫描循环...');
+                    _startBDLoop(videoEl2);
+                } else if (!('BarcodeDetector' in window)) {
+                    console.log('⚠️ 此浏览器不支持 BarcodeDetector API，仅使用 html5-qrcode');
+                }
             }
             break;
         } catch(e) {
@@ -629,6 +710,7 @@ async function startScanner() {
 }
 
 async function stopScanner() {
+    _stopBDLoop();  // 停止 BarcodeDetector 并行循环
     if (scanner) {
         await scanner.stop();
         scanner = null;
