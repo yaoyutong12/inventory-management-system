@@ -8,7 +8,17 @@ import io
 import json
 import uuid
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+JST = timezone(timedelta(hours=9))
+
+def jst_today():
+    """Return today's date string in JST (YYYY-MM-DD)."""
+    return datetime.now(JST).strftime('%Y-%m-%d')
+
+def jst_now():
+    """Return current datetime in JST."""
+    return datetime.now(JST)
 import re
 from pathlib import Path
 
@@ -1208,10 +1218,10 @@ def api_inventory_stats():
     """).fetchall()
     stats['categories'] = [dict(row) for row in categories]
     
-    # Monthly sales
+    # Monthly sales (JST timezone)
     if USE_POSTGRES:
         monthly = db.execute("""
-            SELECT TO_CHAR(sale_date, 'YYYY-MM') as month, 
+            SELECT TO_CHAR(sale_date + INTERVAL '9 hours', 'YYYY-MM') as month, 
                    COUNT(*) as cnt, COALESCE(SUM(total_amount),0) as revenue,
                    COALESCE(SUM(profit_amount),0) as profit
             FROM sales_records 
@@ -1220,11 +1230,11 @@ def api_inventory_stats():
         """).fetchall()
     else:
         monthly = db.execute("""
-            SELECT strftime('%Y-%m', sale_date) as month, 
+            SELECT strftime('%Y-%m', sale_date, '+9 hours') as month, 
                    COUNT(*) as cnt, COALESCE(SUM(total_amount),0) as revenue,
                    COALESCE(SUM(profit_amount),0) as profit
             FROM sales_records 
-            WHERE sale_date >= date('now','-6 months')
+            WHERE sale_date >= datetime('now','-6 months')
             GROUP BY month ORDER BY month
         """).fetchall()
     stats['monthly_sales'] = [dict(row) for row in monthly]
@@ -1900,15 +1910,15 @@ def api_sales_report():
     params = []
     if start_date:
         if USE_POSTGRES:
-            where += " AND s.sale_date::date >= %s"
+            where += " AND DATE(s.sale_date + INTERVAL '9 hours') >= %s"
         else:
-            where += " AND date(s.sale_date) >= ?"
+            where += " AND date(s.sale_date, '+9 hours') >= ?"
         params.append(start_date)
     if end_date:
         if USE_POSTGRES:
-            where += " AND s.sale_date::date <= %s"
+            where += " AND DATE(s.sale_date + INTERVAL '9 hours') <= %s"
         else:
-            where += " AND date(s.sale_date) <= ?"
+            where += " AND date(s.sale_date, '+9 hours') <= ?"
         params.append(end_date)
     if platform:
         where += " AND s.platform = %s" if USE_POSTGRES else " AND s.platform = ?"
@@ -2497,9 +2507,9 @@ def api_sales_recent():
     
     if date:
         if USE_POSTGRES:
-            query += " AND DATE(s.sale_date) = %s"
+            query += " AND DATE(s.sale_date + INTERVAL '9 hours') = %s"
         else:
-            query += " AND date(s.sale_date) = ?"
+            query += " AND date(s.sale_date, '+9 hours') = ?"
         params.append(date)
     
     query += " ORDER BY s.sale_date DESC LIMIT ?"
@@ -2511,22 +2521,22 @@ def api_sales_recent():
 
 @app.route('/api/sales/today')
 def api_sales_today():
-    """本日销售汇总"""
+    """本日销售汇总（JST时区）"""
     db = get_db()
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = jst_today()
     if USE_POSTGRES:
         summary = db.execute("""
             SELECT COUNT(*) as count,
                    COALESCE(SUM(total_amount),0) as revenue,
                    COALESCE(SUM(profit_amount),0) as profit
-            FROM sales_records WHERE DATE(sale_date) = %s
+            FROM sales_records WHERE DATE(sale_date + INTERVAL '9 hours') = %s
         """, (today,)).fetchone()
     else:
         summary = db.execute("""
             SELECT COUNT(*) as count,
                    COALESCE(SUM(total_amount),0) as revenue,
                    COALESCE(SUM(profit_amount),0) as profit
-            FROM sales_records WHERE date(sale_date) = ?
+            FROM sales_records WHERE date(sale_date, '+9 hours') = ?
         """, (today,)).fetchone()
     return jsonify(dict(summary))
 
