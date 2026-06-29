@@ -33,11 +33,14 @@
                 <div class="text-center mb-2">
                     <span class="text-muted small">—— 或 ——</span>
                 </div>
-                <div class="d-grid gap-2">
+                <div class="d-flex gap-2">
                     <input type="file" id="aiBarcodeInput" accept="image/*"
                            style="display:none" onchange="aiReadBarcode(event)">
-                    <button class="btn btn-outline-danger" onclick="document.getElementById('aiBarcodeInput').click()">
-                        <i class="bi bi-robot"></i> 选条码照片 AI 读数字
+                    <button class="btn btn-outline-primary flex-fill" onclick="openCameraFor('barcode')">
+                        <i class="bi bi-camera"></i> 拍照
+                    </button>
+                    <button class="btn btn-outline-secondary flex-fill" onclick="document.getElementById('aiBarcodeInput').click()">
+                        <i class="bi bi-folder2-open"></i> 选文件
                     </button>
                 </div>
                 
@@ -48,9 +51,14 @@
                 <div class="border rounded p-3 bg-light text-center" id="photoDropZone" style="min-height:100px">
                     <input type="file" id="photoInput" accept="image/*" 
                            class="form-control" onchange="uploadAIPhoto()" style="display:none">
-                    <button class="btn btn-success" onclick="document.getElementById('photoInput').click()">
-                        <i class="bi bi-camera"></i> 选商品照片 AI 识别
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-success flex-fill" onclick="openCameraFor('product')">
+                            <i class="bi bi-camera"></i> 拍照
+                        </button>
+                        <button class="btn btn-outline-secondary flex-fill" onclick="document.getElementById('photoInput').click()">
+                            <i class="bi bi-folder2-open"></i> 选文件
+                        </button>
+                    </div>
                     <div class="mt-2">
                         <div id="photoPreview" class="d-none">
                             <img id="photoImg" class="border rounded shadow" style="max-width:100%;max-height:180px">
@@ -204,6 +212,30 @@
                                     <label class="form-label small">备注（选填）</label>
                                     <textarea class="form-control" id="scrapNote" rows="2" placeholder="可输入详细说明..."></textarea>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Camera Modal -->
+                <div class="modal fade" id="cameraModal" tabindex="-1" data-bs-backdrop="static">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header py-2">
+                                <h6 class="modal-title"><i class="bi bi-camera-video text-danger"></i> 拍照</h6>
+                                <button type="button" class="btn-close" onclick="stopCamera()"></button>
+                            </div>
+                            <div class="modal-body p-2 text-center bg-dark">
+                                <video id="cameraVideo" autoplay playsinline
+                                       style="width:100%;max-height:60vh;border-radius:6px;background:#000"></video>
+                                <canvas id="cameraCanvas" style="display:none"></canvas>
+                            </div>
+                            <div class="modal-footer py-2">
+                                <button class="btn btn-lg btn-danger rounded-circle" 
+                                        style="width:60px;height:60px;font-size:24px"
+                                        id="captureBtn" onclick="capturePhoto()">
+                                    <i class="bi bi-camera"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -870,6 +902,90 @@ async function markAsScrap(reason) {
     } else {
         showToast(result.error || '标记失败', 'error');
     }
+}
+
+// ─── Camera Capture ──────────────────────────
+let _cameraStream = null;
+let _cameraTarget = null;
+
+async function openCameraFor(target) {
+    _cameraTarget = target;
+    const modal = new bootstrap.Modal(document.getElementById('cameraModal'));
+    modal.show();
+    
+    const video = document.getElementById('cameraVideo');
+    try {
+        _cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        video.srcObject = _cameraStream;
+    } catch (e) {
+        showToast('摄像头不可用: ' + e.message, 'danger');
+        modal.hide();
+    }
+}
+
+function stopCamera() {
+    if (_cameraStream) {
+        _cameraStream.getTracks().forEach(t => t.stop());
+        _cameraStream = null;
+    }
+    document.getElementById('cameraVideo').srcObject = null;
+    _cameraTarget = null;
+    bootstrap.Modal.getInstance(document.getElementById('cameraModal'))?.hide();
+}
+
+// Auto-stop camera when modal is dismissed
+document.getElementById('cameraModal').addEventListener('hidden.bs.modal', () => {
+    if (_cameraStream) {
+        _cameraStream.getTracks().forEach(t => t.stop());
+        _cameraStream = null;
+    }
+    document.getElementById('cameraVideo').srcObject = null;
+    _cameraTarget = null;
+});
+
+async function capturePhoto() {
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('cameraCanvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    
+    // Stop camera and close modal
+    if (_cameraStream) {
+        _cameraStream.getTracks().forEach(t => t.stop());
+        _cameraStream = null;
+    }
+    bootstrap.Modal.getInstance(document.getElementById('cameraModal')).hide();
+    
+    // Route to appropriate function
+    const blob = dataURLtoBlob(dataUrl);
+    const file = new File([blob], 'camera.jpg', { type: 'image/jpeg' });
+    
+    if (_cameraTarget === 'barcode') {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        document.getElementById('aiBarcodeInput').files = dt.files;
+        await aiReadBarcode({ target: { files: dt.files } });
+    } else if (_cameraTarget === 'product') {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        document.getElementById('photoInput').files = dt.files;
+        await uploadAIPhoto();
+    }
+    _cameraTarget = null;
+}
+
+function dataURLtoBlob(dataurl) {
+    const parts = dataurl.split(',');
+    const mime = parts[0].match(/:(.*?);/)[1];
+    const bytes = atob(parts[1]);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    return new Blob([arr], { type: mime });
 }
 
 // ─── Init ──────────────────────────────────────
