@@ -84,8 +84,13 @@
                     </div>
                     <!-- 隱藏容器，用於撮影識別時的獨立 Html5Qrcode 實例 -->
                     <div id="scan-helper"></div>
-                    <div id="scanIndicator" class="text-center mb-2 d-none">
-                        <span class="badge bg-success pulse-badge">🔍 スキャン中... 条码を枠内に入れてください</span>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div id="scanIndicator" class="d-none">
+                            <span class="badge bg-success pulse-badge">🔍 スキャン中... 条码を枠内に入れてください</span>
+                        </div>
+                        <button class="btn btn-sm btn-outline-dark d-none" id="torchBtn" onclick="toggleTorch()" title="ライトON/OFF（暗い場所で有効）">
+                            <i class="bi bi-lightbulb"></i> ライト
+                        </button>
                     </div>
                     <div class="d-grid gap-2">
                         <div class="btn-group" role="group">
@@ -418,15 +423,45 @@ function isMobileDevice() {
         || ('ontouchstart' in window && window.innerWidth < 768);
 }
 
+// ─── 手电筒控制 ─────────────────────────────
+let _videoStream = null;
+async function toggleTorch() {
+    if (!_videoStream) return;
+    try {
+        const track = _videoStream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        if (!capabilities.torch) {
+            showToast('⚠️ このデバイスはライト（トーチ）に対応していません', 'warning');
+            return;
+        }
+        const current = track.getConstraints().advanced?.[0]?.torch || false;
+        await track.applyConstraints({
+            advanced: [{ torch: !current }]
+        });
+        const btn = document.getElementById('torchBtn');
+        btn.classList.toggle('btn-warning', !current);
+        btn.classList.toggle('btn-outline-dark', current);
+        showToast(!current ? '💡 ライトON' : '💡 ライトOFF', 'info');
+    } catch(e) {
+        showToast('ライト制御エラー: ' + e.message, 'danger');
+    }
+}
+
 function getCameraConfigs() {
     // 手机：后置摄像头优先（environment），扫描条码时自然使用背面
     // 笔记本/台式机：前置摄像头优先（user），大多数笔记本只有前置
     if (isMobileDevice()) {
-        return [{ facingMode: "environment" }, { facingMode: "user" }, {}];
+        return [{ facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, 
+                { facingMode: "environment" },
+                { facingMode: "user" }, {}];
     } else {
-        return [{ facingMode: "user" }, { facingMode: "environment" }, {}];
+        return [{ facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, 
+                { facingMode: "user" }, 
+                { facingMode: "environment" }, {}];
     }
 }
+let _activeCameraConfig = null;
+
 async function _ensureCameraStarted() {
     if (scanner) return; // 已经启动了
     
@@ -441,23 +476,38 @@ async function _ensureCameraStarted() {
         try {
             await scanner.start(
                 cfg,
-                { fps: 10, qrbox: { width: 380, height: 200 }, formatsToSupport: [
+                { fps: 15, qrbox: { width: 320, height: 180 }, formatsToSupport: [
                     Html5QrcodeSupportedFormats.CODE_128,
-                    Html5QrcodeSupportedFormats.CODE_39,
-                    Html5QrcodeSupportedFormats.CODE_93,
                     Html5QrcodeSupportedFormats.EAN_13,
                     Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.CODE_39,
+                    Html5QrcodeSupportedFormats.CODE_93,
                     Html5QrcodeSupportedFormats.UPC_A,
                     Html5QrcodeSupportedFormats.UPC_E,
                     Html5QrcodeSupportedFormats.ITF,
-                    Html5QrcodeSupportedFormats.QR_CODE,
                     Html5QrcodeSupportedFormats.CODABAR,
+                    Html5QrcodeSupportedFormats.QR_CODE,
                     Html5QrcodeSupportedFormats.DATA_MATRIX,
                 ]},
                 () => {},  // onScanSuccess — 绿色按钮不需要连续识别回调
                 () => {}   // onScanFailure
             );
             console.log('✅ 摄像头启动成功:', JSON.stringify(cfg));
+            _activeCameraConfig = cfg;
+            
+            // 获取视频流引用（用于手电筒控制）
+            const videoEl = scanView.querySelector('video');
+            if (videoEl && videoEl.srcObject) {
+                _videoStream = videoEl.srcObject;
+                // 显示手电筒按钮
+                const torchBtn = document.getElementById('torchBtn');
+                torchBtn.classList.remove('d-none');
+                try {
+                    const track = _videoStream.getVideoTracks()[0];
+                    const caps = track.getCapabilities();
+                    if (!caps.torch) torchBtn.classList.add('d-none'); // 不支持则隐藏
+                } catch(_) { torchBtn.classList.add('d-none'); }
+            }
             return;
         } catch(e) {
             console.warn('摄像头配置失敗:', JSON.stringify(cfg), e.message);
@@ -497,19 +547,19 @@ async function startScanner() {
     scanner = new Html5Qrcode("scanner-view");
     
     const scanConfig = {
-        fps: 10,
-        qrbox: { width: 380, height: 200 },
+        fps: 15,
+        qrbox: { width: 320, height: 180 },
         formatsToSupport: [
             Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.CODE_93,
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
             Html5QrcodeSupportedFormats.UPC_A,
             Html5QrcodeSupportedFormats.UPC_E,
             Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.QR_CODE,
             Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.QR_CODE,
             Html5QrcodeSupportedFormats.DATA_MATRIX,
         ],
     };
@@ -539,6 +589,18 @@ async function startScanner() {
             started = true;
             statusText.textContent = '🔍 スキャン中... 条码を枠内に合わせてください';
             console.log('✅ 摄像头启动成功:', JSON.stringify(cfg));
+            _activeCameraConfig = cfg;
+            // 显示手电筒按钮
+            const videoEl2 = scanView.querySelector('video');
+            if (videoEl2 && videoEl2.srcObject) {
+                _videoStream = videoEl2.srcObject;
+                const torchBtn2 = document.getElementById('torchBtn');
+                torchBtn2.classList.remove('d-none');
+                try {
+                    const t = _videoStream.getVideoTracks()[0];
+                    if (!t.getCapabilities().torch) torchBtn2.classList.add('d-none');
+                } catch(_) { torchBtn2.classList.add('d-none'); }
+            }
             break;
         } catch(e) {
             console.warn('摄像头配置失敗:', JSON.stringify(cfg), e.message);
@@ -571,7 +633,12 @@ async function stopScanner() {
         await scanner.stop();
         scanner = null;
     }
+    _videoStream = null;
+    _activeCameraConfig = null;
     document.getElementById('scanIndicator').classList.add('d-none');
+    document.getElementById('torchBtn').classList.add('d-none');
+    document.getElementById('torchBtn').classList.remove('btn-warning');
+    document.getElementById('torchBtn').classList.add('btn-outline-dark');
     document.getElementById('scanStatusText').textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
     document.getElementById('startScanBtn').disabled = false;
     document.getElementById('stopScanBtn').disabled = true;
@@ -586,32 +653,87 @@ async function detectFromImageFile(event) {
     showToast('🔍 画像解析中...', 'info');
     
     try {
-        // 用独立 Html5Qrcode 实例扫描图片文件
-        const helperEl = document.getElementById('scan-helper');
-        helperEl.innerHTML = '';
-        const tmpScanner = new Html5Qrcode("scan-helper");
-        
         let decodedText = null;
-        try {
-            decodedText = await tmpScanner.scanFile(file, true);
-        } catch(e) {
-            console.warn('scanFile true失敗, 重試 scanFile false:', e.message);
+        let methodUsed = '';
+        
+        // ── 策略1: Chrome原生 BarcodeDetector (最快最准) ──
+        if ('BarcodeDetector' in window && !decodedText) {
             try {
-                decodedText = await tmpScanner.scanFile(file, false);
-            } catch(e2) {
-                console.warn('scanFile false亦失敗:', e2.message);
+                console.log('🖼️ [画像] 試行 BarcodeDetector...');
+                const img = await createImageBitmap(file);
+                const detector = new BarcodeDetector({
+                    formats: ['code_128', 'ean_13', 'ean_8', 'code_39', 'code_93',
+                              'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code', 'data_matrix']
+                });
+                const results = await detector.detect(img);
+                console.log('🖼️ BarcodeDetector結果:', results?.length || 0, '個');
+                if (results && results.length > 0) {
+                    decodedText = results[0].rawValue;
+                    methodUsed = 'Chrome原生API';
+                    console.log('✅ [画像] BarcodeDetector成功:', decodedText);
+                }
+            } catch(e) {
+                console.warn('🖼️ BarcodeDetector失敗:', e.message);
             }
         }
         
-        try { await tmpScanner.clear(); } catch(_) {}
-        helperEl.innerHTML = '';
+        // ── 策略2: 图像预处理 + Html5Qrcode ──
+        if (!decodedText) {
+            console.log('🖼️ [画像] 試行 Html5Qrcode scanFile...');
+            
+            // 先尝试原图
+            const helperEl = document.getElementById('scan-helper');
+            helperEl.innerHTML = '';
+            const tmpScanner = new Html5Qrcode("scan-helper");
+            
+            try {
+                decodedText = await tmpScanner.scanFile(file, true);
+                methodUsed = 'Html5Qrcode(原图)';
+                console.log('✅ [画像] scanFile(true)成功:', decodedText);
+            } catch(e) {
+                console.warn('🖼️ scanFile(原图)失敗:', e.message);
+                
+                // 尝试预处理后的图像
+                try {
+                    const processedBlob = await preprocessImage(file);
+                    if (processedBlob) {
+                        const processedFile = new File([processedBlob], 'processed.png', { type: 'image/png' });
+                        try { await tmpScanner.clear(); } catch(_) {}
+                        helperEl.innerHTML = '';
+                        const tmp2 = new Html5Qrcode("scan-helper");
+                        decodedText = await tmp2.scanFile(processedFile, false);
+                        methodUsed = 'Html5Qrcode(预处理图)';
+                        console.log('✅ [画像] 预处理后scanFile成功:', decodedText);
+                        try { await tmp2.clear(); } catch(_) {}
+                    }
+                } catch(e2) {
+                    console.warn('🖼️ 预处理後scanFile亦失敗:', e2.message);
+                    
+                    // 最后尝试不显示图像的模式
+                    try { await tmpScanner.clear(); } catch(_) {}
+                    helperEl.innerHTML = '';
+                    const tmp3 = new Html5Qrcode("scan-helper");
+                    try {
+                        decodedText = await tmp3.scanFile(file, false);
+                        methodUsed = 'Html5Qrcode(无显示)';
+                        console.log('✅ [画像] scanFile(false)成功:', decodedText);
+                    } catch(e3) {
+                        console.warn('🖼️ scanFile(false)亦失敗:', e3.message);
+                    }
+                    try { await tmp3.clear(); } catch(_) {}
+                }
+            }
+            
+            try { await tmpScanner.clear(); } catch(_) {}
+            helperEl.innerHTML = '';
+        }
         
         if (decodedText) {
-            console.log('✅ 画像識別成功:', decodedText);
-            showToast('✅ 識別成功: ' + decodedText, 'success');
+            console.log('✅ 画像識別成功 [' + methodUsed + ']:', decodedText);
+            showToast('✅ 識別成功 (' + methodUsed + '): ' + decodedText, 'success');
             lookupBarcode(decodedText);
         } else {
-            showToast('❌ 画像から条码を認識できませんでした。条码がはっきり映った写真をお試しください', 'warning');
+            showToast('❌ 画像から条码を認識できませんでした。<br><small>💡 ヒント：ライトをONにして、もう一度撮影してみてください</small>', 'warning');
         }
     } catch(e) {
         console.error('画像識別エラー:', e);
@@ -620,6 +742,45 @@ async function detectFromImageFile(event) {
     
     // 重置 input 以便重新選擇同一文件
     event.target.value = '';
+}
+
+// ─── 图像预处理：灰度化 + 对比度增强 + 锐化 ───
+async function preprocessImage(file) {
+    try {
+        const img = await createImageBitmap(file);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        
+        // 绘制灰度图像
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        // 灰度化 + 对比度增强 (拉伸直方图)
+        let min = 255, max = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+            data[i] = data[i+1] = data[i+2] = gray;
+            if (gray < min) min = gray;
+            if (gray > max) max = gray;
+        }
+        // 对比度拉伸
+        const range = max - min || 1;
+        for (let i = 0; i < data.length; i += 4) {
+            let v = ((data[i] - min) / range * 255);
+            v = Math.max(0, Math.min(255, v)); // clamp
+            data[i] = data[i+1] = data[i+2] = v;
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        
+        return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    } catch(e) {
+        console.warn('画像前処理失敗:', e.message);
+        return null;
+    }
 }
 
 // ─── 撮影して識別（備用モード） ──────────────
@@ -696,7 +857,7 @@ async function captureAndDetect() {
         }
         
         if (!found) {
-            // 策略2：Html5Qrcode scanFile — 先試 showImage=true 再試 false
+            // 策略2：Html5Qrcode scanFile — 原图 + 预处理图
             console.log('📷 BarcodeDetector未找到，使用 Html5Qrcode fallback');
             
             // 抓取一幀高清畫面
@@ -717,37 +878,65 @@ async function captureAndDetect() {
             
             // 用獨立 Html5Qrcode 掃描（傳 ID 字串）
             const helperEl = document.getElementById('scan-helper');
-            helperEl.innerHTML = '';
-            const tmpScanner = new Html5Qrcode("scan-helper");
             
             let decodedText = null;
-            try {
-                decodedText = await tmpScanner.scanFile(file, true);
-                console.log('scanFile(true) 結果:', decodedText);
-            } catch(e) {
-                console.warn('scanFile(true) 失敗:', e.message);
+            let methodUsed = '';
+            
+            // 2a: 原图扫描
+            for (const [showImg, label] of [[true, '原图(显示)'], [false, '原图(不显示)']]) {
+                if (decodedText) break;
                 try {
-                    decodedText = await tmpScanner.scanFile(file, false);
-                    console.log('scanFile(false) 結果:', decodedText);
-                } catch(e2) {
-                    console.warn('scanFile(false) 亦失敗:', e2.message);
+                    helperEl.innerHTML = '';
+                    const tmpS = new Html5Qrcode("scan-helper");
+                    decodedText = await tmpS.scanFile(file, showImg);
+                    methodUsed = 'Html5Qrcode(' + label + ')';
+                    console.log('✅ ' + methodUsed + ':', decodedText);
+                    try { await tmpS.clear(); } catch(_) {}
+                } catch(e) {
+                    console.warn(methodUsed + ' 失敗:', e.message);
+                    try { 
+                        // need to get the scanner instance to clear it
+                        const el = document.getElementById('scan-helper');
+                        el.innerHTML = ''; 
+                    } catch(_) {}
                 }
             }
             
-            try { await tmpScanner.clear(); } catch(_) {}
-            helperEl.innerHTML = '';
+            // 2b: 预处理后的图像扫描
+            if (!decodedText) {
+                console.log('📷 原图扫描失败，尝试预处理图像...');
+                try {
+                    const processedBlob = await preprocessImage(file);
+                    if (processedBlob) {
+                        const processedFile = new File([processedBlob], 'processed.png', { type: 'image/png' });
+                        helperEl.innerHTML = '';
+                        const tmpS2 = new Html5Qrcode("scan-helper");
+                        try {
+                            decodedText = await tmpS2.scanFile(processedFile, false);
+                            methodUsed = 'Html5Qrcode(预处理图)';
+                            console.log('✅ 预处理后成功:', decodedText);
+                        } catch(e) {
+                            console.warn('预处理图扫描失敗:', e.message);
+                        }
+                        try { await tmpS2.clear(); } catch(_) {}
+                        helperEl.innerHTML = '';
+                    }
+                } catch(e) {
+                    console.warn('预处理过程出错:', e.message);
+                }
+            }
             
             if (decodedText) {
-                console.log('✅ 撮影識別成功:', decodedText);
+                console.log('✅ 撮影識別成功 [' + methodUsed + ']:', decodedText);
                 stopScanner();
-                showToast('✅ 識別成功: ' + decodedText, 'success');
+                showToast('✅ 識別成功 (' + methodUsed + '): ' + decodedText, 'success');
                 lookupBarcode(decodedText);
                 found = true;
             }
         }
         
         if (!found) {
-            showToast('❌ 条码が見つかりません。「画像で識別」ボタンで写真をアップロードしてください', 'warning');
+            showToast('❌ 条码が見つかりません。<br><small>💡 ヒント：「ライト」ボタンをONにする、または「画像で識別」で写真をアップロード</small>', 'warning');
             captureBtn.disabled = false;
             statusText.textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
         }
