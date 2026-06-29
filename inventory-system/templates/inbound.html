@@ -113,6 +113,13 @@
                                 <i class="bi bi-image"></i> 画像で識別（写真アップロード）
                             </button>
                         </div>
+                        <div class="d-grid mt-2">
+                            <input type="file" id="aiBarcodeInput" accept="image/*" capture="environment"
+                                   style="display:none" onchange="aiReadBarcode(event)">
+                            <button class="btn btn-outline-danger" onclick="document.getElementById('aiBarcodeInput').click()">
+                                <i class="bi bi-robot"></i> AIで読み取り（Gemini Vision）
+                            </button>
+                        </div>
                         <button class="btn btn-outline-secondary" id="stopScanBtn" onclick="stopScanner()" disabled>
                             <i class="bi bi-stop-circle"></i> 停止
                         </button>
@@ -630,22 +637,7 @@ function _getZxingReader() {
     if (!_zxingReader && typeof ZXing !== 'undefined') {
         try {
             _zxingReader = new ZXing.BrowserMultiFormatReader();
-            // 仅设置常见1D+2D格式（减少误检）
-            _zxingReader.hints = new Map();
-            _zxingReader.hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-                ZXing.BarcodeFormat.CODE_128,
-                ZXing.BarcodeFormat.CODE_39,
-                ZXing.BarcodeFormat.CODE_93,
-                ZXing.BarcodeFormat.EAN_13,
-                ZXing.BarcodeFormat.EAN_8,
-                ZXing.BarcodeFormat.UPC_A,
-                ZXing.BarcodeFormat.UPC_E,
-                ZXing.BarcodeFormat.ITF,
-                ZXing.BarcodeFormat.CODABAR,
-                ZXing.BarcodeFormat.QR_CODE,
-                ZXing.BarcodeFormat.DATA_MATRIX,
-            ]);
-            console.log('✅ ZXing 解码器已初始化');
+            console.log('✅ ZXing 初始化成功');
         } catch(e) {
             console.warn('ZXing 初始化失敗:', e.message);
             _zxingReader = null;
@@ -926,6 +918,40 @@ async function stopScanner() {
     document.getElementById('startScanBtn').disabled = false;
     document.getElementById('stopScanBtn').disabled = true;
     document.getElementById('captureScanBtn').disabled = false;
+}
+
+// ─── AIでバーコード読み取り（Gemini Vision、最強のバックアップ） ──
+async function aiReadBarcode(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    showToast('🤖 AIがバーコード画像を解析中...', 'info');
+    
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        const res = await fetch('/api/inbound/ai-read-barcode', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        
+        if (data.success && data.barcode) {
+            console.log('✅ [AI] バーコード読み取り成功:', data.barcode, '(原始:', data.raw, ')');
+            showToast('✅ AI識別成功: ' + data.barcode, 'success');
+            lookupBarcode(data.barcode);
+        } else {
+            const msg = data.error || 'AIが番号を見つけられませんでした';
+            console.warn('[AI] 読み取り失敗:', msg);
+            showToast('❌ ' + msg + '<br><small>💡 バーコードがはっきり写った写真を撮って再試行してください</small>', 'warning');
+        }
+    } catch(e) {
+        console.error('[AI] 通信エラー:', e);
+        showToast('AI読み取りエラー: ' + (e.message || e), 'danger');
+    }
+    
+    event.target.value = '';
 }
 
 // ─── 画像アップロードで識別（最も信頼性が高い） ──
@@ -1934,5 +1960,16 @@ async function markAsScrap(reason) {
         showToast(result.error || '标记失败', 'error');
     }
 }
+
+// ─── 引擎可用性诊断（页面加载时） ──
+(function() {
+    setTimeout(function() {
+        const engines = [];
+        engines.push(typeof Html5Qrcode !== 'undefined' ? '✅ html5-qrcode' : '❌ html5-qrcode');
+        engines.push('BarcodeDetector' in window ? '✅ BarcodeDetector' : '❌ BarcodeDetector');
+        engines.push(typeof ZXing !== 'undefined' ? '✅ ZXing v' + (ZXing.version || '?') : '❌ ZXing');
+        console.log('🔧 条码引擎状态:', engines.join(' | '));
+    }, 1000);
+})();
 </script>
 {% endblock %}

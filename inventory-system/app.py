@@ -1951,6 +1951,88 @@ def api_inbound_ai_recognize():
         return jsonify({'error': f'AI認識エラー: {err_str}'}), 500
 
 
+@app.route('/api/inbound/ai-read-barcode', methods=['POST'])
+def api_ai_read_barcode():
+    """使用Gemini直接从图片中读取条码号码（绕过所有条码库）"""
+    if not GEMINI_AVAILABLE:
+        return jsonify({'error': 'AI recognition not configured', 'type': 'not_configured'}), 503
+    
+    api_key = os.environ.get('GEMINI_API_KEY', '')
+    if not api_key:
+        return jsonify({'error': 'Gemini API key not set', 'type': 'no_api_key'}), 503
+    
+    file = request.files.get('image')
+    if not file:
+        return jsonify({'error': '画像がありません'}), 400
+    
+    try:
+        img = Image.open(file.stream)
+        
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=85)
+        buf.seek(0)
+        image_bytes = buf.getvalue()
+        
+        prompt = """あなたはバーコード読み取りアシスタントです。
+この画像には商品のバーコードが写っています。
+
+バーコードの下に書かれている数字（人間が読める数字）をそのまま読み取ってください。
+ハイフン(-)やスペースが含まれている場合は、そのまま含めてください。
+
+ルール：
+- バーコードの数字だけを返してください
+- 説明や余計な文字は一切含めないでください
+- 数字が見えない/読めない場合は "NOT_FOUND" とだけ返してください
+- JSONではなく、数字の文字列だけを返してください
+
+例：
+5000-2301-7896
+または
+4901234567890"""
+        
+        response = model.generate_content([
+            {'mime_type': 'image/jpeg', 'data': image_bytes},
+            prompt
+        ])
+        
+        raw_text = response.text.strip()
+        
+        # Clean up: remove any markdown, quotes, extra whitespace
+        clean_text = raw_text.replace('```', '').replace('"', '').replace("'", '').strip()
+        
+        # If AI returned NOT_FOUND or empty, report accordingly
+        if not clean_text or clean_text.upper() == 'NOT_FOUND':
+            return jsonify({
+                'success': False,
+                'error': 'AIがバーコード番号を見つけられませんでした',
+                'type': 'not_found'
+            })
+        
+        # Remove any non-barcode characters (keep digits, hyphens, spaces)
+        import re
+        barcode = re.sub(r'[^\d\-\s]', '', clean_text).strip()
+        
+        print(f'[AI-Barcode] 原始返回: "{raw_text}" → 清理后: "{barcode}"')
+        
+        return jsonify({
+            'success': True,
+            'barcode': barcode,
+            'raw': raw_text
+        })
+        
+    except Exception as e:
+        err_str = str(e)
+        if '429' in err_str or 'ResourceExhausted' in err_str or 'quota' in err_str.lower():
+            return jsonify({
+                'error': 'AIの利用制限に達しました。しばらく待ってから再試行してください。',
+                'type': 'quota_exceeded'
+            }), 429
+        return jsonify({'error': f'AIバーコード読み取りエラー: {err_str}'}), 500
+
+
 @app.route('/api/inbound/manual', methods=['POST'])
 def api_inbound_manual():
     """手动输入条码入库，不需要扫描"""
