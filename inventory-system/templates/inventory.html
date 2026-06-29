@@ -65,7 +65,10 @@
                                 <span class="price-display">¥{{ '%d' | format(p.selling_price or 0) | int }}</span>
                                 <small class="text-muted ms-1" style="font-size:10px"><i class="bi bi-pencil"></i></small>
                             </td>
-                            <td class="text-center">{{ p.total_in }}</td>
+                            <td class="text-center" style="cursor:pointer;position:relative" onclick="editInbound(this, {{ p.id }}, {{ p.total_in }})">
+                                <span class="inbound-display">{{ p.total_in }}</span>
+                                <small class="text-muted ms-1 inbound-edit-icon" style="font-size:9px"><i class="bi bi-pencil"></i></small>
+                            </td>
                             <td class="text-center">{{ p.total_out }}</td>
                             <td class="text-center" style="cursor:pointer;position:relative" onclick="editStock(this, {{ p.id }}, {{ p.current_stock }})">
                                 <span class="badge bg-{{ stock_class }} stock-display" style="font-size:0.9rem;min-width:32px">{{ p.current_stock }}</span>
@@ -435,6 +438,71 @@ async function deleteProduct(productId, productName, internalCode) {
     }
 }
 
+// ─── 内联编辑入库数 ─────────────────────────────
+function editInbound(cell, productId, currentInbound) {
+    if (cell.querySelector('.inbound-editor')) return;
+    
+    const displaySpan = cell.querySelector('.inbound-display');
+    const editIcon = cell.querySelector('.inbound-edit-icon');
+    
+    const editor = document.createElement('div');
+    editor.className = 'inbound-editor d-flex align-items-center justify-content-center';
+    editor.innerHTML = '<input type="number" class="form-control form-control-sm text-center" id="inboundInput_' + productId + '" value="' + currentInbound + '" min="0" style="width:65px;font-size:0.9rem">'
+        + '<button class="btn btn-sm btn-success ms-1 py-0 px-1" style="font-size:12px" onclick="saveInbound(' + productId + ', this)"><i class="bi bi-check-lg"></i></button>'
+        + '<button class="btn btn-sm btn-secondary ms-1 py-0 px-1" style="font-size:12px" onclick="cancelEdit(this, \'inbound\')"><i class="bi bi-x-lg"></i></button>';
+    
+    displaySpan.style.display = 'none';
+    editIcon.style.display = 'none';
+    cell.appendChild(editor);
+    
+    const input = document.getElementById('inboundInput_' + productId);
+    if (input) {
+        input.focus();
+        input.select();
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); saveInbound(productId, editor.querySelector('.btn-success')); }
+            if (e.key === 'Escape') { cancelEdit(editor.querySelector('.btn-secondary'), 'inbound'); }
+        });
+    }
+}
+
+async function saveInbound(productId, btn) {
+    const cell = btn.closest('td');
+    const input = document.getElementById('inboundInput_' + productId);
+    if (!input) return;
+    
+    const targetInbound = parseInt(input.value);
+    if (isNaN(targetInbound) || targetInbound < 0) {
+        showToast('0以上の数値を入力してください', 'warning');
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    
+    try {
+        const resp = await fetch('/api/product/' + productId + '/adjust-inbound', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({target_inbound: targetInbound})
+        });
+        const result = await resp.json();
+        
+        if (result.success) {
+            showToast(result.message || '入庫数を更新しました', 'success');
+            setTimeout(() => location.reload(), 600);
+        } else {
+            showToast(result.error || '更新に失敗しました', 'danger');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+        }
+    } catch(e) {
+        showToast('通信エラー: ' + e.message, 'danger');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+    }
+}
+
 // ─── 内联编辑库存数 ─────────────────────────────
 function editStock(cell, productId, currentStock) {
     if (cell.querySelector('.stock-editor')) return;
@@ -502,12 +570,17 @@ async function saveStock(productId, btn) {
 }
 
 function cancelStock(btn) {
+    cancelEdit(btn, 'stock');
+}
+
+// 汎用キャンセル関数
+function cancelEdit(btn, prefix) {
     const cell = btn.closest('td');
-    const editor = cell.querySelector('.stock-editor');
+    const editor = cell.querySelector('.' + prefix + '-editor');
     if (editor) editor.remove();
-    const display = cell.querySelector('.stock-display');
+    const display = cell.querySelector('.' + prefix + '-display');
     if (display) display.style.display = '';
-    const icon = cell.querySelector('.stock-edit-icon');
+    const icon = cell.querySelector('.' + prefix + '-edit-icon');
     if (icon) icon.style.display = '';
 }
 

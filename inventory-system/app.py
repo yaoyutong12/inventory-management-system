@@ -1260,6 +1260,56 @@ def api_adjust_stock(product_id):
     return jsonify({'success': True, 'stock': new_stock, 'diff': diff, 'message': f'在庫数を {current_stock} → {new_stock} に調整しました'})
 
 
+@app.route('/api/product/<int:product_id>/adjust-inbound', methods=['POST'])
+def api_adjust_inbound(product_id):
+    """目標の入庫数に合わせてinbound_recordsを調整"""
+    db = get_db()
+    product = db.execute("SELECT id, product_name, unit_cost FROM products WHERE id=?", (product_id,)).fetchone()
+    if not product:
+        return jsonify({'success': False, 'error': '商品が見つかりません'}), 404
+
+    data = request.get_json()
+    target_inbound = data.get('target_inbound', None)
+    if target_inbound is None:
+        return jsonify({'success': False, 'error': '目標の入庫数を指定してください'}), 400
+
+    try:
+        target_inbound = int(target_inbound)
+        if target_inbound < 0:
+            return jsonify({'success': False, 'error': '0以上の数値を入力してください'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': '有効な数値を入力してください'}), 400
+
+    total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (product_id,)).fetchone()[0]
+    diff = target_inbound - total_in
+
+    if diff == 0:
+        total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (product_id,)).fetchone()[0]
+        return jsonify({'success': True, 'message': '入庫数に変更はありません', 'total_in': total_in, 'current_stock': total_in - total_out})
+
+    # 差分を入庫調整レコードとして記録
+    note = '入庫数調整' if diff >= 0 else '入庫数調整（減少）'
+    db.execute(
+        "INSERT INTO inbound_records (product_id, qty, unit_cost, inbound_date, notes) VALUES (?, ?, ?, ?, ?)",
+        (product_id, diff, product['unit_cost'] or 0, datetime.now(), note)
+    )
+
+    new_total_in = total_in + diff
+    total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (product_id,)).fetchone()[0]
+    new_stock = new_total_in - total_out
+    new_status = 'sold_out' if new_stock <= 0 else 'in_stock'
+    db.execute("UPDATE products SET status=?, updated_at=? WHERE id=?", (new_status, datetime.now(), product_id))
+
+    app.logger.info(f'[InboundAdjust] Product {product_id} "{product["product_name"]}": 入庫数 {total_in}→{new_total_in} (diff={diff:+d}), 在庫 {new_stock}')
+    return jsonify({
+        'success': True,
+        'total_in': new_total_in,
+        'current_stock': new_stock,
+        'diff': diff,
+        'message': f'入庫数を {total_in} → {new_total_in} に調整しました'
+    })
+
+
 @app.route('/api/product/<int:product_id>/update', methods=['POST'])
 def api_update_product(product_id):
     """直接编辑已入库商品（商品名/进价/售价/品类/照片）"""
