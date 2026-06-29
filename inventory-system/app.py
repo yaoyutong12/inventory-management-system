@@ -2877,6 +2877,38 @@ def api_sales_receipt(sale_id):
 # ─── API: Scrap (报废) ──────────────────────────────
 
 # ─── API: Delete Sale (撤销销售) ──────────────────────────────
+
+# ─── API: Update Payment Method (批量更新支付方式) ──────────────
+@app.route('/api/sales/update-payment', methods=['POST'])
+def api_sales_update_payment():
+    """批量更新销售记录的支付方式"""
+    data = request.get_json()
+    sale_ids = data.get('sale_ids', [])
+    payment_method = data.get('payment_method', 'cash')
+    
+    if not sale_ids:
+        return jsonify({'error': 'sale_ids is required'}), 400
+    
+    db = get_db()
+    if DATABASE_URL:
+        # PostgreSQL
+        placeholders = ','.join(['%s'] * len(sale_ids))
+        db.execute(
+            f"UPDATE sales_records SET payment_method=%s WHERE id IN ({placeholders})",
+            [payment_method] + sale_ids
+        )
+    else:
+        # SQLite
+        placeholders = ','.join(['?'] * len(sale_ids))
+        db.execute(
+            f"UPDATE sales_records SET payment_method=? WHERE id IN ({placeholders})",
+            [payment_method] + sale_ids
+        )
+    db.commit()
+    
+    return jsonify({'success': True, 'updated': len(sale_ids)})
+
+
 @app.route('/api/sales/<int:sale_id>/delete', methods=['POST'])
 def api_sales_delete(sale_id):
     """撤销一笔销售记录，恢复库存"""

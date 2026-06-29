@@ -131,25 +131,52 @@
         <div class="card border-success d-none mt-3" id="lastCheckoutCard">
             <div class="card-header bg-success text-white d-flex justify-content-between align-items-center py-2">
                 <span><i class="bi bi-receipt me-1"></i>本次结算 — <span id="lastCheckoutTime"></span></span>
-                <div>
-                    <button class="btn btn-sm btn-light me-1" onclick="printBatchReceipt()" title="打印本次小票">
-                        <i class="bi bi-printer"></i> 打印小票
-                    </button>
-                    <button class="btn btn-sm btn-outline-light" onclick="clearLastCheckout()" title="关闭">
-                        <i class="bi bi-x-lg"></i>
-                    </button>
-                </div>
+                <span class="badge bg-light text-success" id="checkoutStatusBadge">待收款</span>
             </div>
             <div class="card-body p-2" style="max-height:300px;overflow-y:auto" id="lastCheckoutList"></div>
             <div class="card-footer bg-white py-2">
-                <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex justify-content-between align-items-center mb-2">
                     <div>
                         <span class="text-muted small">共 <strong id="lastCheckoutItems">0</strong> 种 / <strong id="lastCheckoutQty">0</strong> 件</span>
                     </div>
                     <div class="text-end">
                         <div><span class="small text-muted">小計(税抜): </span><strong id="lastCheckoutSubtotal" class="text-success">¥0</strong></div>
-                        <div><span class="small text-muted">合計(税込): </span><strong id="lastCheckoutTaxIncluded" class="text-danger">¥0</strong></div>
+                        <div><span class="small text-muted">合計(税込): </span><strong id="lastCheckoutTaxIncluded" class="text-danger fs-5">¥0</strong></div>
                         <div class="small"><span class="text-muted">净利润: </span><strong id="lastCheckoutProfit" class="text-primary">¥0</strong></div>
+                    </div>
+                </div>
+                <!-- 收款按钮区 -->
+                <div id="checkoutPaymentArea">
+                    <div class="d-flex gap-1 flex-wrap mb-2" id="checkoutPaymentBtns">
+                        <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('cash')">
+                            💰 現金
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('paypay')">
+                            📱 PayPay
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('card')">
+                            💳 卡
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('mercari')">
+                            🛒 煤炉
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('other')">
+                            📝 其他
+                        </button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-success flex-grow-1" id="checkoutPayBtn" onclick="confirmCheckoutPayment()" disabled>
+                            <i class="bi bi-check-lg"></i> 確認收款
+                        </button>
+                        <button class="btn btn-outline-primary" onclick="printBatchReceipt()" title="打印小票">
+                            <i class="bi bi-printer"></i>
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="clearLastCheckout()" title="清空">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <div class="text-center mt-1 d-none" id="checkoutPaidLabel">
+                        <span class="badge bg-success fs-6"><i class="bi bi-check-circle"></i> 已收款: <span id="checkoutPaidMethod"></span> · <span id="checkoutPaidTime"></span></span>
                     </div>
                 </div>
             </div>
@@ -678,7 +705,73 @@ function renderLastCheckout() {
 
 function clearLastCheckout() {
     _lastCheckoutData = null;
+    _checkoutPaymentMethod = null;
     document.getElementById('lastCheckoutCard').classList.add('d-none');
+    // 重置收款按钮
+    document.getElementById('checkoutPayBtn').disabled = true;
+    document.getElementById('checkoutPaidLabel').classList.add('d-none');
+    document.getElementById('checkoutStatusBadge').textContent = '待收款';
+    document.getElementById('checkoutStatusBadge').className = 'badge bg-light text-success';
+    document.querySelectorAll('#checkoutPaymentBtns .btn').forEach(b => {
+        b.className = 'btn btn-sm btn-outline-secondary flex-grow-1';
+    });
+}
+
+// ─── 本次结算收款 ─────────────────────────────
+let _checkoutPaymentMethod = null;
+
+function selectCheckoutPayment(method) {
+    _checkoutPaymentMethod = method;
+    const methodMap = {'cash':'現金','paypay':'PayPay','card':'カード','mercari':'メルカリ','other':'その他'};
+    // 高亮选中
+    document.querySelectorAll('#checkoutPaymentBtns .btn').forEach(b => {
+        b.className = 'btn btn-sm btn-outline-secondary flex-grow-1';
+    });
+    event.currentTarget.className = 'btn btn-sm btn-success flex-grow-1';
+    document.getElementById('checkoutPayBtn').disabled = false;
+    document.getElementById('checkoutPayBtn').innerHTML = 
+        `<i class="bi bi-check-lg"></i> 確認收款 (${methodMap[method]})`;
+}
+
+async function confirmCheckoutPayment() {
+    if (!_lastCheckoutData || !_checkoutPaymentMethod) return;
+    
+    const methodMap = {'cash':'現金','paypay':'PayPay','card':'カード','mercari':'メルカリ','other':'その他'};
+    const method = _checkoutPaymentMethod;
+    
+    // 更新本次结算数据的支付方式
+    _lastCheckoutData.payment_method = methodMap[method];
+    _lastCheckoutData.paid = true;
+    _lastCheckoutData.paid_time = new Date().toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'});
+    
+    // 如果有 sale_ids，更新后端支付方式
+    if (_lastCheckoutData.sale_ids && _lastCheckoutData.sale_ids.length > 0) {
+        try {
+            await API.post('/api/sales/update-payment', {
+                sale_ids: _lastCheckoutData.sale_ids,
+                payment_method: method
+            });
+        } catch(e) { console.error('更新支付方式失败:', e); }
+    }
+    
+    // 更新UI
+    document.getElementById('checkoutPayBtn').disabled = true;
+    document.getElementById('checkoutPayBtn').innerHTML = '<i class="bi bi-check-lg"></i> 已收款';
+    document.getElementById('checkoutPaymentBtns').querySelectorAll('.btn').forEach(b => b.disabled = true);
+    document.getElementById('checkoutPaidLabel').classList.remove('d-none');
+    document.getElementById('checkoutPaidMethod').textContent = methodMap[method];
+    document.getElementById('checkoutPaidTime').textContent = _lastCheckoutData.paid_time;
+    document.getElementById('checkoutStatusBadge').textContent = '✓ 已收款';
+    document.getElementById('checkoutStatusBadge').className = 'badge bg-warning text-dark';
+    
+    showToast(`收款確認: ${methodMap[method]} ¥${Math.round(Number(_lastCheckoutData.total_amount) * 1.1).toLocaleString()}`, 'success');
+    
+    // 自动打印小票
+    printBatchReceipt();
+    
+    // 刷新销售记录和汇总
+    loadSalesHistory();
+    loadTodaySummary();
 }
 
 function printBatchReceipt() {
