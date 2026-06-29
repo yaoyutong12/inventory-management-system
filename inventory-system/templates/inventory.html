@@ -308,9 +308,9 @@ function handleProductPhotoSelect(input) {
     const file = input.files[0];
     if (!file) return;
     
-    // 超过2MB警告
-    if (file.size > 2 * 1024 * 1024) {
-        showToast('写真が大きすぎます（2MB以下にしてください）', 'warning');
+    // 超过15MB警告
+    if (file.size > 15 * 1024 * 1024) {
+        showToast('写真が大きすぎます（15MB以下にしてください）', 'warning');
         input.value = '';
         return;
     }
