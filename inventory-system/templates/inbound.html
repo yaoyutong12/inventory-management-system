@@ -34,10 +34,10 @@
                     <span class="text-muted small">—— 或 ——</span>
                 </div>
                 <div class="d-grid gap-2">
-                    <input type="file" id="aiBarcodeInput" accept="image/*" capture="environment"
+                    <input type="file" id="aiBarcodeInput" accept="image/*"
                            style="display:none" onchange="aiReadBarcode(event)">
                     <button class="btn btn-outline-danger" onclick="document.getElementById('aiBarcodeInput').click()">
-                        <i class="bi bi-robot"></i> 拍条码照片 AI 读数字
+                        <i class="bi bi-robot"></i> 选条码照片 AI 读数字
                     </button>
                 </div>
                 
@@ -46,10 +46,10 @@
                 <!-- AI实物识别 -->
                 <h6><i class="bi bi-camera me-1"></i> AI 实物识别（拍照匹配未入库商品）</h6>
                 <div class="border rounded p-3 bg-light text-center" id="photoDropZone" style="min-height:100px">
-                    <input type="file" id="photoInput" accept="image/*" capture="environment" 
+                    <input type="file" id="photoInput" accept="image/*" 
                            class="form-control" onchange="uploadAIPhoto()" style="display:none">
                     <button class="btn btn-success" onclick="document.getElementById('photoInput').click()">
-                        <i class="bi bi-camera"></i> 拍商品照片 AI 识别
+                        <i class="bi bi-camera"></i> 选商品照片 AI 识别
                     </button>
                     <div class="mt-2">
                         <div id="photoPreview" class="d-none">
@@ -158,7 +158,7 @@
                             <i class="bi bi-camera me-1"></i>商品照片（选填）
                             <small class="text-muted fw-normal">- 入库时上传，库存和煤炉页面可预览</small>
                         </label>
-                        <input type="file" id="inboundPhotoInput" accept="image/*" capture="environment"
+                        <input type="file" id="inboundPhotoInput" accept="image/*"
                                class="form-control form-control-sm" onchange="previewInboundPhoto()">
                         <div id="inboundPhotoPreviewArea" class="mt-2 d-none">
                             <img id="inboundPhotoPreviewImg" style="max-width:200px;max-height:150px;border-radius:8px;border:1px solid #ddd">
