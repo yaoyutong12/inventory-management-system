@@ -423,7 +423,19 @@ async function _ensureCameraStarted() {
         try {
             await scanner.start(
                 cfg,
-                { fps: 10, qrbox: { width: 380, height: 200 } },
+                { fps: 10, qrbox: { width: 380, height: 200 }, formatsToSupport: [
+                    Html5QrcodeSupportedFormats.CODE_128,
+                    Html5QrcodeSupportedFormats.CODE_39,
+                    Html5QrcodeSupportedFormats.CODE_93,
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.UPC_A,
+                    Html5QrcodeSupportedFormats.UPC_E,
+                    Html5QrcodeSupportedFormats.ITF,
+                    Html5QrcodeSupportedFormats.QR_CODE,
+                    Html5QrcodeSupportedFormats.CODABAR,
+                    Html5QrcodeSupportedFormats.DATA_MATRIX,
+                ]},
                 () => {},  // onScanSuccess — 绿色按钮不需要连续识别回调
                 () => {}   // onScanFailure
             );
@@ -602,7 +614,8 @@ async function captureAndDetect() {
         }
         
         const file = new File([blob], 'capture.png', { type: 'image/png' });
-        const decodedText = await Html5Qrcode.scanFile(file, false);
+        // 使用实例方法而非静态方法（html5-qrcode 2.3.8 静态 scanFile 可能不存在）
+        const decodedText = await scanner.scanFile(file, false);
         
         if (decodedText) {
             console.log('✅ 撮影識別成功:', decodedText);
