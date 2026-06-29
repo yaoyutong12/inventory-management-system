@@ -37,6 +37,7 @@
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <h6 class="mb-0"><i class="bi bi-box-seam me-2"></i>在庫商品一覧</h6>
                 <span class="badge bg-primary" id="productCount">0件</span>
+                <small class="text-muted ms-2" id="apiDebugInfo"></small>
             </div>
             <div class="card-body p-2">
                 <div class="px-2 mb-2">
@@ -211,10 +212,21 @@ let allProducts = [];
 let currentProduct = null;
 
 async function loadAllProducts() {
-    const data = await API.get('/api/mercari/stock');
-    allProducts = data;
-    document.getElementById('productCount').textContent = `${data.length}件`;
-    renderProductList(data);
+    try {
+        const data = await API.get('/api/mercari/stock');
+        console.log('[DEBUG] /api/mercari/stock 返回:', data);
+        allProducts = data;
+        document.getElementById('productCount').textContent = `${data.length}件`;
+        // 调试信息
+        var debugEl = document.getElementById('apiDebugInfo');
+        if (debugEl) {
+            debugEl.textContent = 'API返却: ' + data.length + '件 | 内部コード: ' + data.map(p => p.internal_code).join(', ');
+        }
+        renderProductList(data);
+    } catch(e) {
+        console.error('[DEBUG] API取得失败:', e);
+        alert('API取得失败: ' + e.message);
+    }
 }
 
 function renderProductList(products) {

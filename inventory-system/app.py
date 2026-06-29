@@ -1848,6 +1848,23 @@ def api_mercari_stock():
     return jsonify(result)
 
 
+# ─── API: Debug - 查看所有商品状态（调试用）─────────────────
+@app.route('/api/debug/products')
+def api_debug_products():
+    """调试用：查看所有商品的status、current_stock、is_high_value"""
+    db = get_db()
+    products = db.execute("SELECT p.id, p.internal_code, p.product_name, p.status, p.is_high_value, p.sales_channel, " +
+        "(SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=p.id) as total_in, " +
+        "(SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=p.id) as total_out " +
+        "FROM products p ORDER BY p.id").fetchall()
+    result = []
+    for p in products:
+        d = dict(p)
+        d['current_stock'] = d['total_in'] - d['total_out']
+        result.append(d)
+    return jsonify(result)
+
+
 # ─── API: Sales Report (销售报表，按平台统计) ───────────────
 @app.route('/api/sales/report')
 def api_sales_report():
