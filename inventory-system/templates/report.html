@@ -171,15 +171,14 @@
                         <th class="text-end">単価</th>
                         <th class="text-end">売上</th>
                         <th class="text-end">仕入</th>
-                        <th class="text-end">
-                            <span title="運費/手数料/その他 — クリックして編集">費用 ✎</span>
-                        </th>
+                        <th class="text-end" style="min-width:55px">運費</th>
+                        <th class="text-end" style="min-width:55px">佣金</th>
+                        <th class="text-end" style="min-width:55px">雑費</th>
                         <th class="text-end">利益</th>
-                        <th class="text-center" style="width:40px"></th>
                     </tr>
                 </thead>
                 <tbody id="detailTableBody">
-                    <tr><td colspan="11" class="text-center text-muted py-3">読み込み中...</td></tr>
+                    <tr><td colspan="12" class="text-center text-muted py-3">読み込み中...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -259,79 +258,71 @@ async function loadReport(noFilter = false) {
     }
 }
 
-// ─── Inline fee editing in sales detail ────────────────────────
-function editFees(sid, shipping, platformF, other) {
-    const cell = document.getElementById('fee-edit-' + sid);
-    cell.className = '';
-    cell.innerHTML = `
-        <div class="d-flex gap-1 align-items-center" style="min-width:180px">
-            <input type="number" id="fee-ship-${sid}" class="form-control form-control-sm" 
-                   value="${shipping}" min="0" style="width:55px" placeholder="運">
-            <input type="number" id="fee-plat-${sid}" class="form-control form-control-sm"
-                   value="${platformF}" min="0" style="width:55px" placeholder="手">
-            <input type="number" id="fee-oth-${sid}" class="form-control form-control-sm"
-                   value="${other}" min="0" style="width:55px" placeholder="他">
-            <button class="btn btn-success btn-sm py-0 px-1" onclick="saveFees(${sid})" title="保存">✓</button>
-            <button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="loadReport()" title="取消">✕</button>
-        </div>`;
-    document.getElementById('fee-disp-' + sid).classList.add('d-none');
+// ─── Inline fee editing — one column at a time ──────────────────
+function editFeeCell(sid, field) {
+    const labels = {shipping:'運費', platform:'佣金', other:'雑費'};
+    const display = document.getElementById('fee-' + field + '-' + sid);
+    const editSpan = document.getElementById('fee-edit-' + field + '-' + sid);
+    
+    // Get current value from display text
+    const current = parseInt(display.textContent.replace(/[^0-9]/g, '')) || 0;
+    
+    display.className = 'd-none';
+    editSpan.className = '';
+    editSpan.innerHTML = `<div class="d-flex gap-1 align-items-center">
+        <input type="number" id="fee-input-${field}-${sid}" class="form-control form-control-sm"
+               value="${current}" min="0" style="width:62px">
+        <button class="btn btn-success btn-sm py-0 px-1" onclick="saveFeeCell('${sid}','${field}')">✓</button>
+        <button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="cancelFeeCell('${sid}','${field}',${current})">✕</button>
+    </div>`;
+    document.getElementById('fee-input-' + field + '-' + sid).focus();
 }
 
-async function saveFees(sid) {
-    const shipping = parseInt(document.getElementById('fee-ship-' + sid).value) || 0;
-    const platformF = parseInt(document.getElementById('fee-plat-' + sid).value) || 0;
-    const other = parseInt(document.getElementById('fee-oth-' + sid).value) || 0;
+function cancelFeeCell(sid, field, val) {
+    const display = document.getElementById('fee-' + field + '-' + sid);
+    const editSpan = document.getElementById('fee-edit-' + field + '-' + sid);
+    display.textContent = val > 0 ? '-' + formatJPY(val) : '¥0';
+    display.className = val > 0 ? 'text-danger fw-bold' : 'text-muted';
+    display.style.cssText = 'cursor:pointer;border-bottom:1px dashed #999;';
+    editSpan.className = 'd-none';
+    editSpan.innerHTML = '';
+}
+
+async function saveFeeCell(sid, field) {
+    const val = parseInt(document.getElementById('fee-input-' + field + '-' + sid).value) || 0;
     
+    // Build payload with all three fees (need to read current values from other cells)
+    const getVal = (f) => {
+        const d = document.getElementById('fee-' + f + '-' + sid);
+        if (!d || d.classList.contains('d-none')) return null; // being edited, skip
+        return parseInt(d.textContent.replace(/[^0-9]/g, '')) || 0;
+    };
+    
+    const payload = {};
+    ['shipping','platform','other'].forEach(f => {
+        const v = f === field ? val : getVal(f);
+        if (v !== null) payload[f + '_fee'] = v;
+    });
+    
+    // Re-fetch from display in case another cell is also being edited
+    // Just pass all three values explicitly
     try {
         const resp = await fetch('/api/sales/' + sid + '/update-fees', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                shipping_fee: shipping,
-                platform_fee: platformF,
-                other_fee: other
-            })
+            body: JSON.stringify(payload)
         });
         const data = await resp.json();
         
         if (data.success) {
-            const totalFees = shipping + platformF + other;
-            const disp = document.getElementById('fee-disp-' + sid);
-            disp.textContent = totalFees > 0 ? '-' + formatJPY(totalFees) : '¥0';
-            disp.className = totalFees > 0 ? 'text-danger fw-bold' : 'text-muted';
-            disp.style.cssText = 'cursor:pointer;border-bottom:1px dashed #999;padding-bottom:1px';
-            disp.classList.remove('d-none');
-            document.getElementById('fee-edit-' + sid).className = 'd-none';
-            
-            // Update profit cell
-            const profitCell = document.getElementById('profit-cell-' + sid);
-            profitCell.textContent = formatJPY(data.profit_amount);
-            profitCell.className = 'text-end fw-bold ' + (data.profit_amount >= 0 ? 'text-success' : 'text-danger');
-            
-            // Reload report summary
-            loadReportSummary();
+            // Reload full report to refresh all summaries
+            loadReport();
         } else {
             showToast(data.error || '更新失敗', 'error');
         }
     } catch (err) {
         showToast('保存エラー: ' + err.message, 'error');
     }
-}
-
-// Only reload summary (charts + platform table) without rebuilding detail table
-async function loadReportSummary() {
-    const start = document.getElementById('startDate').value;
-    const end = document.getElementById('endDate').value;
-    const platform = document.getElementById('platformFilter').value;
-    let url = '/api/sales/report?';
-    if (start) url += 'start_date='+start+'&';
-    if (end) url += 'end_date='+end+'&';
-    if (platform) url += 'platform='+platform+'&';
-    
-    try {
-        const data = await (await fetch(url)).json();
-        renderReport(data);
-    } catch (e) {}
 }
 
 function renderReport(data) {
@@ -406,15 +397,24 @@ function renderReport(data) {
             </tr>`;
         }).join('');
     
-    // Individual Sales Detail Table — with inline fee editing
-    const paymentLabels = {'cash':'現金','paypay':'PayPay','card':'カード','mercari':'メルカリ','other':'その他'};
+    // Individual Sales Detail Table — three separate fee columns, each clickable
+    function feeCell(sid, field, val, label) {
+        const cls = val > 0 ? 'text-danger fw-bold' : 'text-muted';
+        return `<span id="fee-${field}-${sid}" class="${cls}" style="cursor:pointer;border-bottom:1px dashed #999;"
+                      onclick="editFeeCell('${sid}','${field}')" title="${label} - クリックして編集">
+                    ${val > 0 ? '-'+formatJPY(val) : '¥0'}
+                </span>
+                <span id="fee-edit-${field}-${sid}" class="d-none"></span>`;
+    }
     document.getElementById('detailTableBody').innerHTML = salesDetail.length === 0
-        ? '<tr><td colspan="11" class="text-center text-muted py-3">データがありません</td></tr>'
+        ? '<tr><td colspan="12" class="text-center text-muted py-3">データがありません</td></tr>'
         : salesDetail.map(s => {
             const platform = platformLabels[s.platform] || s.platform || '未分類';
-            const fees = (s.shipping_fee||0) + (s.platform_fee||0) + (s.other_fee||0);
             const profitClass = (s.profit_amount || 0) >= 0 ? 'text-success' : 'text-danger';
             const sid = s.id;
+            const sf = s.shipping_fee || 0;
+            const pf = s.platform_fee || 0;
+            const of = s.other_fee || 0;
             return `<tr id="detail-row-${sid}">
                 <td><small>${s.sale_time || s.sale_date || ''}</small></td>
                 <td><strong>${s.product_name || '(已削除)'}</strong></td>
@@ -424,21 +424,10 @@ function renderReport(data) {
                 <td class="text-end">${formatJPY(s.unit_price)}</td>
                 <td class="text-end fw-bold">${formatJPY(s.total_amount)}</td>
                 <td class="text-end text-muted">${formatJPY(s.cost_amount || 0)}</td>
-                <td class="text-end">
-                    <span id="fee-disp-${sid}" class="${fees > 0 ? 'text-danger fw-bold' : 'text-muted'}"
-                          style="cursor:pointer;border-bottom:1px dashed #999;padding-bottom:1px"
-                          onclick="editFees(${sid}, ${s.shipping_fee||0}, ${s.platform_fee||0}, ${s.other_fee||0})"
-                          title="点击编辑费用">
-                        ${fees > 0 ? '-'+formatJPY(fees) : '¥0'}
-                    </span>
-                    <span id="fee-edit-${sid}" class="d-none"></span>
-                </td>
+                <td class="text-end">${feeCell(sid, 'shipping', sf, '運費')}</td>
+                <td class="text-end">${feeCell(sid, 'platform', pf, '佣金')}</td>
+                <td class="text-end">${feeCell(sid, 'other', of, '雑費')}</td>
                 <td class="text-end ${profitClass} fw-bold" id="profit-cell-${sid}">${formatJPY(s.profit_amount || 0)}</td>
-                <td class="text-center">
-                    <button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="editFees(${sid}, ${s.shipping_fee||0}, ${s.platform_fee||0}, ${s.other_fee||0})" title="编辑费用">
-                        <i class="bi bi-pencil-square" style="font-size:0.75rem"></i>
-                    </button>
-                </td>
             </tr>`;
         }).join('');
     
