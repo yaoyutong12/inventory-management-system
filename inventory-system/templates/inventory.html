@@ -67,7 +67,10 @@
                             </td>
                             <td class="text-center">{{ p.total_in }}</td>
                             <td class="text-center">{{ p.total_out }}</td>
-                            <td class="text-center"><span class="badge bg-{{ stock_class }}">{{ p.current_stock }}</span></td>
+                            <td class="text-center" style="cursor:pointer;position:relative" onclick="editStock(this, {{ p.id }}, {{ p.current_stock }})">
+                                <span class="badge bg-{{ stock_class }} stock-display" style="font-size:0.9rem;min-width:32px">{{ p.current_stock }}</span>
+                                <small class="text-muted ms-1 stock-edit-icon" style="font-size:9px"><i class="bi bi-pencil"></i></small>
+                            </td>
                             <td class="text-end">¥{{ '%d' | format(p.total_revenue or 0) | int }}</td>
                             <td class="text-end text-success">¥{{ '%d' | format((p.total_revenue or 0) - (p.unit_cost or 0) * (p.total_out or 0)) | int }}</td>
                             <td>{{ status_badge | safe }}</td>
@@ -430,6 +433,82 @@ async function deleteProduct(productId, productName, internalCode) {
     } catch(e) {
         alert('通信エラー: ' + e.message);
     }
+}
+
+// ─── 内联编辑库存数 ─────────────────────────────
+function editStock(cell, productId, currentStock) {
+    if (cell.querySelector('.stock-editor')) return;
+    
+    const displayBadge = cell.querySelector('.stock-display');
+    const editIcon = cell.querySelector('.stock-edit-icon');
+    
+    const editor = document.createElement('div');
+    editor.className = 'stock-editor d-flex align-items-center justify-content-center';
+    editor.innerHTML = '<input type="number" class="form-control form-control-sm text-center" id="stockInput_' + productId + '" value="' + currentStock + '" min="0" style="width:65px;font-size:0.9rem">'
+        + '<button class="btn btn-sm btn-success ms-1 py-0 px-1" style="font-size:12px" onclick="saveStock(' + productId + ', this)"><i class="bi bi-check-lg"></i></button>'
+        + '<button class="btn btn-sm btn-secondary ms-1 py-0 px-1" style="font-size:12px" onclick="cancelStock(this)"><i class="bi bi-x-lg"></i></button>';
+    
+    displayBadge.style.display = 'none';
+    editIcon.style.display = 'none';
+    cell.appendChild(editor);
+    
+    const input = document.getElementById('stockInput_' + productId);
+    if (input) {
+        input.focus();
+        input.select();
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); saveStock(productId, editor.querySelector('.btn-success')); }
+            if (e.key === 'Escape') { cancelStock(editor.querySelector('.btn-secondary')); }
+        });
+    }
+}
+
+async function saveStock(productId, btn) {
+    const cell = btn.closest('td');
+    const input = document.getElementById('stockInput_' + productId);
+    if (!input) return;
+    
+    const targetStock = parseInt(input.value);
+    if (isNaN(targetStock) || targetStock < 0) {
+        showToast('0以上の数値を入力してください', 'warning');
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    
+    try {
+        const resp = await fetch('/api/product/' + productId + '/adjust-stock', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({target_stock: targetStock})
+        });
+        const result = await resp.json();
+        
+        if (result.success) {
+            // Refresh the page to show updated stock numbers
+            showToast(result.message || '在庫数を更新しました', 'success');
+            setTimeout(() => location.reload(), 600);
+        } else {
+            showToast(result.error || '更新に失敗しました', 'danger');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+        }
+    } catch(e) {
+        showToast('通信エラー: ' + e.message, 'danger');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+    }
+}
+
+function cancelStock(btn) {
+    const cell = btn.closest('td');
+    const editor = cell.querySelector('.stock-editor');
+    if (editor) editor.remove();
+    const display = cell.querySelector('.stock-display');
+    if (display) display.style.display = '';
+    const icon = cell.querySelector('.stock-edit-icon');
+    if (icon) icon.style.display = '';
 }
 
 // ─── 内联编辑售价 ─────────────────────────────
