@@ -657,15 +657,28 @@ async function startSalesScanner() {
     }
 }
 
+// 防重复扫描：购物篮模式下同一码3秒内不重复处理
+let _lastScannedBarcode = '';
+let _lastScanTime = 0;
+
 function onBarcodeFound(barcode, method) {
     console.log('[SalesScan] ' + method + ' 识别: ' + barcode);
+    if (_cartMode) {
+        const now = Date.now();
+        if (barcode === _lastScannedBarcode && (now - _lastScanTime) < 3000) {
+            console.log('[SalesScan] 跳过重复扫描: ' + barcode);
+            return;
+        }
+        _lastScannedBarcode = barcode;
+        _lastScanTime = now;
+    }
     document.getElementById('salesBarcode').value = barcode;
     if (_cartMode) {
         // 购物篮模式：扫码成功后自动继续扫码，无需手动点击
         stopSalesScanner();
         scanProduct().finally(() => {
             if (_cartMode) {
-                setTimeout(() => startSalesScanner(), 500);
+                setTimeout(() => startSalesScanner(), 800);
             }
         });
     } else {
@@ -698,8 +711,11 @@ async function scanProduct() {
     const data = await API.get(`/api/lookup/${encodeURIComponent(barcode)}`);
     
     if (data.error || data.type !== 'product') {
-        showToast(data.type==='product'?'':'未找到商品: ' + barcode, 'warning');
-        if (!_cartMode) {
+        showToast('未找到商品: ' + barcode, 'warning');
+        if (_cartMode) {
+            // 购物篮模式：清空输入方便手动输入，扫描继续
+            document.getElementById('salesBarcode').value = '';
+        } else {
             document.getElementById('productInfo').classList.add('d-none');
         }
         return;
