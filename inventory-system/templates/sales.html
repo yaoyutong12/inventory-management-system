@@ -127,6 +127,34 @@
             </div>
         </div>
         
+        <!-- 本次结算（当前批次） -->
+        <div class="card border-success d-none mt-3" id="lastCheckoutCard">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center py-2">
+                <span><i class="bi bi-receipt me-1"></i>本次结算 — <span id="lastCheckoutTime"></span></span>
+                <div>
+                    <button class="btn btn-sm btn-light me-1" onclick="printBatchReceipt()" title="打印本次小票">
+                        <i class="bi bi-printer"></i> 打印小票
+                    </button>
+                    <button class="btn btn-sm btn-outline-light" onclick="clearLastCheckout()" title="关闭">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-2" style="max-height:300px;overflow-y:auto" id="lastCheckoutList"></div>
+            <div class="card-footer bg-white py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">共 <strong id="lastCheckoutItems">0</strong> 种 / <strong id="lastCheckoutQty">0</strong> 件</span>
+                    </div>
+                    <div class="text-end">
+                        <div><span class="small text-muted">小計(税抜): </span><strong id="lastCheckoutSubtotal" class="text-success">¥0</strong></div>
+                        <div><span class="small text-muted">合計(税込): </span><strong id="lastCheckoutTaxIncluded" class="text-danger">¥0</strong></div>
+                        <div class="small"><span class="text-muted">净利润: </span><strong id="lastCheckoutProfit" class="text-primary">¥0</strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Today Summary -->
         <div class="card mt-3">
             <div class="card-body">
@@ -156,32 +184,7 @@
     
     <!-- Sales History with Platform Filter -->
     <div class="col-lg-6">
-        <!-- 本次结算（当前批次） -->
-        <div class="card border-success d-none" id="lastCheckoutCard">
-            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center py-2">
-                <span><i class="bi bi-receipt me-1"></i>本次结算 — <span id="lastCheckoutTime"></span></span>
-                <div>
-                    <button class="btn btn-sm btn-light me-1" onclick="printBatchReceipt()" title="打印本次小票">
-                        <i class="bi bi-printer"></i> 打印小票
-                    </button>
-                    <button class="btn btn-sm btn-outline-light" onclick="clearLastCheckout()" title="关闭">
-                        <i class="bi bi-x-lg"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="card-body p-2" style="max-height:300px;overflow-y:auto" id="lastCheckoutList"></div>
-            <div class="card-footer bg-white d-flex justify-content-between align-items-center py-2">
-                <div>
-                    <span class="text-muted small">共 <strong id="lastCheckoutItems">0</strong> 种 / <strong id="lastCheckoutQty">0</strong> 件</span>
-                </div>
-                <div>
-                    <span class="me-3">小计: <strong id="lastCheckoutSubtotal" class="text-success">¥0</strong></span>
-                    <span>净利润: <strong id="lastCheckoutProfit" class="text-primary">¥0</strong></span>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mt-2">
+        <div class="card">
             <div class="card-body">
                 <h5 class="card-title">
                     <i class="bi bi-clock-history me-2"></i>销售记录
@@ -655,7 +658,10 @@ function renderLastCheckout() {
     document.getElementById('lastCheckoutList').innerHTML = html;
     document.getElementById('lastCheckoutItems').textContent = d.items.length;
     document.getElementById('lastCheckoutQty').textContent = d.total_qty;
-    document.getElementById('lastCheckoutSubtotal').textContent = '¥' + Number(d.total_amount).toLocaleString();
+    const subtotal = Number(d.total_amount);
+    const taxIncluded = Math.round(subtotal * 1.1);
+    document.getElementById('lastCheckoutSubtotal').textContent = '¥' + subtotal.toLocaleString();
+    document.getElementById('lastCheckoutTaxIncluded').textContent = '¥' + taxIncluded.toLocaleString();
     document.getElementById('lastCheckoutProfit').textContent = '¥' + Number(d.total_profit).toLocaleString();
 
     // 滚动到本次结算面板
@@ -708,15 +714,19 @@ ${d.items.map((item, i) => `
     <span>小計 (${d.total_qty}点)</span>
     <span>¥${Number(d.total_amount).toLocaleString()}</span>
 </div>
+<div class="row">
+    <span>消費税 (10%)</span>
+    <span>¥${Math.round(Number(d.total_amount) * 0.1).toLocaleString()}</span>
+</div>
 ${feeTotal > 0 ? `
 <div class="row small">
     <span>費用 (運賃·手数料等)</span>
     <span>-¥${feeTotal.toLocaleString()}</span>
-</div>
-<div class="row bold">
-    <span>合計</span>
-    <span>¥${(Number(d.total_amount) - feeTotal).toLocaleString()}</span>
 </div>` : ''}
+<div class="row bold">
+    <span>合計 (税込)</span>
+    <span>¥${(Math.round(Number(d.total_amount) * 1.1) - feeTotal).toLocaleString()}</span>
+</div>
 <div class="row small">
     <span>利益</span>
     <span>¥${Number(d.total_profit).toLocaleString()}</span>
