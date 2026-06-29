@@ -413,7 +413,7 @@ function startScanner() {
     
     scanner = new Html5Qrcode("scanner-view");
     
-    // 扫码配置：全帧扫描（无 qrbox 约束，摄像头视野内任意位置都能识别）
+    // 扫码配置
     const scanConfig = {
         fps: 10,
         qrbox: { width: 380, height: 200 },
@@ -430,9 +430,6 @@ function startScanner() {
             Html5QrcodeSupportedFormats.CODABAR,
             Html5QrcodeSupportedFormats.DATA_MATRIX,
         ],
-        experimentalFeatures: {
-            useBarCodeDetectorIfSupported: true  // Chrome 原生条码 API 更快更准
-        }
     };
     
     // 视频约束：1080p 提高识别率
@@ -482,8 +479,8 @@ function startScanner() {
             const scanView = document.getElementById('scanner-view');
             scanView.innerHTML = `<div class="alert alert-warning m-2">
                 <i class="bi bi-exclamation-triangle"></i> 
-                ${t('camera_not_available')}<br>
-                <small class="text-muted">カメラが検出されないか、アクセスが拒否されました。ブラウザのカメラ権限を確認してください。</small>
+                カメラ起動失敗<br>
+                <small class="text-muted">${err2.message || err2}</small>
             </div>`;
             document.getElementById('startScanBtn').disabled = false;
             document.getElementById('stopScanBtn').disabled = true;
