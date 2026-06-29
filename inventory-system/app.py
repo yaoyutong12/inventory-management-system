@@ -456,10 +456,22 @@ def _init_sqlite():
         "ALTER TABLE sales_records ADD COLUMN shipping_fee REAL DEFAULT 0",
         "ALTER TABLE sales_records ADD COLUMN platform_fee REAL DEFAULT 0",
         "ALTER TABLE sales_records ADD COLUMN other_fee REAL DEFAULT 0",
+        "ALTER TABLE supplier_items ADD COLUMN inbound_qty INTEGER DEFAULT 0",
     ]:
         try: db.execute(sql)
         except: pass
-    
+
+    # 数据迁移: 补填旧数据的 inbound_qty（根据 inbound_records 实际数量）
+    try:
+        db.execute("""UPDATE supplier_items SET inbound_qty = COALESCE(
+            (SELECT SUM(qty) FROM inbound_records WHERE supplier_item_id = supplier_items.id), 0
+        ) WHERE COALESCE(inbound_qty, 0) = 0""")
+        count = db.execute("SELECT COUNT(*) FROM supplier_items WHERE inbound_qty > 0").fetchone()[0]
+        if count > 0:
+            app.logger.info(f"[Migration] Fixed inbound_qty for {count} supplier_items")
+    except Exception as e:
+        app.logger.warning(f"[Migration] inbound_qty fix failed (non-critical): {e}")
+
     db.commit()
     db.close()
 
@@ -479,7 +491,8 @@ def _init_postgres():
             id {pk}, import_id INTEGER REFERENCES supplier_imports(id) ON DELETE SET NULL,
             tracking_no TEXT, location_code TEXT, weight REAL, dimensions TEXT,
             product_name TEXT, expected_qty INTEGER DEFAULT 1, category TEXT,
-            unit_cost REAL, matched BOOLEAN DEFAULT FALSE, matched_date TIMESTAMP
+            unit_cost REAL, matched BOOLEAN DEFAULT FALSE, matched_date TIMESTAMP,
+            inbound_qty INTEGER DEFAULT 0
         )""",
         f"""CREATE TABLE IF NOT EXISTS products (
             id {pk}, internal_code TEXT UNIQUE NOT NULL,
@@ -545,9 +558,19 @@ def _init_postgres():
         "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS shipping_fee REAL DEFAULT 0",
         "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS platform_fee REAL DEFAULT 0",
         "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS other_fee REAL DEFAULT 0",
+        "ALTER TABLE supplier_items ADD COLUMN IF NOT EXISTS inbound_qty INTEGER DEFAULT 0",
     ]:
         try: cur.execute(col_sql)
         except: pass
+
+    # 数据迁移 (PG): 补填旧数据的 inbound_qty
+    try:
+        cur.execute("""UPDATE supplier_items SET inbound_qty = COALESCE(
+            (SELECT SUM(qty) FROM inbound_records WHERE supplier_item_id = supplier_items.id), 0
+        ) WHERE COALESCE(inbound_qty, 0) = 0""")
+        conn.commit()
+    except Exception as e:
+        app.logger.warning(f"[Migration] PG inbound_qty fix failed (non-critical): {e}")
 
     conn.commit()
     cur.close()
@@ -1022,9 +1045,16 @@ def api_inbound_create():
     item = db.execute("SELECT * FROM supplier_items WHERE id=?", (supplier_item_id,)).fetchone()
     if not item:
         return jsonify({'error': '商品が見つかりません'}), 404
+
+    # 部分入库支持：检查是否强制创建新商品（同一跟踪号不同型号）
+    force_new = data.get('force_new', False)
     
     # Check if already has a product
     existing = db.execute("SELECT * FROM products WHERE supplier_item_id=?", (supplier_item_id,)).fetchone()
+    
+    # 如果 force_new=True，忽略 existing，创建新商品
+    if force_new:
+        existing = None
     
     if existing:
         product_id = existing['id']
@@ -1077,9 +1107,15 @@ def api_inbound_create():
     else:
         db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, photo, photo_data) VALUES (?,?,?,?,?,?)",
                   (product_id, supplier_item_id, qty, unit_cost or 0, photo_filename, photo_encoded))
-    
-    # Mark supplier item as matched
-    db.execute("UPDATE supplier_items SET matched=TRUE, matched_date=CURRENT_TIMESTAMP WHERE id=?", (supplier_item_id,))
+
+    # 更新 inbound_qty（部分入库支持）
+    db.execute("UPDATE supplier_items SET inbound_qty = COALESCE(inbound_qty,0) + ? WHERE id=?",
+               (qty, supplier_item_id))
+    # 只有入库数量 >= 预报数量时才标记为已完成
+    db.execute("""UPDATE supplier_items
+                   SET matched=TRUE, matched_date=CURRENT_TIMESTAMP
+                   WHERE id=? AND inbound_qty >= expected_qty""",
+               (supplier_item_id,))
     db.commit()
     
     product = db.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
@@ -1101,9 +1137,20 @@ def api_inbound_create():
 
 @app.route('/api/inbound/unmatched')
 def api_inbound_unmatched():
+    """返回未匹配 + 部分入库中的供应商商品"""
     db = get_db()
-    items = db.execute("SELECT * FROM supplier_items WHERE matched=FALSE ORDER BY id").fetchall()
-    return jsonify([dict(row) for row in items])
+    # 显示: 未匹配(matched=FALSE) OR 部分入库中(inbound_qty < expected_qty)
+    items = db.execute("""SELECT * FROM supplier_items
+                           WHERE matched=FALSE OR (matched=TRUE AND inbound_qty < expected_qty)
+                           ORDER BY matched ASC, id ASC""").fetchall()
+    result = []
+    for row in items:
+        d = dict(row)
+        d['inbound_qty'] = d.get('inbound_qty') or 0
+        d['expected_qty'] = d.get('expected_qty') or 1
+        d['progress_pct'] = int((d['inbound_qty'] / d['expected_qty']) * 100) if d['expected_qty'] > 0 else 0
+        result.append(d)
+    return jsonify(result)
 
 
 # ─── API: Sales (销售) ──────────────────────────────────────────
@@ -1553,13 +1600,21 @@ def api_delete_product(product_id):
         app.logger.error(f'[DeleteProduct] Failed to delete product {product_id}: {e}')
         return jsonify({'success': False, 'error': f'削除に失敗しました: {str(e)}'}), 500
 
-    # 退回采购清单：重置 supplier_item.matched
+    # 退回采购清单：减少 inbound_qty，若归零则重置 matched
     if supplier_item_id:
+        # 计算该商品的实际入库数量
+        total_qty = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?",
+                              (product_id,)).fetchone()[0]
         db.execute(
-            "UPDATE supplier_items SET matched=FALSE, matched_date=NULL WHERE id=?",
+            "UPDATE supplier_items SET inbound_qty = COALESCE(inbound_qty,0) - ? WHERE id=?",
+            (total_qty, supplier_item_id)
+        )
+        # 如果 inbound_qty <= 0，重置 matched 状态
+        db.execute(
+            "UPDATE supplier_items SET matched=FALSE, matched_date=NULL WHERE id=? AND COALESCE(inbound_qty,0) <= 0",
             (supplier_item_id,)
         )
-        app.logger.info(f'[DeleteProduct] supplier_item {supplier_item_id} returned to purchase list')
+        app.logger.info(f'[DeleteProduct] supplier_item {supplier_item_id} inbound_qty decreased by {total_qty}')
 
     # 清理照片文件
     for fname in photos:

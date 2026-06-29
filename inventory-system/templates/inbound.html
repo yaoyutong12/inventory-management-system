@@ -96,6 +96,30 @@
                         <i class="bi bi-check-circle-fill me-2"></i>
                         <span id="matchMsg" data-i18n="matched_list">与进货清单匹配成功！</span>
                     </div>
+
+                    <!-- 部分入库进度条 -->
+                    <div id="progressArea" class="d-none mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="fw-bold text-primary">
+                                <i class="bi bi-box-arrow-in-down"></i> 入庫進捗
+                            </small>
+                            <small id="progressText" class="text-muted">0/0 (0%)</small>
+                        </div>
+                        <div class="progress" style="height:8px">
+                            <div id="progressBar" class="progress-bar bg-success" style="width:0%"></div>
+                        </div>
+                        <small id="progressHint" class="text-muted d-block mt-1"></small>
+                    </div>
+
+                    <!-- 同一跟踪号创建新商品 -->
+                    <div id="forceNewArea" class="d-none mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="forceNewCheck">
+                            <label class="form-check-label small" for="forceNewCheck">
+                                <i class="bi bi-plus-circle"></i> 同一跟踪号で<strong>別の商品</strong>を作成（不同型号/颜色）
+                            </label>
+                        </div>
+                    </div>
                     
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
@@ -589,13 +613,24 @@ function filterAndRenderManualItems(items, containerId, countSpanId, keyword) {
     
     let html = '';
     filtered.forEach(item => {
+        const inboundQty = item.inbound_qty || 0;
+        const expectedQty = item.expected_qty || 1;
+        const isPartial = inboundQty > 0 && inboundQty < expectedQty;
+        const isDone = inboundQty >= expectedQty;
+        let progressBadge = '';
+        if (isPartial) {
+            progressBadge = `<span class="badge bg-warning ms-1">部分入庫 ${inboundQty}/${expectedQty}</span>`;
+        } else if (isDone) {
+            progressBadge = `<span class="badge bg-success ms-1">入庫完了</span>`;
+        }
         html += `<div class="border-bottom py-2 px-1 ai-candidate" style="cursor:pointer"
                      onclick="selectAICandidate(0, ${item.id})">
-            <div class="fw-bold small">${escapeHtml(item.product_name || '未知')}</div>
+            <div class="fw-bold small">${escapeHtml(item.product_name || '未知')} ${progressBadge}</div>
             <div class="text-muted" style="font-size:0.75rem">
                 ${item.tracking_no ? escapeHtml(item.tracking_no) : ''}
                 ${item.category ? '<span class="badge bg-light text-dark ms-1">' + escapeHtml(item.category) + '</span>' : ''}
                 ${item.weight ? ' <span class="ms-1">' + item.weight + 'kg</span>' : ''}
+                ${isPartial ? '<span class="ms-1 text-warning">⚠ あと' + (expectedQty - inboundQty) + '件</span>' : ''}
             </div>
         </div>`;
     });
@@ -673,6 +708,37 @@ function fillSupplierData(data) {
     document.getElementById('location').value = '';
     document.getElementById('isHighValue').checked = false;
     document.getElementById('highValueReason').classList.add('d-none');
+    document.getElementById('forceNewCheck').checked = false;
+
+    // 显示部分入库进度
+    const inboundQty = data.inbound_qty || 0;
+    const expectedQty = data.expected_qty || 1;
+    const progressPct = data.progress_pct || 0;
+    const progressArea = document.getElementById('progressArea');
+    const forceNewArea = document.getElementById('forceNewArea');
+
+    if (inboundQty > 0 && inboundQty < expected_qty) {
+        // 部分入库中
+        progressArea.classList.remove('d-none');
+        document.getElementById('progressText').textContent = `${inboundQty}/${expectedQty} (${progressPct}%)`;
+        document.getElementById('progressBar').style.width = progressPct + '%';
+        document.getElementById('progressHint').textContent = `あと${expectedQty - inboundQty}件の入庫が必要です`;
+        document.getElementById('matchAlert').className = 'alert alert-warning';
+        document.getElementById('matchMsg').textContent = `部分的に入庫済み（${inboundQty}/${expectedQty}件）— 続けて入庫できます`;
+        forceNewArea.classList.remove('d-none');
+    } else if (inboundQty >= expectedQty) {
+        // 已全部入库（理论上不会显示在此，但防御性处理）
+        progressArea.classList.remove('d-none');
+        document.getElementById('progressText').textContent = `${inboundQty}/${expected_qty} (100%)`;
+        document.getElementById('progressBar').style.width = '100%';
+        document.getElementById('progressBar').className = 'progress-bar bg-success';
+        document.getElementById('progressHint').textContent = '入庫完了！';
+        forceNewArea.classList.remove('d-none');
+    } else {
+        // 未入库
+        progressArea.classList.add('d-none');
+        forceNewArea.classList.add('d-none');
+    }
 }
 
 function fillProductData(data) {
@@ -732,7 +798,8 @@ async function doInbound() {
         is_high_value: document.getElementById('isHighValue').checked,
         location: document.getElementById('location').value,
         inbound_date: document.getElementById('inboundDate').value || null,
-        photo_base64: _formPhotoBase64 || _currentPhotoBase64 || null
+        photo_base64: _formPhotoBase64 || _currentPhotoBase64 || null,
+        force_new: document.getElementById('forceNewCheck') ? document.getElementById('forceNewCheck').checked : false
     };
     
     const result = await API.post('/api/inbound/create', data);
