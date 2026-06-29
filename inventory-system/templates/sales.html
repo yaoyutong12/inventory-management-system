@@ -576,7 +576,6 @@ let _scanRunning = false;
 async function startSalesScanner() {
     if (_scanRunning) return;
     _scanRunning = true;
-    _scanBusy = false;
     
     document.getElementById('salesScanBtn').classList.add('d-none');
     document.getElementById('salesStopBtn').classList.remove('d-none');
@@ -661,19 +660,11 @@ async function startSalesScanner() {
 // 防重复扫描：购物篮模式下同一码3秒内不重复处理
 let _lastScannedBarcode = '';
 let _lastScanTime = 0;
-// 忙碌标记：处理中跳过所有帧，处理完自动恢复
-let _scanBusy = false;
 
 function onBarcodeFound(barcode, method) {
-    console.log('[SalesScan] ' + method + ' 识别: ' + barcode);
-    
-    // 忙碌中跳过
-    if (_scanBusy) return;
-    
     if (_cartMode) {
         const now = Date.now();
         if (barcode === _lastScannedBarcode && (now - _lastScanTime) < 3000) {
-            console.log('[SalesScan] 跳过重复扫描: ' + barcode);
             return;
         }
         _lastScannedBarcode = barcode;
@@ -684,12 +675,10 @@ function onBarcodeFound(barcode, method) {
     const scanStatus = document.getElementById('scanStatus');
     
     if (_cartMode) {
-        // 购物篮模式：不停摄像头，用忙碌标记防止重复扫描
-        _scanBusy = true;
+        // 购物篮模式：不停摄像头，传入 barcode 参数避免 DOM 竞态
         if (scanStatus) scanStatus.textContent = '加入中...';
-        scanProduct().finally(() => {
+        scanProduct(barcode).finally(() => {
             if (scanStatus) scanStatus.textContent = '对准条码...';
-            _scanBusy = false;
         });
     } else {
         stopSalesScanner();
@@ -699,7 +688,6 @@ function onBarcodeFound(barcode, method) {
 
 async function stopSalesScanner() {
     _scanRunning = false;
-    _scanBusy = false;
     
     if (_scanTimer) {
         clearInterval(_scanTimer);
@@ -715,8 +703,8 @@ async function stopSalesScanner() {
     document.getElementById('salesStopBtn').classList.add('d-none');
 }
 
-async function scanProduct() {
-    const barcode = document.getElementById('salesBarcode').value.trim();
+async function scanProduct(barcodeOverride) {
+    const barcode = barcodeOverride || document.getElementById('salesBarcode').value.trim();
     if (!barcode) return;
     
     const data = await API.get(`/api/lookup/${encodeURIComponent(barcode)}`);
