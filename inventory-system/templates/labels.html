@@ -90,6 +90,33 @@
 <div class="mt-2 text-muted small text-end" id="labelCountInfo">
     {% if ssr_data %}全 {{ ssr_data|length }} 件の商品{% endif %}
 </div>
+
+<!-- データ状態デバッグ -->
+<div class="mt-2 p-2 bg-light rounded small" style="font-size:11px;color:#666">
+    SSR_DATA件数: {{ ssr_data|length if ssr_data else 0 }} | 
+    読み込み時刻: <span id="loadTime">{{ now_ts }}</span> |
+    <a href="/api/inventory/list" target="_blank" class="ms-2">APIデータ確認</a> |
+    <a href="/api/labels/generate" target="_blank" class="ms-2" onclick="event.preventDefault();testLabelsApi()">テストAPI</a>
+</div>
+
+<script>
+function testLabelsApi() {
+    var ids = [];
+    document.querySelectorAll('.label-cb').forEach(function(cb){ ids.push(parseInt(cb.value)); });
+    var testIds = ids.length > 0 ? ids.slice(0, 3) : [1];
+    fetch('/api/labels/generate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({product_ids: testIds})
+    }).then(r=>r.json()).then(function(d){
+        console.log('Labels API test:', d);
+        alert('Labels API結果:\n' + JSON.stringify(d, null, 2).substring(0, 500));
+    }).catch(function(e){
+        console.error('Labels API test error:', e);
+        alert('APIエラー: ' + e.message);
+    });
+}
+</script>
 {% endblock %}
 
 {% block extra_js %}
@@ -187,7 +214,11 @@ async function previewLabel(id) {
     
     try {
         var result = await API.post('/api/labels/generate', {product_ids: [id]});
-        if (result.labels.length > 0) {
+        console.log('Labels API result:', result);
+        if (result.errors && result.errors.length > 0) {
+            console.warn('Label errors:', result.errors);
+        }
+        if (result.labels && result.labels.length > 0) {
             var l = result.labels[0];
             win.document.write('<html><head><title>ラベルプレビュー</title>' +
                 '<style>@page{size:62mm 40mm;margin:3mm}body{font-family:"MS Gothic",sans-serif;margin:20px;display:flex;justify-content:center}' +
@@ -199,9 +230,14 @@ async function previewLabel(id) {
                 '<div class="name">' + l.product_name + '</div>' +
                 '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>');
         } else {
-            win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">ラベル生成に失敗しました</p></body></html>');
+            var errHtml = '<p style="color:red;font-size:14px">ラベル生成に失敗しました</p>';
+            if (result.errors && result.errors.length > 0) {
+                errHtml += '<p style="font-size:12px;color:#666">' + result.errors.map(function(e){return e.error}).join('<br>') + '</p>';
+            }
+            win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;flex-direction:column">' + errHtml + '</body></html>');
         }
     } catch(e) {
+        console.error('Label preview error:', e);
         win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">エラー: ' + e.message + '</p></body></html>');
     }
 }
@@ -225,15 +261,23 @@ async function printSelected(mode) {
     
     try {
         var result = await API.post('/api/labels/generate', {product_ids: Array.from(selectedIds)});
-        if (result.labels.length === 0) {
-            win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">ラベル生成に失敗しました</p></body></html>');
+        console.log('Print labels result:', result);
+        if (result.errors && result.errors.length > 0) {
+            console.warn('Print label errors:', result.errors);
+        }
+        if (!result.labels || result.labels.length === 0) {
+            var errMsg2 = 'ラベル生成に失敗しました';
+            if (result.errors && result.errors.length > 0) {
+                errMsg2 += '<br>' + result.errors.map(function(e){return e.error}).join('<br>');
+            }
+            win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">' + errMsg2 + '</p></body></html>');
             return;
         }
         
         if (isThermal) {
             var labelsHtml = result.labels.map(function(l) {
                 return '<div class="thermal-label">' +
-                    '<img src="data:image/png;base64,' + l.qr_code + '">' +
+                    (l.qr_code ? '<img src="data:image/png;base64,' + l.qr_code + '">' : '<div style="width:28mm;height:28mm;border:1px dashed #ccc;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px">QRなし</div>') +
                     '<div class="code">' + l.internal_code + '</div>' +
                     '<div class="name">' + l.product_name + '</div>' +
                     '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>';
@@ -250,7 +294,8 @@ async function printSelected(mode) {
                 labelsHtml + '<script>window.onload=function(){window.print();}<\/script></body></html>');
         } else {
             var labelsHtml = result.labels.map(function(l) {
-                return '<div class="label"><img src="data:image/png;base64,' + l.qr_code + '">' +
+                return '<div class="label">' +
+                    (l.qr_code ? '<img src="data:image/png;base64,' + l.qr_code + '">' : '<div style="width:60px;height:60px;border:1px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:9px">QRなし</div>') +
                     '<div class="code">' + l.internal_code + '</div>' +
                     '<div class="name">' + l.product_name + '</div>' +
                     '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>';
@@ -271,6 +316,7 @@ async function printSelected(mode) {
         var modeLabel = isThermal ? '热敏 (48mm)' : 'A4';
         showToast(result.labels.length + '枚のラベルを' + modeLabel + 'で印刷します', 'info');
     } catch(e) {
+        console.error('Print labels error:', e);
         win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">エラー: ' + e.message + '</p></body></html>');
     }
 }

@@ -1581,19 +1581,34 @@ def api_labels_generate():
     
     db = get_db()
     labels = []
+    errors = []
     for pid in product_ids:
-        product = db.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
-        if product:
-            qr_data = generate_qrcode_base64(product['internal_code'])
+        try:
+            product = db.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
+            if not product:
+                errors.append({'id': pid, 'error': '商品が見つかりません'})
+                continue
+            internal_code = product.get('internal_code') or f'NOCODE-{pid}'
+            product_name = (product.get('product_name_ja') or product.get('product_name') or f'商品{pid}')
+            if isinstance(product_name, str) and len(product_name) > 50:
+                product_name = product_name[:50]
+            selling_price = product.get('selling_price') or 0
+            try:
+                qr_data = generate_qrcode_base64(internal_code)
+            except Exception as qe:
+                errors.append({'id': pid, 'error': f'QR生成失敗: {str(qe)[:80]}'})
+                qr_data = ''
             labels.append({
                 'id': product['id'],
-                'internal_code': product['internal_code'],
-                'product_name': (product['product_name_ja'] or product['product_name'])[:50],
-                'selling_price': product['selling_price'],
+                'internal_code': internal_code,
+                'product_name': product_name,
+                'selling_price': selling_price,
                 'qr_code': qr_data
             })
+        except Exception as e:
+            errors.append({'id': pid, 'error': str(e)[:100]})
     
-    return jsonify({'labels': labels})
+    return jsonify({'labels': labels, 'errors': errors})
 
 
 @app.route('/api/labels/print', methods=['POST'])
