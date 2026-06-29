@@ -932,25 +932,33 @@ def api_imports():
 @app.route('/api/lookup/<barcode>')
 def api_lookup(barcode):
     db = get_db()
-    # First check internal products (exclude scrapped)
+    # First check internal products by internal_code (QR code scan)
     product = db.execute("SELECT * FROM products WHERE internal_code=? AND status != 'scrapped'", (barcode,)).fetchone()
     if product:
-        result = dict(product)
-        # Get stock info
-        total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (product['id'],)).fetchone()[0]
-        total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (product['id'],)).fetchone()[0]
-        result['current_stock'] = total_in - total_out
-        result['type'] = 'product'
-        return jsonify(result)
+        return _format_product_result(db, product)
     
-    # Check supplier items
+    # Check supplier items by tracking_no (original barcode)
     item = db.execute("SELECT * FROM supplier_items WHERE tracking_no=?", (barcode,)).fetchone()
     if item:
+        # If this supplier_item already linked to a product, return the product
+        linked = db.execute("SELECT * FROM products WHERE supplier_item_id=? AND status != 'scrapped'", (item['id'],)).fetchone()
+        if linked:
+            return _format_product_result(db, linked)
+        # Otherwise return supplier_item (for inbound matching)
         result = dict(item)
         result['type'] = 'supplier_item'
         return jsonify(result)
     
     return jsonify({'error': '見つかりません', 'type': 'unknown'})
+
+
+def _format_product_result(db, product):
+    result = dict(product)
+    total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (product['id'],)).fetchone()[0]
+    total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (product['id'],)).fetchone()[0]
+    result['current_stock'] = total_in - total_out
+    result['type'] = 'product'
+    return jsonify(result)
 
 
 # ─── API: Inbound (入库) ────────────────────────────────────────
