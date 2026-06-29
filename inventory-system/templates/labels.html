@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-upc-scan me-2"></i>ラベル印刷 <small class="text-muted fs-6" id="verInfo">(v20260629-3)</small></h4>
+    <h4><i class="bi bi-upc-scan me-2"></i>ラベル印刷 <small class="text-muted fs-6" id="verInfo">(v20260629-4)</small></h4>
     <div>
         <button class="btn btn-outline-primary" id="selectAllBtn" onclick="selectAll()"><i class="bi bi-check-all"></i> 全選択</button>
         <div class="btn-group">
@@ -177,11 +177,18 @@ function filterLabels() {
 
 // ─── 标签预览 ─────────────────────────────
 async function previewLabel(id) {
+    // ★必须先开窗（在await之前），否则浏览器弹窗拦截器会阻止
+    var win = window.open('', '_blank', 'width=400,height=450');
+    if (!win) {
+        alert('ポップアップがブロックされました。ブラウザのポップアップブロックを解除してください。');
+        return;
+    }
+    win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p>読み込み中...</p></body></html>');
+    
     try {
         var result = await API.post('/api/labels/generate', {product_ids: [id]});
         if (result.labels.length > 0) {
             var l = result.labels[0];
-            var win = window.open('', '_blank', 'width=400,height=450');
             win.document.write('<html><head><title>ラベルプレビュー</title>' +
                 '<style>@page{size:62mm 40mm;margin:3mm}body{font-family:"MS Gothic",sans-serif;margin:20px;display:flex;justify-content:center}' +
                 '.label{text-align:center;border:2px dashed #ccc;padding:20px;border-radius:12px;width:250px}' +
@@ -192,10 +199,10 @@ async function previewLabel(id) {
                 '<div class="name">' + l.product_name + '</div>' +
                 '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>');
         } else {
-            showToast('ラベル生成に失敗しました', 'danger');
+            win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">ラベル生成に失敗しました</p></body></html>');
         }
     } catch(e) {
-        alert('エラー: ' + e.message);
+        win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">エラー: ' + e.message + '</p></body></html>');
     }
 }
 
@@ -207,12 +214,21 @@ async function printSelected(mode) {
         return;
     }
     
+    // ★必须先开窗（在await之前），否则浏览器弹窗拦截器会阻止
+    var isThermal = mode === 'thermal';
+    var win = window.open('', '_blank', 'width=' + (isThermal ? 400 : 800) + ',height=600');
+    if (!win) {
+        alert('ポップアップがブロックされました。ブラウザのポップアップブロックを解除してください。');
+        return;
+    }
+    win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p>ラベル生成中...</p></body></html>');
+    
     try {
         var result = await API.post('/api/labels/generate', {product_ids: Array.from(selectedIds)});
-        if (result.labels.length === 0) return;
-        
-        var isThermal = mode === 'thermal';
-        var win = window.open('', '_blank', 'width=' + (isThermal ? 400 : 800) + ',height=600');
+        if (result.labels.length === 0) {
+            win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">ラベル生成に失敗しました</p></body></html>');
+            return;
+        }
         
         if (isThermal) {
             var labelsHtml = result.labels.map(function(l) {
@@ -255,7 +271,7 @@ async function printSelected(mode) {
         var modeLabel = isThermal ? '热敏 (48mm)' : 'A4';
         showToast(result.labels.length + '枚のラベルを' + modeLabel + 'で印刷します', 'info');
     } catch(e) {
-        alert('通信エラー: ' + e.message);
+        win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">エラー: ' + e.message + '</p></body></html>');
     }
 }
 </script>
