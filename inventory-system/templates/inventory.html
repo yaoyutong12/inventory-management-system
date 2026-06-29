@@ -357,34 +357,41 @@ async function submitProductEdit() {
         return;
     }
     
-    const payload = {
-        product_name: productName,
-        unit_cost: unitCost,
-        selling_price: sellingPrice,
-        category: category
-    };
+    // Use FormData for reliable file upload (multipart/form-data)
+    const formData = new FormData();
+    formData.append('product_name', productName);
+    formData.append('unit_cost', unitCost);
+    formData.append('selling_price', sellingPrice);
+    formData.append('category', category);
     
-    // 照片处理
+    // 照片处理 — 直接传文件二进制，不转 base64
+    const photoInput = document.getElementById('editPhotoInput');
     if (_newPhotoBase64 === '__REMOVE__') {
-        payload.photo_base64 = null;  // 不传照片，后端也不会清理旧的
-    } else if (_newPhotoBase64) {
-        payload.photo_base64 = _newPhotoBase64;
+        formData.append('photo_action', 'remove');
+    } else if (photoInput.files && photoInput.files.length > 0) {
+        formData.append('photo_action', 'update');
+        formData.append('photo', photoInput.files[0]);
     }
+    // 如果 _newPhotoBase64 是 base64 但 photoInput 没有 file（Edge case），回退 base64
+    // 实际上 data: URL 不会有这个问题，因为选择了文件就会在 input 里
     
     try {
         const resp = await fetch('/api/product/' + productId + '/update', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
+            body: formData  // NO Content-Type header; browser sets it with boundary
         });
         const result = await resp.json();
         
         if (result.success) {
-            // 关闭模态框
             bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide();
-            showToast('「' + productName + '」を更新しました', 'success');
-            // 刷新页面显示新数据
-            setTimeout(() => location.reload(), 500);
+            if (result.photo_error) {
+                showToast('「' + productName + '」を更新しました（写真未保存）', 'warning');
+            } else if (result.photo_url) {
+                showToast('「' + productName + '」を更新しました（写真あり）', 'success');
+            } else {
+                showToast('「' + productName + '」を更新しました', 'success');
+            }
+            setTimeout(() => location.reload(), 800);
         } else {
             alert('更新エラー: ' + (result.error || '不明なエラー'));
         }

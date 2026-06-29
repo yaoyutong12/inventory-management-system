@@ -1210,7 +1210,11 @@ def api_update_product(product_id):
     if not product:
         return jsonify({'success': False, 'error': '商品が見つかりません'}), 404
 
-    data = request.json or {}
+    # 兼容 JSON 和 FormData（multipart/form-data）两种请求方式
+    if request.is_json:
+        data = request.json or {}
+    else:
+        data = {k: v for k, v in request.form.items()}
     updated_fields = []
     updated_values = []
 
@@ -1244,52 +1248,60 @@ def api_update_product(product_id):
         updated_fields.append("category=?")
         updated_values.append(data['category'])
 
-    # 照片处理
+    # 照片处理 — 支持 multipart/form-data 文件上传 和 JSON base64（兼容旧前端）
     photo_filename = None
     photo_removed = False
-    if 'photo_base64' in data:
-        if data['photo_base64'] and data['photo_base64'].startswith('data:image/'):
+    photo_action = request.form.get('photo_action', '') if 'photo_action' in request.form else ''
+    
+    if not photo_action and 'photo_base64' in data:
+        # 兼容旧 JSON base64 方式
+        if data['photo_base64'] and str(data['photo_base64']).startswith('data:image/'):
+            photo_action = 'update'
+            _old_b64 = data['photo_base64']  # 保存以便后续处理
+        elif str(data.get('photo_base64', '')) == '__REMOVE__':
+            photo_action = 'remove'
+    
+    if photo_action == 'update':
+        # FormData 方式优先：从 request.files 获取照片
+        photo_file = request.files.get('photo')
+        if photo_file and photo_file.filename:
+            orig_name = photo_file.filename.rsplit('.', 1)[-1].lower() if '.' in photo_file.filename else 'jpg'
+            if orig_name == 'jpeg':
+                orig_name = 'jpg'
+            photo_filename = f"product_{product_id}_{uuid.uuid4().hex[:8]}.{orig_name}"
+            photo_path = UPLOAD_DIR / photo_filename
+            UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+            photo_file.save(str(photo_path))
+            file_size = photo_path.stat().st_size if photo_path.exists() else 0
+            app.logger.info(f'[ProductUpdate] Photo saved (multipart): {photo_filename} ({file_size} bytes)')
+        elif 'photo_base64' in data:
+            # 回退到 base64 方式
             try:
-                header, encoded = data['photo_base64'].split(',', 1)
+                b64_str = str(data['photo_base64'])
+                header, encoded = b64_str.split(',', 1)
                 ext = header.split('/')[1].split(';')[0]
                 if ext == 'jpeg':
                     ext = 'jpg'
                 photo_filename = f"product_{product_id}_{uuid.uuid4().hex[:8]}.{ext}"
                 photo_path = UPLOAD_DIR / photo_filename
+                UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
                 with open(photo_path, 'wb') as f:
                     f.write(base64.b64decode(encoded))
                 if not photo_path.exists() or photo_path.stat().st_size == 0:
-                    app.logger.error(f'[ProductUpdate] Photo write failed: {photo_path}')
+                    app.logger.error(f'[ProductUpdate] Photo write failed (base64): {photo_path}')
                     photo_filename = None
                 else:
-                    app.logger.info(f'[ProductUpdate] Photo saved: {photo_filename} ({photo_path.stat().st_size} bytes)')
-                    # 删除旧照片
-                    old_photos = db.execute(
-                        "SELECT photo FROM inbound_records WHERE product_id=? AND photo IS NOT NULL",
-                        (product_id,)
-                    ).fetchall()
-                    for r in old_photos:
-                        old_fname = r.get('photo')
-                        if old_fname:
-                            try:
-                                old_fp = UPLOAD_DIR / old_fname
-                                if old_fp.exists():
-                                    old_fp.unlink()
-                            except Exception:
-                                pass
-                    # 更新 inbound_records 照片
-                    db.execute(
-                        "UPDATE inbound_records SET photo=? WHERE product_id=? ORDER BY id DESC LIMIT 1",
-                        (photo_filename, product_id)
-                    )
+                    app.logger.info(f'[ProductUpdate] Photo saved (base64): {photo_filename} ({photo_path.stat().st_size} bytes)')
             except Exception as e:
-                app.logger.error(f'[ProductUpdate] Photo error: {e}')
+                app.logger.error(f'[ProductUpdate] Photo base64 error: {e}')
                 import traceback
                 traceback.print_exc()
                 photo_filename = None
-        elif data['photo_base64'] == '__REMOVE__':
-            # 用户明确要删除照片
-            photo_removed = True
+        else:
+            app.logger.warning(f'[ProductUpdate] photo_action=update but no file or base64 data')
+        
+        # 照片保存成功后清理旧照片
+        if photo_filename:
             old_photos = db.execute(
                 "SELECT photo FROM inbound_records WHERE product_id=? AND photo IS NOT NULL",
                 (product_id,)
@@ -1304,10 +1316,30 @@ def api_update_product(product_id):
                     except Exception:
                         pass
             db.execute(
-                "UPDATE inbound_records SET photo=NULL WHERE product_id=?",
-                (product_id,)
+                "UPDATE inbound_records SET photo=? WHERE product_id=? ORDER BY id DESC LIMIT 1",
+                (photo_filename, product_id)
             )
-            app.logger.info(f'[ProductUpdate] Photo removed for product {product_id}')
+    
+    elif photo_action == 'remove':
+        photo_removed = True
+        old_photos = db.execute(
+            "SELECT photo FROM inbound_records WHERE product_id=? AND photo IS NOT NULL",
+            (product_id,)
+        ).fetchall()
+        for r in old_photos:
+            old_fname = r.get('photo')
+            if old_fname:
+                try:
+                    old_fp = UPLOAD_DIR / old_fname
+                    if old_fp.exists():
+                        old_fp.unlink()
+                except Exception:
+                    pass
+        db.execute(
+            "UPDATE inbound_records SET photo=NULL WHERE product_id=?",
+            (product_id,)
+        )
+        app.logger.info(f'[ProductUpdate] Photo removed for product {product_id}')
 
     # 执行数据库更新
     if updated_fields:
@@ -1321,6 +1353,8 @@ def api_update_product(product_id):
     resp = {'success': True}
     if photo_filename:
         resp['photo_url'] = f'/uploads/{photo_filename}'
+    if photo_action and not photo_filename and not photo_removed:
+        resp['photo_error'] = '写真の保存に失敗しました'
     return jsonify(resp)
 
 
