@@ -116,14 +116,16 @@
                                 <th class="text-end">件数</th>
                                 <th class="text-end">売上</th>
                                 <th class="text-end">仕入</th>
-                                <th class="text-end">費用</th>
+                                <th class="text-end">運費</th>
+                                <th class="text-end">佣金</th>
+                                <th class="text-end">雑費</th>
                                 <th class="text-end">利益</th>
                                 <th class="text-end">利益率</th>
                                 <th class="text-end">平均単価</th>
                             </tr>
                         </thead>
                         <tbody id="platformTableBody">
-                            <tr><td colspan="6" class="text-center text-muted py-3">読み込み中...</td></tr>
+                            <tr><td colspan="10" class="text-center text-muted py-3">読み込み中...</td></tr>
                         </tbody>
                         <tfoot id="platformTableFoot"></tfoot>
                     </table>
@@ -141,12 +143,14 @@
                                 <th>チャネル</th>
                                 <th class="text-end">件数</th>
                                 <th class="text-end">売上</th>
-                                <th class="text-end">費用</th>
+                                <th class="text-end">運費</th>
+                                <th class="text-end">佣金</th>
+                                <th class="text-end">雑費</th>
                                 <th class="text-end">利益</th>
                             </tr>
                         </thead>
                         <tbody id="dailyTableBody">
-                            <tr><td colspan="6" class="text-center text-muted py-3">読み込み中...</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-3">読み込み中...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -282,8 +286,8 @@ function cancelFeeCell(sid, field, val) {
     const display = document.getElementById('fee-' + field + '-' + sid);
     const editSpan = document.getElementById('fee-edit-' + field + '-' + sid);
     display.textContent = val > 0 ? '-' + formatJPY(val) : '¥0';
-    display.className = val > 0 ? 'text-danger fw-bold' : 'text-muted';
-    display.style.cssText = 'cursor:pointer;border-bottom:1px dashed #999;';
+    display.className = val > 0 ? 'text-danger' : 'text-muted';
+    display.style.cssText = 'cursor:pointer';
     editSpan.className = 'd-none';
     editSpan.innerHTML = '';
 }
@@ -346,17 +350,22 @@ function renderReport(data) {
     
     // Platform Table
     document.getElementById('platformTableBody').innerHTML = platformStats.length === 0
-        ? '<tr><td colspan="8" class="text-center text-muted py-3">データがありません</td></tr>'
+        ? '<tr><td colspan="10" class="text-center text-muted py-3">データがありません</td></tr>'
         : platformStats.map(p => {
             const margin = p.total_revenue > 0 ? Math.round(p.total_profit / p.total_revenue * 100) : 0;
-            const totalFees = (p.total_shipping_fee || 0) + (p.total_platform_fee || 0) + (p.total_other_fee || 0);
             const label = platformLabels[p.platform] || p.platform || '未分類';
+            const sf = p.total_shipping_fee || 0;
+            const pf = p.total_platform_fee || 0;
+            const of = p.total_other_fee || 0;
+            const fmtFee = (v) => v > 0 ? '-' + formatJPY(v) : '¥0';
             return `<tr>
                 <td><strong>${label}</strong></td>
                 <td class="text-end">${p.sale_count}件</td>
                 <td class="text-end fw-bold">${formatJPY(p.total_revenue)}</td>
                 <td class="text-end text-muted">${formatJPY(p.total_cost || 0)}</td>
-                <td class="text-end text-danger small">${totalFees > 0 ? '-' + formatJPY(totalFees) : '¥0'}</td>
+                <td class="text-end text-danger small">${fmtFee(sf)}</td>
+                <td class="text-end text-danger small">${fmtFee(pf)}</td>
+                <td class="text-end text-danger small">${fmtFee(of)}</td>
                 <td class="text-end text-success">${formatJPY(p.total_profit)}</td>
                 <td class="text-end">${margin}%</td>
                 <td class="text-end">${formatJPY(Math.round(p.avg_price))}</td>
@@ -364,18 +373,23 @@ function renderReport(data) {
         }).join('');
     
     // Platform Table Foot (total)
-    let totalCost = 0, totalFees = 0;
+    let totalCost = 0, totalShip = 0, totalPlat = 0, totalOth = 0;
     platformStats.forEach(p => {
         totalCost += (p.total_cost || 0);
-        totalFees += (p.total_shipping_fee || 0) + (p.total_platform_fee || 0) + (p.total_other_fee || 0);
+        totalShip += (p.total_shipping_fee || 0);
+        totalPlat += (p.total_platform_fee || 0);
+        totalOth += (p.total_other_fee || 0);
     });
+    const fmtFootFee = (v) => v > 0 ? '-' + formatJPY(v) : '¥0';
     document.getElementById('platformTableFoot').innerHTML = platformStats.length > 1 ? `
         <tr class="table-primary fw-bold">
             <td>合計</td>
             <td class="text-end">${totalCount}件</td>
             <td class="text-end">${formatJPY(totalRevenue)}</td>
             <td class="text-end">${formatJPY(totalCost)}</td>
-            <td class="text-end text-danger small">${totalFees > 0 ? '-' + formatJPY(totalFees) : '¥0'}</td>
+            <td class="text-end text-danger small">${fmtFootFee(totalShip)}</td>
+            <td class="text-end text-danger small">${fmtFootFee(totalPlat)}</td>
+            <td class="text-end text-danger small">${fmtFootFee(totalOth)}</td>
             <td class="text-end text-success">${formatJPY(totalProfit)}</td>
             <td class="text-end">${totalRevenue > 0 ? Math.round(totalProfit / totalRevenue * 100) : 0}%</td>
             <td class="text-end">-</td>
@@ -383,25 +397,29 @@ function renderReport(data) {
     
     // Daily Table
     document.getElementById('dailyTableBody').innerHTML = dailyStats.length === 0
-        ? '<tr><td colspan="6" class="text-center text-muted py-3">データがありません</td></tr>'
+        ? '<tr><td colspan="8" class="text-center text-muted py-3">データがありません</td></tr>'
         : dailyStats.slice(0, 60).map(d => {
             const label = platformLabels[d.platform] || d.platform || '未分類';
-            const dailyFees = d.total_fees || 0;
+            const sf = d.total_shipping_fee || 0;
+            const pf = d.total_platform_fee || 0;
+            const of = d.total_other_fee || 0;
+            const fmtD = (v) => v > 0 ? '-' + formatJPY(v) : '¥0';
             return `<tr>
                 <td><small>${d.sale_date}</small></td>
                 <td><small>${label}</small></td>
                 <td class="text-end"><small>${d.sale_count}件</small></td>
                 <td class="text-end"><small>${formatJPY(d.total_revenue)}</small></td>
-                <td class="text-end text-danger"><small>${dailyFees > 0 ? '-'+formatJPY(dailyFees) : '¥0'}</small></td>
+                <td class="text-end text-danger"><small>${fmtD(sf)}</small></td>
+                <td class="text-end text-danger"><small>${fmtD(pf)}</small></td>
+                <td class="text-end text-danger"><small>${fmtD(of)}</small></td>
                 <td class="text-end text-success"><small>${formatJPY(d.total_profit)}</small></td>
             </tr>`;
         }).join('');
     
-    // Individual Sales Detail Table — three separate fee columns, each clickable
+    // Individual Sales Detail Table — three separate fee columns, directly visible
     function feeCell(sid, field, val, label) {
-        const cls = val > 0 ? 'text-danger fw-bold' : 'text-muted';
-        return `<span id="fee-${field}-${sid}" class="${cls}" style="cursor:pointer;border-bottom:1px dashed #999;"
-                      onclick="editFeeCell('${sid}','${field}')" title="${label} - クリックして編集">
+        return `<span id="fee-${field}-${sid}" class="${val > 0 ? 'text-danger' : 'text-muted'}"
+                      style="cursor:pointer" onclick="editFeeCell('${sid}','${field}')" title="${label} - クリックして編集">
                     ${val > 0 ? '-'+formatJPY(val) : '¥0'}
                 </span>
                 <span id="fee-edit-${field}-${sid}" class="d-none"></span>`;
@@ -488,19 +506,22 @@ function renderProfitChart(stats) {
 }
 
 function exportReportCSV() {
-    const rows = [['チャネル','件数','売上','仕入','費用','利益','利益率','平均単価']];
+    const rows = [['チャネル','件数','売上','仕入','運費','佣金','雑費','利益','利益率','平均単価']];
     const tbody = document.getElementById('platformTableBody');
-    const platforms = [];
     tbody.querySelectorAll('tr').forEach(tr => {
         const cells = tr.querySelectorAll('td');
-        if (cells.length >= 5) {
+        if (cells.length >= 8) {
             rows.push([
                 cells[0].textContent,
                 cells[1].textContent,
                 cells[2].textContent,
                 cells[3].textContent,
                 cells[4].textContent,
-                cells[5].textContent
+                cells[5].textContent,
+                cells[6].textContent,
+                cells[7].textContent,
+                cells[8].textContent,
+                cells[9].textContent
             ]);
         }
     });

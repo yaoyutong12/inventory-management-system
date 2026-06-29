@@ -1833,7 +1833,9 @@ def api_sales_report():
                     COUNT(*) as sale_count,
                     COALESCE(SUM(s.total_amount),0) as total_revenue,
                     COALESCE(SUM(s.cost_amount),0) as total_cost,
-                    COALESCE(SUM(s.shipping_fee+s.platform_fee+s.other_fee),0) as total_fees,
+                    COALESCE(SUM(s.shipping_fee),0) as total_shipping_fee,
+                    COALESCE(SUM(s.platform_fee),0) as total_platform_fee,
+                    COALESCE(SUM(s.other_fee),0) as total_other_fee,
                     COALESCE(SUM(s.profit_amount),0) as total_profit
                 FROM sales_records s
                 GROUP BY """ + ("DATE(s.sale_date)" if USE_POSTGRES else "date(s.sale_date)") + """, s.platform
@@ -1928,7 +1930,9 @@ def api_sales_report():
                     COUNT(*) as sale_count,
                     COALESCE(SUM(s.total_amount),0) as total_revenue,
                     COALESCE(SUM(s.cost_amount),0) as total_cost,
-                    COALESCE(SUM(s.shipping_fee+s.platform_fee+s.other_fee),0) as total_fees,
+                    COALESCE(SUM(s.shipping_fee),0) as total_shipping_fee,
+                    COALESCE(SUM(s.platform_fee),0) as total_platform_fee,
+                    COALESCE(SUM(s.other_fee),0) as total_other_fee,
                     COALESCE(SUM(s.profit_amount),0) as total_profit
                 FROM sales_records s
                 WHERE {where}
@@ -1944,7 +1948,9 @@ def api_sales_report():
                     COUNT(*) as sale_count,
                     COALESCE(SUM(s.total_amount),0) as total_revenue,
                     COALESCE(SUM(s.cost_amount),0) as total_cost,
-                    COALESCE(SUM(s.shipping_fee+s.platform_fee+s.other_fee),0) as total_fees,
+                    COALESCE(SUM(s.shipping_fee),0) as total_shipping_fee,
+                    COALESCE(SUM(s.platform_fee),0) as total_platform_fee,
+                    COALESCE(SUM(s.other_fee),0) as total_other_fee,
                     COALESCE(SUM(s.profit_amount),0) as total_profit
                 FROM sales_records s
                 WHERE {where}
