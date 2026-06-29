@@ -374,6 +374,7 @@ let _cartNextId = 1;   // 购物篮内临时ID
 
 function toggleCartMode() {
     _cartMode = !_cartMode;
+    _saleBusy = false;  // 切换模式时重置锁
     const btn = document.getElementById('cartToggleBtn');
     const area = document.getElementById('cartArea');
     const singleArea = document.getElementById('productInfo');
@@ -705,6 +706,7 @@ function onBarcodeFound(barcode, method) {
 
 async function stopSalesScanner() {
     _scanRunning = false;
+    _saleBusy = false;
     
     if (_scanTimer) {
         clearInterval(_scanTimer);
