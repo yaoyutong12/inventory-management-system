@@ -156,7 +156,32 @@
     
     <!-- Sales History with Platform Filter -->
     <div class="col-lg-6">
-        <div class="card">
+        <!-- 本次结算（当前批次） -->
+        <div class="card border-success d-none" id="lastCheckoutCard">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center py-2">
+                <span><i class="bi bi-receipt me-1"></i>本次结算 — <span id="lastCheckoutTime"></span></span>
+                <div>
+                    <button class="btn btn-sm btn-light me-1" onclick="printBatchReceipt()" title="打印本次小票">
+                        <i class="bi bi-printer"></i> 打印小票
+                    </button>
+                    <button class="btn btn-sm btn-outline-light" onclick="clearLastCheckout()" title="关闭">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-2" style="max-height:300px;overflow-y:auto" id="lastCheckoutList"></div>
+            <div class="card-footer bg-white d-flex justify-content-between align-items-center py-2">
+                <div>
+                    <span class="text-muted small">共 <strong id="lastCheckoutItems">0</strong> 种 / <strong id="lastCheckoutQty">0</strong> 件</span>
+                </div>
+                <div>
+                    <span class="me-3">小计: <strong id="lastCheckoutSubtotal" class="text-success">¥0</strong></span>
+                    <span>净利润: <strong id="lastCheckoutProfit" class="text-primary">¥0</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-2">
             <div class="card-body">
                 <h5 class="card-title">
                     <i class="bi bi-clock-history me-2"></i>销售记录
@@ -367,6 +392,14 @@
 let currentProduct = null;
 let externalProduct = null;
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── 本次结算数据（最近一次 checkout） ─────────────
+let _lastCheckoutData = null;  // { time, items[], fees, payment_method, platform, total_amount, total_profit }
+
 // ─── Sales Cart (购物篮) ─────────────────────────────
 let _cartMode = false;
 let _cartItems = [];   // { id, internal_code, product_name, selling_price, qty, max_stock }
@@ -557,6 +590,21 @@ async function doCartCheckout() {
     });
 
     if (result.success) {
+        // 保存本次结算数据（在清空前复制）
+        _lastCheckoutData = {
+            time: new Date().toLocaleString('ja-JP', {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+            items: _cartItems.map(item => ({...item})),  // 深拷贝
+            payment_method: cartPaymentMethodText(paymentMethod),
+            platform: cartPlatformText(platform),
+            shipping_fee: shippingFee,
+            platform_fee: platformFee,
+            other_fee: otherFee,
+            total_qty: result.total_qty,
+            total_amount: result.total_amount,
+            total_profit: result.total_profit,
+            sale_ids: result.sale_ids
+        };
+        renderLastCheckout();
         showToast(`购物篮结算完成！共 ${result.total_qty} 件，总额 ¥${Number(result.total_amount).toLocaleString()}，净利润 ¥${Number(result.total_profit).toLocaleString()}`, 'success');
         _cartItems = [];
         renderCart();
@@ -567,6 +615,124 @@ async function doCartCheckout() {
     } else {
         showToast(result.error || '结算失败', 'error');
     }
+}
+
+// ─── 本次结算展示 ─────────────────────────────
+function cartPaymentMethodText(method) {
+    const map = {'cash':'现金','paypay':'PayPay','card':'银行卡','mercari':'煤炉','other':'其他'};
+    return map[method] || method;
+}
+function cartPlatformText(platform) {
+    const map = {'physical':'实体店','mercari':'煤炉','yahoo':'雅虎拍卖','rakuten':'乐天','other':'其他'};
+    return map[platform] || platform;
+}
+
+function renderLastCheckout() {
+    if (!_lastCheckoutData) return;
+    const d = _lastCheckoutData;
+    const card = document.getElementById('lastCheckoutCard');
+    card.classList.remove('d-none');
+
+    document.getElementById('lastCheckoutTime').textContent = d.time;
+
+    let html = '';
+    d.items.forEach((item, i) => {
+        const subtotal = item.selling_price * item.qty;
+        html += `<div class="d-flex align-items-center py-2 ${i < d.items.length-1 ? 'border-bottom' : ''}">
+            <div class="flex-grow-1" style="min-width:0">
+                <div class="small fw-bold text-truncate" style="max-width:220px">${escapeHtml(item.product_name)}</div>
+                <div class="text-muted" style="font-size:0.7rem">${escapeHtml(item.internal_code)}</div>
+            </div>
+            <div class="text-center" style="min-width:50px">
+                <span class="badge bg-secondary">×${item.qty}</span>
+            </div>
+            <div class="text-end ms-2" style="min-width:80px">
+                <span class="small fw-bold">¥${(item.selling_price).toLocaleString()}</span>
+                ${item.qty > 1 ? `<div class="text-muted" style="font-size:0.65rem">小计 ¥${subtotal.toLocaleString()}</div>` : ''}
+            </div>
+        </div>`;
+    });
+    document.getElementById('lastCheckoutList').innerHTML = html;
+    document.getElementById('lastCheckoutItems').textContent = d.items.length;
+    document.getElementById('lastCheckoutQty').textContent = d.total_qty;
+    document.getElementById('lastCheckoutSubtotal').textContent = '¥' + Number(d.total_amount).toLocaleString();
+    document.getElementById('lastCheckoutProfit').textContent = '¥' + Number(d.total_profit).toLocaleString();
+
+    // 滚动到本次结算面板
+    card.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function clearLastCheckout() {
+    _lastCheckoutData = null;
+    document.getElementById('lastCheckoutCard').classList.add('d-none');
+}
+
+function printBatchReceipt() {
+    if (!_lastCheckoutData) return;
+    const d = _lastCheckoutData;
+
+    const feeTotal = (d.shipping_fee||0) + (d.platform_fee||0) + (d.other_fee||0);
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ja-JP');
+    const timeStr = now.toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'});
+
+    const receiptHTML = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+    @media print {
+        @page { size: 80mm auto; margin: 0; }
+        body { width: 80mm; font-family: 'MS Gothic','Yu Gothic',sans-serif; font-size: 11px; padding: 12px 8px; }
+    }
+    body { font-family: 'MS Gothic','Yu Gothic',sans-serif; font-size: 11px; margin: 0; padding: 12px 8px; max-width: 300px; }
+    .center { text-align: center; }
+    .title { font-size: 15px; font-weight: bold; margin-bottom: 2px; }
+    .sub { font-size: 9px; color: #666; margin-bottom: 8px; }
+    .line { border-top: 1px dashed #999; margin: 6px 0; }
+    .row { display: flex; justify-content: space-between; }
+    .bold { font-weight: bold; }
+    .small { font-size: 9px; color: #666; }
+</style></head><body>
+<div class="center">
+    <div class="title">滄海明珠</div>
+    <div class="sub">${dateStr} ${timeStr}</div>
+</div>
+<div class="line"></div>
+${d.items.map((item, i) => `
+<div class="row">
+    <span>${(item.product_name||'').substring(0,18)}</span>
+    <span>×${item.qty}</span>
+    <span>¥${(item.selling_price * item.qty).toLocaleString()}</span>
+</div>
+`).join('')}
+<div class="line"></div>
+<div class="row bold">
+    <span>小計 (${d.total_qty}点)</span>
+    <span>¥${Number(d.total_amount).toLocaleString()}</span>
+</div>
+${feeTotal > 0 ? `
+<div class="row small">
+    <span>費用 (運賃·手数料等)</span>
+    <span>-¥${feeTotal.toLocaleString()}</span>
+</div>
+<div class="row bold">
+    <span>合計</span>
+    <span>¥${(Number(d.total_amount) - feeTotal).toLocaleString()}</span>
+</div>` : ''}
+<div class="row small">
+    <span>利益</span>
+    <span>¥${Number(d.total_profit).toLocaleString()}</span>
+</div>
+<div class="line"></div>
+<div class="center small">
+    <div>お支払い: ${d.payment_method || '---'}</div>
+    <div>販売経路: ${d.platform || '---'}</div>
+    <div>ありがとうございました</div>
+</div>
+<script>window.onload=function(){window.print();}<` + `/script>
+</body></html>`;
+
+    const win = window.open('', '_blank', 'width=400,height=600');
+    win.document.write(receiptHTML);
+    win.document.close();
 }
 
 // ─── Continuous Scanner (getUserMedia + pyzbar后端) ──
@@ -790,6 +956,26 @@ async function quickSale() {
     
     if (result.success) {
         _playBeep();
+        // 更新本次结算面板（单件模式）
+        _lastCheckoutData = {
+            time: new Date().toLocaleString('ja-JP', {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+            items: [{
+                product_name: result.product_name || currentProduct.product_name || '',
+                internal_code: result.internal_code || currentProduct.internal_code || '',
+                selling_price: result.unit_price || currentProduct.selling_price || 0,
+                qty: result.qty || 1
+            }],
+            payment_method: cartPaymentMethodText(document.getElementById('paymentMethod').value),
+            platform: cartPlatformText(document.getElementById('salesPlatform').value),
+            shipping_fee: result.shipping_fee || 0,
+            platform_fee: result.platform_fee || 0,
+            other_fee: result.other_fee || 0,
+            total_qty: result.qty || 1,
+            total_amount: result.total_amount,
+            total_profit: result.net_profit || result.profit || 0,
+            sale_ids: [result.sale_id]
+        };
+        renderLastCheckout();
         const name = (result.product_name||'').substring(0, 15);
         showToast(`${name} 已售出 ¥${Number(result.total_amount).toLocaleString()}`, 'success');
         document.getElementById('salesBarcode').value = '';
