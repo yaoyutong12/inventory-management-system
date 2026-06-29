@@ -73,7 +73,7 @@
                             <td>{{ status_badge | safe }}</td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary" onclick="window.open('/sales','_self')" title="販売"><i class="bi bi-cart"></i></button>
+                                    <button class="btn btn-outline-primary" onclick="quickSale('{{ p.internal_code }}')" title="快速販売"><i class="bi bi-cart"></i></button>
                                     <button class="btn btn-outline-warning" onclick="editProduct({{ p.id }})" title="編集"><i class="bi bi-pencil"></i></button>
                                     <button class="btn btn-outline-danger" onclick="deleteProduct({{ p.id }}, '{{ p.product_name | replace("'", "\\'") }}', '{{ p.internal_code }}')" title="削除して仕入リストに戻す"><i class="bi bi-trash"></i></button>
                                 </div>
@@ -522,6 +522,11 @@ function cancelPrice(btn) {
     if (displaySpan) displaySpan.style.display = '';
     const smallIcon = cell.querySelector('small');
     if (smallIcon) smallIcon.style.display = '';
+}
+
+// ─── 快速贩卖：跳转销售页并自动打开外部销售登记 ───
+function quickSale(internalCode) {
+    window.location.href = '/sales?external=1&code=' + encodeURIComponent(internalCode);
 }
 
 // Render charts if Chart.js loaded

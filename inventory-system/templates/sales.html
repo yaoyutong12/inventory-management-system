@@ -618,5 +618,21 @@ loadTodaySummary();
 
 // Auto-focus barcode input
 document.getElementById('salesBarcode').focus();
+
+// ─── URL 参数自动触发外部销售登记 ───
+(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('external') === '1') {
+        const code = urlParams.get('code');
+        if (code) {
+            // 等页面完全加载后，自动打开外部销售弹窗、填入条码、查询商品
+            setTimeout(async () => {
+                document.getElementById('externalBarcode').value = code;
+                await lookupExternalProduct();
+                new bootstrap.Modal(document.getElementById('externalSaleModal')).show();
+            }, 400);
+        }
+    }
+})();
 </script>
 {% endblock %}
