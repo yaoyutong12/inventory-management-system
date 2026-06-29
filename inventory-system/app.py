@@ -1953,29 +1953,85 @@ def api_inbound_ai_recognize():
 
 @app.route('/api/inbound/ai-read-barcode', methods=['POST'])
 def api_ai_read_barcode():
-    """使用Gemini直接从图片中读取条码号码（绕过所有条码库）"""
-    if not GEMINI_AVAILABLE:
-        return jsonify({'error': 'AI recognition not configured', 'type': 'not_configured'}), 503
-    
-    api_key = os.environ.get('GEMINI_API_KEY', '')
-    if not api_key:
-        return jsonify({'error': 'Gemini API key not set', 'type': 'no_api_key'}), 503
-    
+    """读取条码：优先使用pyzbar解码，失败则用Gemini AI"""
     file = request.files.get('image')
     if not file:
         return jsonify({'error': '画像がありません'}), 400
-    
+
     try:
         img = Image.open(file.stream)
-        
+
+        # ── Step 1: Try pyzbar (reliable CODE-128 decoder) ──
+        # Preprocess: grayscale + enhance contrast for better detection
+        img_gray = img.convert('L')
+        decoded = pyzbar_decode(img_gray)
+        if decoded:
+            barcodes_found = []
+            for d in decoded:
+                text = d.data.decode('utf-8').strip()
+                if text:
+                    barcodes_found.append(text)
+            if barcodes_found:
+                barcode = barcodes_found[0]
+                print(f'[pyzbar] 解码成功: "{barcode}"')
+                return jsonify({
+                    'success': True,
+                    'barcode': barcode,
+                    'method': 'pyzbar',
+                    'all_barcodes': barcodes_found
+                })
+
+        # ── Step 2: pyzbar failed, try with enhanced preprocessing ──
+        import numpy as np
+        img_arr = np.array(img_gray)
+        # Stretch contrast: map 5th-95th percentile to 0-255
+        p5, p95 = np.percentile(img_arr, (5, 95))
+        if p95 > p5:
+            img_arr = np.clip((img_arr - p5) * 255.0 / (p95 - p5), 0, 255).astype(np.uint8)
+        img_enhanced = Image.fromarray(img_arr)
+        decoded2 = pyzbar_decode(img_enhanced)
+        if decoded2:
+            barcodes_found = []
+            for d in decoded2:
+                text = d.data.decode('utf-8').strip()
+                if text:
+                    barcodes_found.append(text)
+            if barcodes_found:
+                barcode = barcodes_found[0]
+                print(f'[pyzbar-enhanced] 解码成功: "{barcode}"')
+                return jsonify({
+                    'success': True,
+                    'barcode': barcode,
+                    'method': 'pyzbar_enhanced',
+                    'all_barcodes': barcodes_found
+                })
+
+        # ── Step 3: pyzbar failed, fall back to Gemini AI ──
+        print('[pyzbar] 解码失败，回退到 Gemini AI')
+
+        if not GEMINI_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': '条码解码失败（pyzbar无法识别，AI未配置）',
+                'type': 'decode_failed'
+            }), 422
+
+        api_key = os.environ.get('GEMINI_API_KEY', '')
+        if not api_key:
+            return jsonify({
+                'success': False,
+                'error': '条码解码失败（pyzbar无法识别，AI Key未设置）',
+                'type': 'decode_failed'
+            }), 422
+
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-2.0-flash')
-        
+
         buf = io.BytesIO()
         img.save(buf, format='JPEG', quality=85)
         buf.seek(0)
         image_bytes = buf.getvalue()
-        
+
         prompt = """あなたはバーコード読み取りアシスタントです。
 この画像には商品のバーコードが写っています。
 
@@ -1992,37 +2048,36 @@ def api_ai_read_barcode():
 5000-2301-7896
 または
 4901234567890"""
-        
+
         response = model.generate_content([
             {'mime_type': 'image/jpeg', 'data': image_bytes},
             prompt
         ])
-        
+
         raw_text = response.text.strip()
-        
-        # Clean up: remove any markdown, quotes, extra whitespace
+
+        # Clean up
         clean_text = raw_text.replace('```', '').replace('"', '').replace("'", '').strip()
-        
-        # If AI returned NOT_FOUND or empty, report accordingly
+
         if not clean_text or clean_text.upper() == 'NOT_FOUND':
             return jsonify({
                 'success': False,
-                'error': 'AIがバーコード番号を見つけられませんでした',
+                'error': '条码解码失败（pyzbar和AI都无法识别）',
                 'type': 'not_found'
             })
-        
-        # Remove any non-barcode characters (keep digits, hyphens, spaces)
+
         import re
         barcode = re.sub(r'[^\d\-\s]', '', clean_text).strip()
-        
-        print(f'[AI-Barcode] 原始返回: "{raw_text}" → 清理后: "{barcode}"')
-        
+
+        print(f'[Gemini] 解码成功: 原始="{raw_text}" → "{barcode}"')
+
         return jsonify({
             'success': True,
             'barcode': barcode,
+            'method': 'gemini',
             'raw': raw_text
         })
-        
+
     except Exception as e:
         err_str = str(e)
         if '429' in err_str or 'ResourceExhausted' in err_str or 'quota' in err_str.lower():
@@ -2030,7 +2085,7 @@ def api_ai_read_barcode():
                 'error': 'AIの利用制限に達しました。しばらく待ってから再試行してください。',
                 'type': 'quota_exceeded'
             }), 429
-        return jsonify({'error': f'AIバーコード読み取りエラー: {err_str}'}), 500
+        return jsonify({'error': f'条码读取错误: {err_str}'}), 500
 
 
 @app.route('/api/inbound/manual', methods=['POST'])
