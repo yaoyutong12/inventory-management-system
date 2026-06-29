@@ -385,7 +385,8 @@ def _init_sqlite():
             unit_cost REAL,
             inbound_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             notes TEXT,
-            photo TEXT
+            photo TEXT,
+            photo_data TEXT
         );
         CREATE TABLE IF NOT EXISTS sales_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -476,7 +477,8 @@ def _init_postgres():
             id {pk}, product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
             supplier_item_id INTEGER REFERENCES supplier_items(id) ON DELETE SET NULL,
             qty INTEGER DEFAULT 1, unit_cost REAL,
-            inbound_date TIMESTAMP DEFAULT NOW(), notes TEXT, photo TEXT
+            inbound_date TIMESTAMP DEFAULT NOW(), notes TEXT, photo TEXT,
+            photo_data TEXT
         )""",
         f"""CREATE TABLE IF NOT EXISTS sales_records (
             id {pk}, product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
@@ -519,6 +521,7 @@ def _init_postgres():
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS scrap_reason TEXT",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS scrapped_at TIMESTAMP",
         "ALTER TABLE inbound_records ADD COLUMN IF NOT EXISTS photo TEXT",
+        "ALTER TABLE inbound_records ADD COLUMN IF NOT EXISTS photo_data TEXT",
         "ALTER TABLE mercari_listings ADD COLUMN IF NOT EXISTS brand TEXT",
     ]:
         try: cur.execute(col_sql)
@@ -609,7 +612,8 @@ def inventory_page():
         try:
             # 关联查询照片和跟踪号
             products = db.execute("""SELECT p.*,
-                (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo,
+                (SELECT photo FROM inbound_records WHERE product_id=p.id AND photo IS NOT NULL AND photo != '' ORDER BY id DESC LIMIT 1) as photo,
+                (SELECT photo_data FROM inbound_records WHERE product_id=p.id AND photo_data IS NOT NULL AND photo_data != '' ORDER BY id DESC LIMIT 1) as photo_data,
                 (SELECT si.tracking_no FROM supplier_items si WHERE si.id=p.supplier_item_id LIMIT 1) as tracking_no
                 FROM products p ORDER BY p.updated_at DESC""").fetchall()
         except Exception as e:
@@ -630,8 +634,10 @@ def inventory_page():
                 p_dict['total_in'] = total_in
                 p_dict['total_out'] = total_out
                 p_dict['total_revenue'] = total_revenue
-                # 添加照片URL
-                if p_dict.get('photo'):
+                # 添加照片URL（优先DB base64 → 磁盘文件兜底）
+                if p_dict.get('photo_data'):
+                    p_dict['photo_url'] = f"data:image/jpeg;base64,{p_dict['photo_data']}"
+                elif p_dict.get('photo'):
                     p_dict['photo_url'] = f'/uploads/{p_dict["photo"]}'
                 else:
                     p_dict['photo_url'] = None
@@ -999,6 +1005,7 @@ def api_inbound_create():
     
     # Save photo if provided
     photo_filename = None
+    photo_encoded = None  # base64 data for DB storage
     if photo_base64 and photo_base64.startswith('data:image/'):
         try:
             # Extract base64 data after comma
@@ -1008,34 +1015,30 @@ def api_inbound_create():
                 ext = 'jpg'
             photo_filename = f"inbound_{product_id}_{uuid.uuid4().hex[:8]}.{ext}"
             photo_path = UPLOAD_DIR / photo_filename
+            photo_encoded = encoded  # 保存base64到DB
 
-            # 确保目录存在且可写
+            # 确保目录存在且可写（disk backup，非必须）
             UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
-            
-            # 写入文件并验证
-            with open(photo_path, 'wb') as f:
-                f.write(base64.b64decode(encoded))
-
-            # 验证文件确实写入成功
-            if photo_path.exists() and photo_path.stat().st_size > 0:
-                app.logger.info(f"[Photo] OK: saved {photo_filename} ({photo_path.stat().st_size} bytes) to {photo_path}")
-            else:
-                app.logger.error(f"[Photo] FAIL: file exists={photo_path.exists()}, path={photo_path}, UPLOAD_DIR={UPLOAD_DIR}, dir_exists={UPLOAD_DIR.exists()}")
-                photo_filename = None
+            try:
+                with open(photo_path, 'wb') as f:
+                    f.write(base64.b64decode(encoded))
+                if not photo_path.exists() or photo_path.stat().st_size == 0:
+                    app.logger.warning(f"[Photo] Disk save failed (non-critical): {photo_path}")
+            except Exception as e:
+                app.logger.warning(f"[Photo] Disk save error (non-critical): {e}")
 
         except Exception as e:
-            app.logger.error(f"[Photo] ERROR saving photo: {e}, path={UPLOAD_DIR}, dir_exists={UPLOAD_DIR.exists()}")
-            import traceback
-            app.logger.error(f"[Photo] TRACEBACK: {traceback.format_exc()}")
+            app.logger.error(f"[Photo] ERROR processing photo: {e}")
             photo_filename = None
+            photo_encoded = None
     
-    # Record inbound (支持自定义入库日期)
+    # Record inbound (DB保存photo_data — 永続化)
     if inbound_date:
-        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, inbound_date, photo) VALUES (?,?,?,?,?,?)",
-                  (product_id, supplier_item_id, qty, unit_cost or 0, inbound_date, photo_filename))
+        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, inbound_date, photo, photo_data) VALUES (?,?,?,?,?,?,?)",
+                  (product_id, supplier_item_id, qty, unit_cost or 0, inbound_date, photo_filename, photo_encoded))
     else:
-        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, photo) VALUES (?,?,?,?,?)",
-                  (product_id, supplier_item_id, qty, unit_cost or 0, photo_filename))
+        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, photo, photo_data) VALUES (?,?,?,?,?,?)",
+                  (product_id, supplier_item_id, qty, unit_cost or 0, photo_filename, photo_encoded))
     
     # Mark supplier item as matched
     db.execute("UPDATE supplier_items SET matched=TRUE, matched_date=CURRENT_TIMESTAMP WHERE id=?", (supplier_item_id,))
@@ -1050,7 +1053,9 @@ def api_inbound_create():
         'qr_code': qr_data,
         'is_new': not bool(existing)
     }
-    if photo_filename:
+    if photo_filename and photo_encoded:
+        result['photo_url'] = f"data:image/jpeg;base64,{photo_encoded}"
+    elif photo_filename:
         result['photo_url'] = f'/uploads/{photo_filename}'
     
     return jsonify(result)
@@ -1121,7 +1126,8 @@ def api_inventory_list():
     # 关联查询照片和跟踪号（取最近一次入库的照片）
     products = db.execute("""
         SELECT p.*,
-               (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo,
+               (SELECT photo FROM inbound_records WHERE product_id=p.id AND photo IS NOT NULL AND photo != '' ORDER BY id DESC LIMIT 1) as photo,
+               (SELECT photo_data FROM inbound_records WHERE product_id=p.id AND photo_data IS NOT NULL AND photo_data != '' ORDER BY id DESC LIMIT 1) as photo_data,
                (SELECT si.tracking_no FROM supplier_items si WHERE si.id=p.supplier_item_id LIMIT 1) as tracking_no
         FROM products p
         ORDER BY p.updated_at DESC
@@ -1135,12 +1141,14 @@ def api_inventory_list():
         d['total_in'] = total_in
         d['total_out'] = total_out
         d['total_revenue'] = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
-        # 添加照片URL
-        if d.get('photo'):
+        # 添加照片URL（优先DB base64 → 磁盘文件兜底）
+        if d.get('photo_data'):
+            d['photo_url'] = f"data:image/jpeg;base64,{d['photo_data']}"
+        elif d.get('photo'):
             d['photo_url'] = f'/uploads/{d["photo"]}'
         else:
             d['photo_url'] = None
-        result.append(d)
+    result.append(d)
     return jsonify(result)
 
 
@@ -1358,6 +1366,7 @@ def api_update_product(product_id):
 
     # 照片处理 — 支持 multipart/form-data 文件上传 和 JSON base64（兼容旧前端）
     photo_filename = None
+    photo_encoded = None  # base64 for DB storage
     photo_removed = False
     photo_action = request.form.get('photo_action', '') if 'photo_action' in request.form else ''
     
@@ -1372,16 +1381,25 @@ def api_update_product(product_id):
     if photo_action == 'update':
         # FormData 方式优先：从 request.files 获取照片
         photo_file = request.files.get('photo')
+        photo_encoded = None  # base64 for DB storage
         if photo_file and photo_file.filename:
             orig_name = photo_file.filename.rsplit('.', 1)[-1].lower() if '.' in photo_file.filename else 'jpg'
             if orig_name == 'jpeg':
                 orig_name = 'jpg'
             photo_filename = f"product_{product_id}_{uuid.uuid4().hex[:8]}.{orig_name}"
+            # Read file bytes for DB storage
+            file_bytes = photo_file.read()
+            photo_encoded = base64.b64encode(file_bytes).decode('utf-8')
+            # Disk save (non-critical backup)
             photo_path = UPLOAD_DIR / photo_filename
             UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
-            photo_file.save(str(photo_path))
-            file_size = photo_path.stat().st_size if photo_path.exists() else 0
-            app.logger.info(f'[ProductUpdate] Photo saved (multipart): {photo_filename} ({file_size} bytes)')
+            try:
+                photo_file.seek(0)
+                photo_file.save(str(photo_path))
+                file_size = photo_path.stat().st_size if photo_path.exists() else 0
+                app.logger.info(f'[ProductUpdate] Photo saved (multipart): {photo_filename} ({file_size} bytes)')
+            except Exception as e:
+                app.logger.warning(f'[ProductUpdate] Disk save error (non-critical): {e}')
         elif 'photo_base64' in data:
             # 回退到 base64 方式
             try:
@@ -1391,62 +1409,38 @@ def api_update_product(product_id):
                 if ext == 'jpeg':
                     ext = 'jpg'
                 photo_filename = f"product_{product_id}_{uuid.uuid4().hex[:8]}.{ext}"
+                photo_encoded = encoded  # Save to DB
+                # Disk save (non-critical backup)
                 photo_path = UPLOAD_DIR / photo_filename
                 UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
-                with open(photo_path, 'wb') as f:
-                    f.write(base64.b64decode(encoded))
-                if not photo_path.exists() or photo_path.stat().st_size == 0:
-                    app.logger.error(f'[ProductUpdate] Photo write failed (base64): {photo_path}')
-                    photo_filename = None
-                else:
-                    app.logger.info(f'[ProductUpdate] Photo saved (base64): {photo_filename} ({photo_path.stat().st_size} bytes)')
+                try:
+                    with open(photo_path, 'wb') as f:
+                        f.write(base64.b64decode(encoded))
+                    if photo_path.exists() and photo_path.stat().st_size > 0:
+                        app.logger.info(f'[ProductUpdate] Photo saved (base64): {photo_filename} ({photo_path.stat().st_size} bytes)')
+                except Exception as e:
+                    app.logger.warning(f'[ProductUpdate] Disk save error (non-critical): {e}')
             except Exception as e:
                 app.logger.error(f'[ProductUpdate] Photo base64 error: {e}')
-                import traceback
-                traceback.print_exc()
                 photo_filename = None
+                photo_encoded = None
         else:
             app.logger.warning(f'[ProductUpdate] photo_action=update but no file or base64 data')
         
-        # 照片保存成功后清理旧照片
-        if photo_filename:
-            old_photos = db.execute(
-                "SELECT photo FROM inbound_records WHERE product_id=? AND photo IS NOT NULL",
-                (product_id,)
-            ).fetchall()
-            for r in old_photos:
-                old_fname = r.get('photo')
-                if old_fname:
-                    try:
-                        old_fp = UPLOAD_DIR / old_fname
-                        if old_fp.exists():
-                            old_fp.unlink()
-                    except Exception:
-                        pass
+        # 照片保存成功后更新DB（同时清旧照片）
+        if photo_filename and photo_encoded:
             db.execute(
-                """UPDATE inbound_records SET photo=? WHERE id = (
+                """UPDATE inbound_records SET photo=?, photo_data=? WHERE id = (
                     SELECT id FROM inbound_records WHERE product_id=? ORDER BY id DESC LIMIT 1
                 )""",
-                (photo_filename, product_id)
+                (photo_filename, photo_encoded, product_id)
             )
+            app.logger.info(f'[ProductUpdate] Photo DB updated for product {product_id}')
     
     elif photo_action == 'remove':
         photo_removed = True
-        old_photos = db.execute(
-            "SELECT photo FROM inbound_records WHERE product_id=? AND photo IS NOT NULL",
-            (product_id,)
-        ).fetchall()
-        for r in old_photos:
-            old_fname = r.get('photo')
-            if old_fname:
-                try:
-                    old_fp = UPLOAD_DIR / old_fname
-                    if old_fp.exists():
-                        old_fp.unlink()
-                except Exception:
-                    pass
         db.execute(
-            "UPDATE inbound_records SET photo=NULL WHERE product_id=?",
+            "UPDATE inbound_records SET photo=NULL, photo_data=NULL WHERE product_id=?",
             (product_id,)
         )
         app.logger.info(f'[ProductUpdate] Photo removed for product {product_id}')
@@ -1465,7 +1459,9 @@ def api_update_product(product_id):
         db.commit()
 
     resp = {'success': True}
-    if photo_filename:
+    if photo_encoded:
+        resp['photo_url'] = f"data:image/jpeg;base64,{photo_encoded}"
+    elif photo_filename:
         resp['photo_url'] = f'/uploads/{photo_filename}'
     if photo_action and not photo_filename and not photo_removed:
         resp['photo_error'] = '写真の保存に失敗しました'
@@ -1756,7 +1752,8 @@ def api_mercari_stock():
     db = get_db()
     # 关联查询照片
     products = db.execute("""SELECT p.*, 
-        (SELECT photo FROM inbound_records WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as photo 
+        (SELECT photo FROM inbound_records WHERE product_id=p.id AND photo IS NOT NULL AND photo != '' ORDER BY id DESC LIMIT 1) as photo,
+        (SELECT photo_data FROM inbound_records WHERE product_id=p.id AND photo_data IS NOT NULL AND photo_data != '' ORDER BY id DESC LIMIT 1) as photo_data 
         FROM products p WHERE p.status='in_stock' ORDER BY p.updated_at DESC""").fetchall()
     result = []
     for p in products:
@@ -1765,12 +1762,14 @@ def api_mercari_stock():
         d = dict(p)
         d['current_stock'] = total_in - total_out
         d['has_listing'] = bool(db.execute("SELECT id FROM mercari_listings WHERE product_id=?", (p['id'],)).fetchone())
-        # 添加照片URL
-        if d.get('photo'):
+        # 添加照片URL（DB优先）
+        if d.get('photo_data'):
+            d['photo_url'] = f"data:image/jpeg;base64,{d['photo_data']}"
+        elif d.get('photo'):
             d['photo_url'] = f'/uploads/{d["photo"]}'
         else:
             d['photo_url'] = None
-        result.append(d)
+    result.append(d)
     return jsonify(result)
 
 
