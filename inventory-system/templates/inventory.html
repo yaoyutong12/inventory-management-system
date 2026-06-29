@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo">(v20260629-3)</small></h4>
+    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo">(v20260629-4)</small></h4>
     <div class="d-flex gap-2">
         <select class="form-select form-select-sm" id="categoryFilter" onchange="filterInventory()">
             <option value="">全カテゴリ</option>
@@ -74,7 +74,7 @@
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-primary" onclick="window.open('/sales','_self')" title="販売"><i class="bi bi-cart"></i></button>
-                                    <button class="btn btn-outline-info" onclick="showDetail({{ p.id }}, {{ p | tojson | safe }})" title="詳細"><i class="bi bi-info-circle"></i></button>
+                                    <button class="btn btn-outline-warning" onclick="editProduct({{ p.id }}, {{ p | tojson | safe }})" title="編集"><i class="bi bi-pencil"></i></button>
                                     <button class="btn btn-outline-danger" onclick="deleteProduct({{ p.id }}, '{{ p.product_name | replace("'", "\\'") }}', '{{ p.internal_code }}')" title="削除して仕入リストに戻す"><i class="bi bi-trash"></i></button>
                                 </div>
                             </td>
@@ -115,6 +115,77 @@
             <div class="card-body">
                 <h6 class="card-title"><i class="bi bi-bar-chart me-2"></i>在庫状況</h6>
                 <canvas id="stockChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑商品模态框 -->
+<div class="modal fade" id="editProductModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning bg-opacity-10">
+                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>商品を編集</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editProductId">
+                
+                <!-- 照片 -->
+                <div class="mb-3 text-center">
+                    <label class="form-label small">商品写真</label>
+                    <div class="mb-2">
+                        <img id="editPhotoPreview" src="" alt="写真" style="max-width:200px;max-height:200px;object-fit:cover;border-radius:8px;border:1px solid #ddd;" class="d-none">
+                        <div id="editPhotoPlaceholder" class="d-flex align-items-center justify-content-center bg-light rounded" style="width:200px;height:150px;margin:0 auto;color:#aaa;">
+                            <span><i class="bi bi-camera" style="font-size:2rem;"></i></span>
+                        </div>
+                    </div>
+                    <input type="file" id="editPhotoInput" accept="image/*" style="display:none" onchange="handleProductPhotoSelect(this)">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('editPhotoInput').click()">
+                        <i class="bi bi-upload me-1"></i>写真を{{ '変更' if 'photo_url' in '' else '追加' }}
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger ms-1 d-none" id="editPhotoRemoveBtn" onclick="removeEditPhoto()">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <hr>
+                
+                <!-- 商品名 -->
+                <div class="mb-3">
+                    <label class="form-label small">商品名</label>
+                    <input class="form-control" id="editProductName">
+                </div>
+                
+                <div class="row g-2 mb-3">
+                    <!-- 进价 -->
+                    <div class="col-6">
+                        <label class="form-label small">仕入単価</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">¥</span>
+                            <input type="number" class="form-control" id="editUnitCost" min="0">
+                        </div>
+                    </div>
+                    <!-- 售价 -->
+                    <div class="col-6">
+                        <label class="form-label small">販売価格</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">¥</span>
+                            <input type="number" class="form-control" id="editSellingPrice" min="0" step="100">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 品类 -->
+                <div class="mb-3">
+                    <label class="form-label small">カテゴリ</label>
+                    <input class="form-control" id="editCategory" placeholder="例: 家電, 日用品...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <button class="btn btn-warning" onclick="submitProductEdit()">
+                    <i class="bi bi-check-lg me-1"></i>保存する
+                </button>
             </div>
         </div>
     </div>
@@ -170,13 +241,141 @@ function exportCSV() {
     a.click();
 }
 
+let _currentEditingProduct = null;
+let _newPhotoBase64 = null;
+
 function showDetail(id, pdata) {
-    alert('商品詳細\n======\nコード: ' + pdata.internal_code +
-          '\n商品名: ' + (pdata.product_name||'') +
-          '\n仕入単価: ' + formatJPY(pdata.unit_cost||0) +
-          '\n販売価格: ' + formatJPY(pdata.selling_price||0) +
-          '\n在庫: ' + pdata.current_stock + '個' +
-          '\n売上: ' + formatJPY(pdata.total_revenue||0));
+    // 兼容旧按钮，现在用编辑替代
+    editProduct(id, pdata);
+}
+
+// ─── 编辑商品 ────────────────────────────────
+function editProduct(id, pdata) {
+    _currentEditingProduct = pdata;
+    _newPhotoBase64 = null;
+    
+    document.getElementById('editProductId').value = id;
+    document.getElementById('editProductName').value = pdata.product_name || '';
+    document.getElementById('editUnitCost').value = pdata.unit_cost || 0;
+    document.getElementById('editSellingPrice').value = pdata.selling_price || 0;
+    document.getElementById('editCategory').value = pdata.category || '';
+    
+    // 照片预览
+    const preview = document.getElementById('editPhotoPreview');
+    const placeholder = document.getElementById('editPhotoPlaceholder');
+    const removeBtn = document.getElementById('editPhotoRemoveBtn');
+    
+    if (pdata.photo_url) {
+        preview.src = pdata.photo_url + '?_t=' + Date.now();
+        preview.classList.remove('d-none');
+        placeholder.classList.add('d-none');
+        removeBtn.classList.remove('d-none');
+    } else {
+        preview.classList.add('d-none');
+        placeholder.classList.remove('d-none');
+        removeBtn.classList.add('d-none');
+    }
+    
+    document.getElementById('editPhotoInput').value = '';
+    
+    // 修正上传按钮文字
+    const uploadBtnEl = document.querySelector('#editProductModal button[onclick*="editPhotoInput"]');
+    if (uploadBtnEl) {
+        uploadBtnEl.innerHTML = '<i class="bi bi-upload me-1"></i>写真を' + (pdata.photo_url ? '変更' : '追加');
+    }
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('editProductModal'));
+    modal.show();
+}
+
+function handleProductPhotoSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    // 超过2MB警告
+    if (file.size > 2 * 1024 * 1024) {
+        showToast('写真が大きすぎます（2MB以下にしてください）', 'warning');
+        input.value = '';
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        _newPhotoBase64 = e.target.result;
+        const preview = document.getElementById('editPhotoPreview');
+        const placeholder = document.getElementById('editPhotoPlaceholder');
+        const removeBtn = document.getElementById('editPhotoRemoveBtn');
+        
+        preview.src = e.target.result;
+        preview.classList.remove('d-none');
+        placeholder.classList.add('d-none');
+        removeBtn.classList.remove('d-none');
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeEditPhoto() {
+    _newPhotoBase64 = '__REMOVE__';  // 标记为删除照片
+    const preview = document.getElementById('editPhotoPreview');
+    const placeholder = document.getElementById('editPhotoPlaceholder');
+    const removeBtn = document.getElementById('editPhotoRemoveBtn');
+    
+    preview.classList.add('d-none');
+    preview.src = '';
+    placeholder.classList.remove('d-none');
+    removeBtn.classList.add('d-none');
+    document.getElementById('editPhotoInput').value = '';
+    
+    showToast('写真を削除します（保存時に反映）', 'info');
+}
+
+async function submitProductEdit() {
+    const productId = parseInt(document.getElementById('editProductId').value);
+    const productName = document.getElementById('editProductName').value.trim();
+    const unitCost = parseInt(document.getElementById('editUnitCost').value) || 0;
+    const sellingPrice = parseInt(document.getElementById('editSellingPrice').value) || 0;
+    const category = document.getElementById('editCategory').value.trim();
+    
+    if (!productName) {
+        showToast('商品名を入力してください', 'warning');
+        return;
+    }
+    
+    const payload = {
+        product_name: productName,
+        unit_cost: unitCost,
+        selling_price: sellingPrice,
+        category: category
+    };
+    
+    // 照片处理
+    if (_newPhotoBase64 === '__REMOVE__') {
+        payload.photo_base64 = null;  // 不传照片，后端也不会清理旧的
+    } else if (_newPhotoBase64) {
+        payload.photo_base64 = _newPhotoBase64;
+    }
+    
+    try {
+        const resp = await fetch('/api/product/' + productId + '/update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const result = await resp.json();
+        
+        if (result.success) {
+            // 关闭模态框
+            bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide();
+            showToast('「' + productName + '」を更新しました', 'success');
+            // 刷新页面显示新数据
+            setTimeout(() => location.reload(), 500);
+        } else {
+            alert('更新エラー: ' + (result.error || '不明なエラー'));
+        }
+    } catch(e) {
+        alert('通信エラー: ' + e.message);
+    }
 }
 
 // ─── 删除商品并退回采购清单 ────────────────────
