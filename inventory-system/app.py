@@ -1212,6 +1212,93 @@ def api_sales_create():
     })
 
 
+# ─── API: Batch Sales Create (购物篮统一结算) ────────────────
+@app.route('/api/sales/batch-create', methods=['POST'])
+def api_sales_batch_create():
+    """购物篮批量销售：一次结算多件商品，费用只计入第一件"""
+    data = request.json
+    items = data.get('items', [])      # [{product_id, qty, unit_price}]
+    payment_method = data.get('payment_method', 'cash')
+    platform = data.get('platform', '')
+    shipping_fee = data.get('shipping_fee', 0) or 0
+    platform_fee = data.get('platform_fee', 0) or 0
+    other_fee = data.get('other_fee', 0) or 0
+    note = data.get('note', '')
+    print_receipt = data.get('print_receipt', False)
+
+    if not items or len(items) == 0:
+        return jsonify({'error': '购物篮为空'}), 400
+
+    db = get_db()
+    cur = None
+    sale_ids = []
+    total_qty = 0
+    total_amount = 0
+    total_profit = 0
+
+    try:
+        for idx, item in enumerate(items):
+            product_id = item.get('product_id')
+            qty = item.get('qty', 1)
+            unit_price = item.get('unit_price', 0)
+
+            product = db.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
+            if not product:
+                raise Exception(f'商品ID {product_id} 不存在')
+
+            # 检查库存
+            total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (product_id,)).fetchone()[0]
+            total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (product_id,)).fetchone()[0]
+            current_stock = total_in - total_out
+            if current_stock < qty:
+                raise Exception(f'商品 {product["product_name"]} 库存不足（当前: {current_stock}，需: {qty}）')
+
+            item_total = unit_price * qty
+            cost_amount = (product['unit_cost'] or 0) * qty
+
+            # 费用分摊：只有第一件商品承担全部费用
+            item_shipping = shipping_fee if idx == 0 else 0
+            item_platform = platform_fee if idx == 0 else 0
+            item_other = other_fee if idx == 0 else 0
+            profit_amount = item_total - cost_amount - item_shipping - item_platform - item_other
+
+            cur = db.execute("""
+                INSERT INTO sales_records (product_id, qty, unit_price, total_amount, cost_amount, profit_amount,
+                                        shipping_fee, platform_fee, other_fee, payment_method, platform, notes)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (product_id, qty, unit_price, item_total, cost_amount, profit_amount,
+                   item_shipping, item_platform, item_other, payment_method, platform, note))
+
+            sale_id = cur.lastrowid
+            sale_ids.append(sale_id)
+
+            # 更新库存状态
+            new_stock = current_stock - qty
+            if new_stock <= 0:
+                db.execute("UPDATE products SET status='sold_out', updated_at=CURRENT_TIMESTAMP WHERE id=?", (product_id,))
+
+            total_qty += qty
+            total_amount += item_total
+            total_profit += profit_amount
+
+        db.commit()
+
+        return jsonify({
+            'success': True,
+            'sale_ids': sale_ids,
+            'total_qty': total_qty,
+            'total_amount': total_amount,
+            'total_profit': total_profit,
+            'print_receipt': print_receipt
+        })
+    except Exception as e:
+        if USE_POSTGRES:
+            db.rollback()
+        else:
+            pass
+        return jsonify({'error': str(e)}), 400
+
+
 # ─── API: Inventory ─────────────────────────────────────────────
 @app.route('/api/inventory/list')
 def api_inventory_list():
