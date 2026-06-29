@@ -450,6 +450,7 @@ def _init_sqlite():
     for sql in [
         "ALTER TABLE products ADD COLUMN scrap_reason TEXT",
         "ALTER TABLE products ADD COLUMN scrapped_at TIMESTAMP",
+        "ALTER TABLE products ADD COLUMN sales_channel TEXT DEFAULT '线下'",
         "ALTER TABLE inbound_records ADD COLUMN photo TEXT",
         "ALTER TABLE mercari_listings ADD COLUMN brand TEXT",
         "ALTER TABLE sales_records ADD COLUMN shipping_fee REAL DEFAULT 0",
@@ -537,6 +538,7 @@ def _init_postgres():
     for col_sql in [
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS scrap_reason TEXT",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS scrapped_at TIMESTAMP",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS sales_channel TEXT DEFAULT '线下'",
         "ALTER TABLE inbound_records ADD COLUMN IF NOT EXISTS photo TEXT",
         "ALTER TABLE inbound_records ADD COLUMN IF NOT EXISTS photo_data TEXT",
         "ALTER TABLE mercari_listings ADD COLUMN IF NOT EXISTS brand TEXT",
@@ -1409,6 +1411,11 @@ def api_update_product(product_id):
     if 'category' in data and data['category']:
         updated_fields.append("category=?")
         updated_values.append(data['category'])
+
+    # 销售路径/販売経路
+    if 'sales_channel' in data and data['sales_channel']:
+        updated_fields.append("sales_channel=?")
+        updated_values.append(data['sales_channel'])
 
     # 照片处理 — 支持 multipart/form-data 文件上传 和 JSON base64（兼容旧前端）
     photo_filename = None

@@ -16,6 +16,14 @@
             <option value="in_stock">在庫あり</option>
             <option value="sold_out">売切れ</option>
         </select>
+        <select class="form-select form-select-sm" id="channelFilter" onchange="filterInventory()" title="販売経路で絞り込み">
+            <option value="">全経路</option>
+            <option value="线下">🏪 线下</option>
+            <option value="Mercari">🟣 Mercari</option>
+            <option value="Yahoo!オク">🔵 Yahoo!オク</option>
+            <option value="淘宝/闲鱼">🟠 淘宝/闲鱼</option>
+            <option value="自家サイト">⚫ 自家サイト</option>
+        </select>
         <input class="form-control form-control-sm" placeholder="検索..." id="inventorySearch" oninput="filterInventory()" style="width:200px">
         <button class="btn btn-sm btn-outline-primary" onclick="exportCSV()"><i class="bi bi-download"></i> CSV</button>
     </div>
@@ -28,6 +36,7 @@
                 <thead>
                     <tr>
                         <th>写真</th><th>追跡番号</th><th>内部コード</th><th>商品名</th><th>カテゴリ</th>
+                        <th>販売経路</th>
                         <th>仕入単価</th><th>販売価格</th>
                         <th>入庫数</th><th>販売数</th><th>在庫数</th>
                         <th>売上</th><th>利益</th><th>費用</th><th>状態</th><th>操作</th>
@@ -48,7 +57,7 @@
                                 {% set stock_class = "success" %}
                                 {% set status_badge = '<span class="badge bg-success">在庫あり</span>' %}
                             {% endif %}
-                        <tr data-category="{{ p.category or '' }}" data-status="{{ p.status or '' }}" data-name="{{ p.product_name or '' }}" data-code="{{ p.internal_code or '' }}">
+                        <tr data-category="{{ p.category or '' }}" data-status="{{ p.status or '' }}" data-name="{{ p.product_name or '' }}" data-code="{{ p.internal_code or '' }}" data-channel="{{ p.sales_channel or '线下' }}">
                             <td class="text-center">
                                 {% if p.photo_url %}
                                     <img src="{{ p.photo_url }}" alt="商品写真" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">
@@ -60,6 +69,24 @@
                             <td><code>{{ p.internal_code }}{% if p.is_high_value %} <span class="badge bg-warning">高額</span>{% endif %}</code></td>
                             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ p.product_name }}">{{ (p.product_name or '')[:40] }}</td>
                             <td><small>{{ p.category or '-' }}</small></td>
+                            <td style="cursor:pointer;position:relative" onclick="editChannel(this, {{ p.id }}, '{{ (p.sales_channel or '线下') }}')">
+                                <span class="channel-display" id="channelDisplay_{{ p.id }}">
+                                    {% if (p.sales_channel or '线下') == 'Mercari' %}
+                                        <span class="badge bg-primary">Mercari</span>
+                                    {% elif (p.sales_channel or '线下') == 'Yahoo!オク' %}
+                                        <span class="badge bg-info">Yahoo!オク</span>
+                                    {% elif (p.sales_channel or '线下') == '淘宝/闲鱼' %}
+                                        <span class="badge bg-orange" style="background-color:#ff6600">淘宝/闲鱼</span>
+                                    {% elif (p.sales_channel or '线下') == '自家サイト' %}
+                                        <span class="badge bg-dark">自家サイト</span>
+                                    {% elif (p.sales_channel or '线下') == '其他' %}
+                                        <span class="badge bg-secondary">{{ p.sales_channel or '线下' }}</span>
+                                    {% else %}
+                                        <span class="badge bg-success">{{ p.sales_channel or '线下' }}</span>
+                                    {% endif %}
+                                </span>
+                                <small class="text-muted ms-1 channel-edit-icon" style="font-size:9px"><i class="bi bi-pencil"></i></small>
+                            </td>
                             <td class="text-end">¥{{ '%d' | format(p.unit_cost or 0) | int }}</td>
                             <td class="text-end fw-bold" style="cursor:pointer;position:relative" onclick="editPrice(this, {{ p.id }}, {{ p.selling_price or 0 }})">
                                 <span class="price-display">¥{{ '%d' | format(p.selling_price or 0) | int }}</span>
@@ -80,6 +107,9 @@
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-primary" onclick="quickSale('{{ p.internal_code }}')" title="快速販売"><i class="bi bi-cart"></i></button>
+                                    {% if p.sales_channel in ['Mercari', 'Yahoo!オク', '淘宝/闲鱼', '自家サイト'] or not p.sales_channel %}
+                                    <button class="btn btn-outline-success" onclick="listOnline({{ p.id }}, '{{ (p.sales_channel or '') }}')" title="上架到线上平台"><i class="bi bi-cloud-upload"></i></button>
+                                    {% endif %}
                                     <button class="btn btn-outline-warning" onclick="editProduct({{ p.id }})" title="編集"><i class="bi bi-pencil"></i></button>
                                     <button class="btn btn-outline-danger" onclick="deleteProduct({{ p.id }}, '{{ p.product_name | replace("'", "\\'") }}', '{{ p.internal_code }}')" title="削除して仕入リストに戻す"><i class="bi bi-trash"></i></button>
                                 </div>
@@ -87,7 +117,7 @@
                         </tr>
                         {% endfor %}
                     {% else %}
-                        <tr><td colspan="14" class="text-center py-5 text-muted">
+                        <tr><td colspan="15" class="text-center py-5 text-muted">
                             <i class="bi bi-inbox" style="font-size:3rem;display:block;margin-bottom:1rem"></i>
                             <p class="mb-2"><strong>まだ商品が登録されていません</strong></p>
                             <p class="small mb-3">手順：<br>
@@ -186,6 +216,19 @@
                     <label class="form-label small">カテゴリ</label>
                     <input class="form-control" id="editCategory" placeholder="例: 家電, 日用品...">
                 </div>
+                
+                <!-- 销售路径 -->
+                <div class="mb-3">
+                    <label class="form-label small">販売経路 / 上架平台</label>
+                    <select class="form-select form-select-sm" id="editSalesChannel">
+                        <option value="线下">🏪 线下销售（对面/店铺）</option>
+                        <option value="Mercari">🟣 Mercari（メルカリ）</option>
+                        <option value="Yahoo!オク">🔵 Yahoo!オークション</option>
+                        <option value="淘宝/闲鱼">🟠 淘宝 / 闲鱼</option>
+                        <option value="自家サイト">⚫ 自家サイト</option>
+                        <option value="其他">⚪ 其他</option>
+                    </select>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
@@ -210,6 +253,7 @@ let allProducts = SSR_DATA;
 function filterInventory() {
     const cat = document.getElementById('categoryFilter').value;
     const status = document.getElementById('statusFilter').value;
+    const channel = document.getElementById('channelFilter').value;
     const search = (document.getElementById('inventorySearch').value || '').toLowerCase();
     
     const rows = document.querySelectorAll('#invTbody > tr[data-category]');
@@ -217,6 +261,7 @@ function filterInventory() {
     rows.forEach(row => {
         const rCat = row.dataset.category;
         const rStatus = row.dataset.status;
+        const rChannel = row.dataset.channel || '线下';
         const rName = (row.dataset.name || '').toLowerCase();
         const rCode = (row.dataset.code || '').toLowerCase();
         
@@ -224,6 +269,7 @@ function filterInventory() {
         if (cat && rCat !== cat) show = false;
         if (status === 'in_stock' && rStatus !== 'in_stock') show = false;
         if (status === 'sold_out' && rStatus !== 'sold_out') show = false;
+        if (channel && rChannel !== channel) show = false;
         if (search && !rName.includes(search) && !rCode.includes(search) && !(rCat||'').toLowerCase().includes(search)) show = false;
         
         row.style.display = show ? '' : 'none';
@@ -280,6 +326,7 @@ function editProduct(id, optData) {
     document.getElementById('editUnitCost').value = pdata.unit_cost || 0;
     document.getElementById('editSellingPrice').value = pdata.selling_price || 0;
     document.getElementById('editCategory').value = pdata.category || '';
+    document.getElementById('editSalesChannel').value = pdata.sales_channel || '线下';
     
     // 照片预览
     const preview = document.getElementById('editPhotoPreview');
@@ -357,6 +404,7 @@ async function submitProductEdit() {
     const unitCost = parseInt(document.getElementById('editUnitCost').value) || 0;
     const sellingPrice = parseInt(document.getElementById('editSellingPrice').value) || 0;
     const category = document.getElementById('editCategory').value.trim();
+    const salesChannel = document.getElementById('editSalesChannel').value;
     
     if (!productName) {
         showToast('商品名を入力してください', 'warning');
@@ -369,6 +417,7 @@ async function submitProductEdit() {
     formData.append('unit_cost', unitCost);
     formData.append('selling_price', sellingPrice);
     formData.append('category', category);
+    formData.append('sales_channel', salesChannel);
     
     // 照片处理 — 直接传文件二进制，不转 base64
     const photoInput = document.getElementById('editPhotoInput');
@@ -604,6 +653,114 @@ function cancelPrice(btn) {
     if (displaySpan) displaySpan.style.display = '';
     const smallIcon = cell.querySelector('small');
     if (smallIcon) smallIcon.style.display = '';
+}
+
+// ─── 内联编辑销售路径 ─────────────────────────────
+const CHANNEL_OPTIONS = [
+    {value:'线下', label:'<span class="badge bg-success">线下</span>', badgeClass:'bg-success'},
+    {value:'Mercari', label:'<span class="badge bg-primary">Mercari</span>', badgeClass:'bg-primary'},
+    {value:'Yahoo!オク', label:'<span class="badge bg-info">Yahoo!オク</span>', badgeClass:'bg-info'},
+    {value:'淘宝/闲鱼', label:'<span class="badge" style="background-color:#ff6600">淘宝/闲鱼</span>', badgeClass:'', customColor:'#ff6600'},
+    {value:'自家サイト', label:'<span class="badge bg-dark">自家サイト</span>', badgeClass:'bg-dark'},
+    {value:'其他', label:'<span class="badge bg-secondary">其他</span>', badgeClass:'bg-secondary'}
+];
+
+function editChannel(cell, productId, currentChannel) {
+    if (cell.querySelector('.channel-editor')) return;
+
+    const displaySpan = cell.querySelector('.channel-display');
+    const editIcon = cell.querySelector('.channel-edit-icon');
+
+    let optionsHtml = '<select class="form-select form-select-sm" id="channelSelect_' + productId + '" style="width:130px;font-size:0.85rem">';
+    CHANNEL_OPTIONS.forEach(function(opt){
+        const selected = opt.value === currentChannel ? ' selected' : '';
+        optionsHtml += '<option value="' + opt.value + '"' + selected + '>' + opt.value + '</option>';
+    });
+    optionsHtml += '</select>';
+    
+    const editor = document.createElement('div');
+    editor.className = 'channel-editor d-flex align-items-center';
+    editor.innerHTML = optionsHtml +
+        '<button class="btn btn-sm btn-success ms-1 py-0 px-1" style="font-size:12px" onclick="saveChannel(' + productId + ', this)"><i class="bi bi-check-lg"></i></button>' +
+        '<button class="btn btn-sm btn-secondary ms-1 py-0 px-1" style="font-size:12px" onclick="cancelChannel(this)"><i class="bi bi-x-lg"></i></button>';
+
+    displaySpan.style.display = 'none';
+    editIcon.style.display = 'none';
+    cell.appendChild(editor);
+
+    const selectEl = document.getElementById('channelSelect_' + productId);
+    if (selectEl) {
+        selectEl.focus();
+        selectEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); saveChannel(productId, editor.querySelector('.btn-success')); }
+            if (e.key === 'Escape') { cancelChannel(editor.querySelector('.btn-secondary')); }
+        });
+    }
+}
+
+async function saveChannel(productId, btn) {
+    const cell = btn.closest('td');
+    const selectEl = document.getElementById('channelSelect_' + productId);
+    if (!selectEl) return;
+    
+    const newChannel = selectEl.value;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        const resp = await fetch('/api/product/' + productId + '/update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({sales_channel: newChannel})
+        });
+        const result = await resp.json();
+
+        if (result.success) {
+            // 更新显示
+            const displayEl = document.getElementById('channelDisplay_' + productId);
+            if (displayEl) {
+                const opt = CHANNEL_OPTIONS.find(o => o.value === newChannel) || CHANNEL_OPTIONS[0];
+                displayEl.innerHTML = opt.label;
+            }
+            
+            // 更新SSR_DATA
+            for (let i = 0; i < SSR_DATA.length; i++) {
+                if (SSR_DATA[i].id === productId) {
+                    SSR_DATA[i].sales_channel = newChannel;
+                    break;
+                }
+            }
+
+            cancelChannel(btn);
+            showToast('販売経路を「' + newChannel + '」に更新しました', 'success');
+        } else {
+            alert('エラー: ' + (result.error || '更新に失敗しました'));
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+        }
+    } catch(e) {
+        alert('通信エラー: ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+    }
+}
+
+function cancelChannel(btn) {
+    const cell = btn.closest('td');
+    const editor = cell.querySelector('.channel-editor');
+    if (editor) editor.remove();
+    const display = cell.querySelector('.channel-display');
+    if (display) display.style.display = '';
+    const icon = cell.querySelector('.channel-edit-icon');
+    if (icon) icon.style.display = '';
+}
+
+// ─── 上架到线上平台 ─────────────────────────────
+function listOnline(productId, currentChannel) {
+    const targetPlatform = currentChannel || 'Mercari';
+    // 跳转到煤炉上架页面，自动选中该商品
+    window.location.href = '/mercari?product_id=' + productId;
 }
 
 // ─── 快速贩卖：跳转销售页并自动打开外部销售登记 ───
