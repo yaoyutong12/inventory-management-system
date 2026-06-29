@@ -82,6 +82,8 @@
                             <div class="small"><span data-i18n="click_start_scan">点击"扫码开始"</span></div>
                         </div>
                     </div>
+                    <!-- 隱藏容器，用於撮影識別時的獨立 Html5Qrcode 實例 -->
+                    <div id="scan-helper"></div>
                     <div id="scanIndicator" class="text-center mb-2 d-none">
                         <span class="badge bg-success pulse-badge">🔍 スキャン中... 条码を枠内に入れてください</span>
                     </div>
@@ -650,11 +652,9 @@ async function captureAndDetect() {
             
             if (blob) {
                 const file = new File([blob], 'capture.png', { type: 'image/png' });
-                // 創建隱藏的臨時 DOM 元素用於掃描文件
-                const tmpDiv = document.createElement('div');
-                tmpDiv.style.display = 'none';
-                document.body.appendChild(tmpDiv);
-                const tmpScanner = new Html5Qrcode(tmpDiv);
+                // 使用隱藏的 #scan-helper 作為容器（傳 ID 字串而非 DOM 元素）
+                const helperEl = document.getElementById('scan-helper');
+                const tmpScanner = new Html5Qrcode("scan-helper");
                 try {
                     const decodedText = await tmpScanner.scanFile(file, false);
                     if (decodedText) {
@@ -668,7 +668,8 @@ async function captureAndDetect() {
                     console.warn('scanFile失敗:', e2.message);
                 }
                 try { await tmpScanner.clear(); } catch(_) {}
-                try { tmpDiv.remove(); } catch(_) {}
+                // 清理 helper 內部殘留
+                try { helperEl.innerHTML = ''; } catch(_) {}
             }
         }
         
