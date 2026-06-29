@@ -1316,7 +1316,9 @@ def api_update_product(product_id):
                     except Exception:
                         pass
             db.execute(
-                "UPDATE inbound_records SET photo=? WHERE product_id=? ORDER BY id DESC LIMIT 1",
+                """UPDATE inbound_records SET photo=? WHERE id = (
+                    SELECT id FROM inbound_records WHERE product_id=? ORDER BY id DESC LIMIT 1
+                )""",
                 (photo_filename, product_id)
             )
     
