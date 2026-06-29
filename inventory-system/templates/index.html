@@ -3,56 +3,90 @@
 
 {% block content %}
 <div class="row g-3 mb-4">
-    <div class="col-md-3 col-6">
-        <div class="card stat-card bg-white">
+    <div class="col-md-2 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value text-primary">{{ total_products }}</div>
             <div class="label">登録商品数</div>
         </div>
     </div>
-    <div class="col-md-3 col-6">
-        <div class="card stat-card bg-white">
+    <div class="col-md-2 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/inventory'">
             <div class="value text-success">{{ total_in_stock }}</div>
             <div class="label">在庫あり</div>
         </div>
     </div>
-    <div class="col-md-3 col-6">
-        <div class="card stat-card bg-white">
+    <div class="col-md-2 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value text-warning">{{ total_sold }}</div>
-            <div class="label">販売数</div>
+            <div class="label">販売件数</div>
         </div>
     </div>
-    <div class="col-md-3 col-6">
-        <div class="card stat-card bg-white">
-            <div class="value text-success" id="totalRevenue">{{ "¥{:,.0f}".format(total_revenue) }}</div>
-            <div class="label">売上合計</div>
+    <div class="col-md-2 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
+            <div class="value" style="color:#1a73e8">{{ "¥{:,.0f}".format(total_revenue) }}</div>
+            <div class="label">総売上</div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
+            <div class="value" style="color:#e47111">{{ "¥{:,.0f}".format(total_cost) }}</div>
+            <div class="label">総仕入</div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
+            <div class="value" style="color:#28a745">{{ "¥{:,.0f}".format(net_profit) }}</div>
+            <div class="label">純利益</div>
         </div>
     </div>
 </div>
 
 <div class="row g-3 mb-4">
-    <div class="col-md-4 col-6">
-        <div class="card stat-card bg-white">
-            <div class="value text-info">{{ "¥{:,.0f}".format(total_profit) }}</div>
-            <div class="label">利益合計</div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
+            <div class="value text-danger">{{ "¥{:,.0f}".format(total_shipping_fee) }}</div>
+            <div class="label">🚚 総運費</div>
         </div>
     </div>
-    <div class="col-md-4 col-6">
-        <div class="card stat-card bg-white">
+    <div class="col-md-3 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
+            <div class="value text-danger">{{ "¥{:,.0f}".format(total_platform_fee) }}</div>
+            <div class="label">📊 総佣金</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
+            <div class="value text-danger">{{ "¥{:,.0f}".format(total_other_fee) }}</div>
+            <div class="label">📦 総雑費</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value">
                 {% if total_revenue > 0 %}
-                {{ "{:.0f}%".format(total_profit/total_revenue*100) }}
+                {{ "{:.0f}%".format(net_profit/total_revenue*100) }}
                 {% else %}0%{% endif %}
             </div>
-            <div class="label">利益率</div>
-        </div>
-    </div>
-    <div class="col-md-4 col-6">
-        <div class="card stat-card bg-white" id="stockAlertCard" style="cursor:pointer" onclick="document.location='/inventory'">
-            <div class="value text-danger" id="lowStockCount">{{ low_stock|length }}</div>
-            <div class="label">低在庫アラート (5個以下)</div>
+            <div class="label">純利益率</div>
         </div>
     </div>
 </div>
+
+{% if low_stock %}
+<div class="row g-3 mb-3">
+    <div class="col-12">
+        <div class="card stat-card bg-white border-danger" style="cursor:pointer" onclick="document.location='/inventory'">
+            <div class="d-flex align-items-center justify-content-between p-3">
+                <div>
+                    <h6 class="text-danger mb-1"><i class="bi bi-exclamation-triangle me-2"></i>低在庫アラート (5個以下)</h6>
+                    <span class="fs-4 fw-bold text-danger">{{ low_stock|length }} 件</span>
+                </div>
+                <i class="bi bi-arrow-right-circle fs-3 text-danger"></i>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <div class="row g-3">
     <div class="col-lg-8">

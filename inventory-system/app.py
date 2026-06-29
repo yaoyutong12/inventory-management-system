@@ -568,6 +568,12 @@ def index():
     total_sold = db.execute("SELECT COUNT(*) FROM sales_records").fetchone()[0]
     total_revenue = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records").fetchone()[0]
     total_profit = db.execute("SELECT COALESCE(SUM(profit_amount),0) FROM sales_records").fetchone()[0]
+    total_shipping_fee = db.execute("SELECT COALESCE(SUM(shipping_fee),0) FROM sales_records").fetchone()[0]
+    total_platform_fee = db.execute("SELECT COALESCE(SUM(platform_fee),0) FROM sales_records").fetchone()[0]
+    total_other_fee = db.execute("SELECT COALESCE(SUM(other_fee),0) FROM sales_records").fetchone()[0]
+    total_fees = total_shipping_fee + total_platform_fee + total_other_fee
+    total_cost = db.execute("SELECT COALESCE(SUM(cost_amount),0) FROM sales_records").fetchone()[0]
+    net_profit = total_revenue - total_cost - total_fees
     recent_sales = db.execute("""
         SELECT s.*, p.product_name, p.internal_code
         FROM sales_records s LEFT JOIN products p ON s.product_id = p.id
@@ -590,7 +596,13 @@ def index():
         total_products=total_products, total_in_stock=total_in_stock,
         total_sold=total_sold, total_revenue=total_revenue,
         total_profit=total_profit, recent_sales=recent_sales,
-        low_stock=stock_data)
+        low_stock=stock_data,
+        total_shipping_fee=total_shipping_fee,
+        total_platform_fee=total_platform_fee,
+        total_other_fee=total_other_fee,
+        total_fees=total_fees,
+        total_cost=total_cost,
+        net_profit=net_profit)
 
 
 @app.route('/import')
