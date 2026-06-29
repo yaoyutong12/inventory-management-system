@@ -394,7 +394,7 @@ function startScanner() {
     
     scanner = new Html5Qrcode("scanner-view");
     scanner.start(
-        { facingMode: "environment" },
+        { facingMode: "user" },  // "user" = 前置摄像头（笔记本/手机通用）; "environment" = 后置
         { fps: 10, qrbox: { width: 250, height: 150 } },
         (decodedText) => {
             stopScanner();
@@ -402,13 +402,27 @@ function startScanner() {
         },
         () => {}
     ).catch(err => {
-        const scanView = document.getElementById('scanner-view');
-        scanView.innerHTML = `<div class="alert alert-warning m-2">
-            <i class="bi bi-exclamation-triangle"></i> 
-            ${t('camera_not_available')}
-        </div>`;
-        document.getElementById('startScanBtn').disabled = false;
-        document.getElementById('stopScanBtn').disabled = true;
+        // user 模式失败，尝试不指定 facingMode
+        console.warn('facingMode "user" 失败，尝试默认摄像头:', err);
+        scanner.start(
+            {},  // 不限制摄像头方向
+            { fps: 10, qrbox: { width: 250, height: 150 } },
+            (decodedText) => {
+                stopScanner();
+                lookupBarcode(decodedText);
+            },
+            () => {}
+        ).catch(err2 => {
+            console.error('摄像头启动失败:', err2);
+            const scanView = document.getElementById('scanner-view');
+            scanView.innerHTML = `<div class="alert alert-warning m-2">
+                <i class="bi bi-exclamation-triangle"></i> 
+                ${t('camera_not_available')}<br>
+                <small class="text-muted">カメラが検出されないか、アクセスが拒否されました。ブラウザのカメラ権限を確認してください。</small>
+            </div>`;
+            document.getElementById('startScanBtn').disabled = false;
+            document.getElementById('stopScanBtn').disabled = true;
+        });
     });
 }
 
