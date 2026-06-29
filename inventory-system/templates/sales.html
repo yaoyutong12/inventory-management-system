@@ -657,11 +657,15 @@ async function startSalesScanner() {
     }
 }
 
-// 防重复扫描：购物篮模式下同一码3秒内不重复处理
+// 防重复扫描 + 处理中锁
 let _lastScannedBarcode = '';
 let _lastScanTime = 0;
+let _saleBusy = false;  // 正在处理销售，拒绝新扫码
 
 function onBarcodeFound(barcode, method) {
+    // 处理中锁：上一笔销售还在 API 请求中，拒绝新扫码
+    if (_saleBusy) return;
+    
     if (_cartMode) {
         const now = Date.now();
         if (barcode === _lastScannedBarcode && (now - _lastScanTime) < 3000) {
@@ -690,8 +694,10 @@ function onBarcodeFound(barcode, method) {
         });
     } else {
         // 非购物篮模式：连续扫码自动销售，不停摄像头
+        _saleBusy = true;
         if (scanStatus) scanStatus.textContent = '处理中...';
         scanProduct(barcode).finally(() => {
+            _saleBusy = false;
             if (scanStatus) scanStatus.textContent = '对准条码...';
         });
     }
@@ -750,6 +756,24 @@ async function scanProduct(barcodeOverride) {
     }
 }
 
+// ─── 扫码成功提示音 ──
+function _playBeep() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);  // A5
+        osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.08);  // 上升到 C#6
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.2);
+    } catch(e) { /* 静默失败 */ }
+}
+
 // ─── 连续扫码自动销售（摄像头常开，每扫即售） ──
 async function quickSale() {
     if (!currentProduct) return;
@@ -763,6 +787,7 @@ async function quickSale() {
     });
     
     if (result.success) {
+        _playBeep();
         const name = (result.product_name||'').substring(0, 15);
         showToast(`${name} 已售出 ¥${Number(result.total_amount).toLocaleString()}`, 'success');
         document.getElementById('salesBarcode').value = '';
