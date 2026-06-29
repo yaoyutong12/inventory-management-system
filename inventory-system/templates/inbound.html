@@ -510,6 +510,34 @@ function _startBDLoop(videoEl) {
                 } catch(e) {}
             }
             
+            // ── 策略D: ZXing 引擎（对1D条码最可靠）──
+            let zxingCode = null;
+            if (!results || results.length === 0) {
+                try {
+                    zxingCode = await _zxingDecodeCanvas(canvas);
+                    if (zxingCode) console.log('✅ [ZXing/BD] 原图命中:', zxingCode);
+                } catch(e) {}
+            }
+            if (!zxingCode) {
+                try {
+                    const filtered = _applyBarcodeFilter(canvas);
+                    if (filtered) {
+                        zxingCode = await _zxingDecodeCanvas(filtered);
+                        if (zxingCode) console.log('✅ [ZXing/BD] 二值化命中:', zxingCode);
+                    }
+                } catch(e) {}
+            }
+            
+            // ── ZXing 命中即停 ──
+            if (zxingCode && zxingCode !== lastCode) {
+                console.log('✅ [ZXing/BD]识别成功:', zxingCode);
+                lastCode = zxingCode;
+                _stopBDLoop();
+                stopScanner();
+                lookupBarcode(zxingCode);
+                return;
+            }
+            
             // ── 调试缩略图（每20帧更新一次）──
             if (bdFrameCount % 20 === 0 && debugCanvas) {
                 try {
@@ -534,7 +562,7 @@ function _startBDLoop(videoEl) {
                     lookupBarcode(code);
                 }
             } else if (bdFrameCount % 20 === 0) {
-                console.log('🔍 [BD] ' + bdFrameCount + '帧 (3策略均未命中)');
+                console.log('🔍 [BD] ' + bdFrameCount + '帧 (BD3策略+ZXing2策略均未命中)');
             }
         } catch(e) {
             if (bdFrameCount % 30 === 0) console.warn('[BD] 帧错误:', e.message);
@@ -545,7 +573,7 @@ function _startBDLoop(videoEl) {
     const debugDiv = document.getElementById('bd-debug');
     if (debugDiv) debugDiv.classList.remove('d-none');
     
-    console.log('🚀 BarcodeDetector 3策略循环 (250ms)');
+    console.log('🚀 BarcodeDetector+ZXing 多策略循环 (250ms)');
 }
 
 // ─── 条码专用滤镜：二值化 + 对比度极值拉伸 + 锐化 ───
@@ -594,6 +622,81 @@ function _applyBarcodeFilter(sourceCanvas) {
     } catch(e) {
         return null;
     }
+}
+
+// ─── ZXing 解码引擎（第三方，对1D条码最强） ──
+let _zxingReader = null;
+function _getZxingReader() {
+    if (!_zxingReader && typeof ZXing !== 'undefined') {
+        try {
+            _zxingReader = new ZXing.BrowserMultiFormatReader();
+            // 仅设置常见1D+2D格式（减少误检）
+            _zxingReader.hints = new Map();
+            _zxingReader.hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                ZXing.BarcodeFormat.CODE_128,
+                ZXing.BarcodeFormat.CODE_39,
+                ZXing.BarcodeFormat.CODE_93,
+                ZXing.BarcodeFormat.EAN_13,
+                ZXing.BarcodeFormat.EAN_8,
+                ZXing.BarcodeFormat.UPC_A,
+                ZXing.BarcodeFormat.UPC_E,
+                ZXing.BarcodeFormat.ITF,
+                ZXing.BarcodeFormat.CODABAR,
+                ZXing.BarcodeFormat.QR_CODE,
+                ZXing.BarcodeFormat.DATA_MATRIX,
+            ]);
+            console.log('✅ ZXing 解码器已初始化');
+        } catch(e) {
+            console.warn('ZXing 初始化失敗:', e.message);
+            _zxingReader = null;
+        }
+    }
+    return _zxingReader;
+}
+
+// ZXing 从 video 元素解码单帧
+async function _zxingDecodeVideo(videoEl) {
+    const reader = _getZxingReader();
+    if (!reader) return null;
+    try {
+        const result = await reader.decodeFromVideoElement(videoEl);
+        return result ? result.getText() : null;
+    } catch(e) { return null; }
+}
+
+// ZXing 从 canvas 解码
+async function _zxingDecodeCanvas(canvas) {
+    const reader = _getZxingReader();
+    if (!reader) return null;
+    try {
+        const dataUrl = canvas.toDataURL('image/png');
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = dataUrl;
+        });
+        const result = await reader.decodeFromImageElement(img);
+        return result ? result.getText() : null;
+    } catch(e) { return null; }
+}
+
+// ZXing 从 File 解码
+async function _zxingDecodeFile(file) {
+    const reader = _getZxingReader();
+    if (!reader) return null;
+    try {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = url;
+        });
+        const result = await _zxingReader.decodeFromImageElement(img);
+        URL.revokeObjectURL(url);
+        return result ? result.getText() : null;
+    } catch(e) { return null; }
 }
 
 function _stopBDLoop() {
@@ -857,7 +960,39 @@ async function detectFromImageFile(event) {
             }
         }
         
-        // ── 策略2: 图像预处理 + Html5Qrcode ──
+        // ── 策略2: ZXing 引擎解码（对1D条码最可靠）──
+        if (!decodedText && typeof ZXing !== 'undefined') {
+            console.log('🖼️ [画像] 試行 ZXing...');
+            try {
+                const zxResult = await _zxingDecodeFile(file);
+                if (zxResult) {
+                    decodedText = zxResult;
+                    methodUsed = 'ZXing(原图)';
+                    console.log('✅ [画像] ZXing成功:', decodedText);
+                }
+            } catch(e) {
+                console.warn('🖼️ ZXing(原图)失敗:', e.message);
+            }
+            // ZXing + 预处理图
+            if (!decodedText) {
+                try {
+                    const processedBlob = await preprocessImage(file);
+                    if (processedBlob) {
+                        const processedFile = new File([processedBlob], 'p.png', { type: 'image/png' });
+                        const zxResult2 = await _zxingDecodeFile(processedFile);
+                        if (zxResult2) {
+                            decodedText = zxResult2;
+                            methodUsed = 'ZXing(二值化)';
+                            console.log('✅ [画像] ZXing二值化成功:', decodedText);
+                        }
+                    }
+                } catch(e) {
+                    console.warn('🖼️ ZXing(二值化)失敗:', e.message);
+                }
+            }
+        }
+        
+        // ── 策略3: Html5Qrcode scanFile ──
         if (!decodedText) {
             console.log('🖼️ [画像] 試行 Html5Qrcode scanFile...');
             
@@ -1022,8 +1157,25 @@ async function captureAndDetect() {
         }
         
         if (!found) {
-            // 策略2：Html5Qrcode scanFile — 原图 + 预处理图
-            console.log('📷 BarcodeDetector未找到，使用 Html5Qrcode fallback');
+            // ── 策略2: ZXing 单帧解码（比Html5Qrcode更擅长1D条码）──
+            console.log('📷 試行 ZXing 单帧解码...');
+            try {
+                const zxResult = await _zxingDecodeVideo(videoEl);
+                if (zxResult) {
+                    console.log('✅ [ZXing/撮影] 成功:', zxResult);
+                    stopScanner();
+                    showToast('✅ 識別成功 (ZXing): ' + zxResult, 'success');
+                    lookupBarcode(zxResult);
+                    found = true;
+                }
+            } catch(e) {
+                console.warn('[ZXing/撮影] 失敗:', e.message);
+            }
+        }
+        
+        if (!found) {
+            // 策略3：Html5Qrcode scanFile — 原图 + 预处理图
+            console.log('📷 ZXing未命中，使用 Html5Qrcode fallback');
             
             // 抓取一幀高清畫面
             const captureCanvas = document.createElement('canvas');
