@@ -294,6 +294,12 @@ def get_db():
 def close_db(e):
     db = g.pop('db', None)
     if db:
+        # PostgreSQL autocommit=False, 需要在关闭前提交以免回滚
+        if hasattr(db, 'commit'):
+            try:
+                db.commit()
+            except Exception:
+                pass
         db.close()
 
 
@@ -1351,6 +1357,10 @@ def api_update_product(product_id):
         sql = f"UPDATE products SET {', '.join(updated_fields)} WHERE id=?"
         db.execute(sql, updated_values)
         app.logger.info(f'[ProductUpdate] Product {product_id}: updated fields: {updated_fields}')
+
+    # PostgreSQL autocommit=False，必须显式提交
+    if hasattr(db, 'commit'):
+        db.commit()
 
     resp = {'success': True}
     if photo_filename:
