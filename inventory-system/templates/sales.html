@@ -182,30 +182,38 @@
         </div>
     </div>
     
-    <!-- Sales History with Platform Filter -->
+    <!-- Sales History (Collapsible) -->
     <div class="col-lg-6">
         <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-2" style="cursor:pointer" 
+                 data-bs-toggle="collapse" data-bs-target="#salesHistoryBody" aria-expanded="false">
+                <h5 class="card-title mb-0">
                     <i class="bi bi-clock-history me-2"></i>销售记录
-                    <small class="text-muted ms-2">（可补打小票）</small>
+                    <span class="badge bg-secondary ms-2" id="salesHistoryCount">0件</span>
                 </h5>
-                <!-- Platform Filter -->
-                <div class="mb-3 d-flex gap-2 align-items-center">
-                    <label class="form-label small mb-0">筛选平台:</label>
-                    <select class="form-select form-select-sm" id="platformFilter" onchange="loadSalesHistory()" style="width:auto;">
-                        <option value="">全部</option>
-                        <option value="physical">🏪 实体店</option>
-                        <option value="mercari">🛒 煤炉</option>
-                        <option value="yahoo">🟨 雅虎</option>
-                        <option value="rakuten">🛍️ 乐天</option>
-                        <option value="other">📦 其他</option>
-                    </select>
-                    <label class="form-label small mb-0 ms-2">日期:</label>
-                    <input type="date" class="form-control form-control-sm" id="salesDateFilter" onchange="loadSalesHistory()" style="width:auto;">
-                </div>
-                <div style="max-height:550px;overflow-y:auto" id="salesHistory">
-                    <p class="text-muted text-center py-4">加载中...</p>
+                <i class="bi bi-chevron-down" id="salesHistoryChevron"></i>
+            </div>
+            <div class="collapse" id="salesHistoryBody">
+                <div class="card-body pt-0">
+                    <!-- Platform Filter -->
+                    <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
+                        <label class="form-label small mb-0">筛选:</label>
+                        <select class="form-select form-select-sm" id="platformFilter" onchange="loadSalesHistory()" style="width:auto;">
+                            <option value="">全部平台</option>
+                            <option value="physical">🏪 实体店</option>
+                            <option value="mercari">🛒 煤炉</option>
+                            <option value="yahoo">🟨 雅虎</option>
+                            <option value="rakuten">🛍️ 乐天</option>
+                            <option value="other">📦 其他</option>
+                        </select>
+                        <input type="date" class="form-control form-control-sm" id="salesDateFilter" onchange="loadSalesHistory()" style="width:auto;">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('platformFilter').value='';document.getElementById('salesDateFilter').value='';loadSalesHistory();">
+                            <i class="bi bi-x-circle"></i> 清除筛选
+                        </button>
+                    </div>
+                    <div style="max-height:500px;overflow-y:auto" id="salesHistory">
+                        <p class="text-muted text-center py-4">点击展开查看销售记录</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1229,6 +1237,13 @@ async function loadSalesHistory() {
             `).join('');
     } catch (err) {
         console.error('加载销售记录失败:', err);
+    } finally {
+        // Update header badge with total count
+        const countEl = document.getElementById('salesHistoryCount');
+        if (countEl) {
+            const visibleRows = document.querySelectorAll('#salesHistory > div');
+            countEl.textContent = visibleRows.length + '件';
+        }
     }
 }
 
@@ -1293,7 +1308,17 @@ async function photoScanBarcode(input) {
 // ─── Init ─────────────────────────────
 document.getElementById('salesDateFilter').value = new Date().toISOString().split('T')[0];
 
-loadSalesHistory();
+// Sales history collapse toggle — auto-load on expand
+const salesHistoryBody = document.getElementById('salesHistoryBody');
+const salesHistoryChevron = document.getElementById('salesHistoryChevron');
+salesHistoryBody.addEventListener('show.bs.collapse', () => {
+    salesHistoryChevron.classList.replace('bi-chevron-down', 'bi-chevron-up');
+    loadSalesHistory();
+});
+salesHistoryBody.addEventListener('hide.bs.collapse', () => {
+    salesHistoryChevron.classList.replace('bi-chevron-up', 'bi-chevron-down');
+});
+
 loadTodaySummary();
 
 // Auto-focus barcode input
