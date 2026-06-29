@@ -606,7 +606,7 @@ async function loadSalesHistory() {
 
 async function loadTodaySummary() {
     try {
-        const res = await fetch('/api/sales/report?period=day');
+        const res = await fetch('/api/sales/today');
         const data = await res.json();
         
         document.getElementById('todayCount').textContent = data.total_count || 0;

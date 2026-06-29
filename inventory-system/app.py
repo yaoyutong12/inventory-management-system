@@ -2526,19 +2526,45 @@ def api_sales_today():
     today = jst_today()
     if USE_POSTGRES:
         summary = db.execute("""
-            SELECT COUNT(*) as count,
-                   COALESCE(SUM(total_amount),0) as revenue,
-                   COALESCE(SUM(profit_amount),0) as profit
+            SELECT COUNT(*) as total_count,
+                   COALESCE(SUM(total_amount),0) as total_revenue,
+                   COALESCE(SUM(profit_amount),0) as total_profit
             FROM sales_records WHERE DATE(sale_date + INTERVAL '9 hours') = %s
         """, (today,)).fetchone()
+        platform_stats_rows = db.execute("""
+            SELECT 
+                COALESCE(s.platform, '未分類') as platform,
+                COUNT(*) as count,
+                COALESCE(SUM(s.total_amount),0) as revenue
+            FROM sales_records s
+            WHERE DATE(s.sale_date + INTERVAL '9 hours') = %s
+            GROUP BY s.platform
+        """, (today,)).fetchall()
     else:
         summary = db.execute("""
-            SELECT COUNT(*) as count,
-                   COALESCE(SUM(total_amount),0) as revenue,
-                   COALESCE(SUM(profit_amount),0) as profit
+            SELECT COUNT(*) as total_count,
+                   COALESCE(SUM(total_amount),0) as total_revenue,
+                   COALESCE(SUM(profit_amount),0) as total_profit
             FROM sales_records WHERE date(sale_date, '+9 hours') = ?
         """, (today,)).fetchone()
-    return jsonify(dict(summary))
+        platform_stats_rows = db.execute("""
+            SELECT 
+                COALESCE(s.platform, '未分類') as platform,
+                COUNT(*) as count,
+                COALESCE(SUM(s.total_amount),0) as revenue
+            FROM sales_records s
+            WHERE date(s.sale_date, '+9 hours') = ?
+            GROUP BY s.platform
+        """, (today,)).fetchall()
+    
+    platform_stats = {}
+    for row in platform_stats_rows:
+        d = dict(row)
+        platform_stats[d['platform']] = {'count': d['count'], 'revenue': d['revenue']}
+    
+    result = dict(summary)
+    result['platform_stats'] = platform_stats
+    return jsonify(result)
 
 
 def generate_receipt_html(sale, product):
