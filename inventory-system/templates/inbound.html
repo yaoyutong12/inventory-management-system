@@ -96,6 +96,13 @@
                                 <i class="bi bi-camera"></i> 撮影して識別
                             </button>
                         </div>
+                        <div class="d-grid">
+                            <input type="file" id="imageBarcodeInput" accept="image/*" capture="environment" 
+                                   style="display:none" onchange="detectFromImageFile(event)">
+                            <button class="btn btn-outline-warning" onclick="document.getElementById('imageBarcodeInput').click()">
+                                <i class="bi bi-image"></i> 画像で識別（写真アップロード）
+                            </button>
+                        </div>
                         <button class="btn btn-outline-secondary" id="stopScanBtn" onclick="stopScanner()" disabled>
                             <i class="bi bi-stop-circle"></i> 停止
                         </button>
@@ -566,6 +573,53 @@ async function stopScanner() {
     document.getElementById('captureScanBtn').disabled = false;
 }
 
+// ─── 画像アップロードで識別（最も信頼性が高い） ──
+async function detectFromImageFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    showToast('🔍 画像解析中...', 'info');
+    
+    try {
+        // 用独立 Html5Qrcode 实例扫描图片文件
+        const helperEl = document.getElementById('scan-helper');
+        helperEl.innerHTML = '';
+        const tmpScanner = new Html5Qrcode("scan-helper");
+        
+        let decodedText = null;
+        try {
+            decodedText = await tmpScanner.scanFile(file, true);
+        } catch(e) {
+            console.warn('scanFile true失敗, 重試 scanFile false:', e.message);
+            try {
+                decodedText = await tmpScanner.scanFile(file, false);
+            } catch(e2) {
+                console.warn('scanFile false亦失敗:', e2.message);
+            }
+        }
+        
+        try { await tmpScanner.clear(); } catch(_) {}
+        helperEl.innerHTML = '';
+        
+        if (decodedText) {
+            console.log('✅ 画像識別成功:', decodedText);
+            showToast('✅ 識別成功: ' + decodedText, 'success');
+            lookupBarcode(decodedText);
+        } else {
+            showToast('❌ 画像から条码を認識できませんでした。条码がはっきり映った写真をお試しください', 'warning');
+        }
+    } catch(e) {
+        console.error('画像識別エラー:', e);
+        showToast('識別失敗: ' + (e.message || e), 'danger');
+    }
+    
+    // 重置 input 以便重新選擇同一文件
+    event.target.value = '';
+    } finally {
+        captureBtn.disabled = false;
+    }
+}
+
 // ─── 撮影して識別（備用モード） ──────────────
 async function captureAndDetect() {
     const statusText = document.getElementById('scanStatusText');
@@ -599,9 +653,10 @@ async function captureAndDetect() {
             return;
         }
         
-        // 策略：嘗試原生 BarcodeDetector（Chrome 內建，最穩）
+        console.log('📷 视频尺寸:', videoEl.videoWidth, 'x', videoEl.videoHeight);
         let found = false;
         
+        // 策略1：原生 BarcodeDetector（Chrome，最快）
         if ('BarcodeDetector' in window) {
             console.log('📷 使用 BarcodeDetector API');
             const detector = new BarcodeDetector({
@@ -609,7 +664,6 @@ async function captureAndDetect() {
                           'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code', 'data_matrix']
             });
             
-            // 嘗試原畫面 + 鏡像翻轉
             for (const flipped of [false, true]) {
                 const canvas = document.createElement('canvas');
                 canvas.width = videoEl.videoWidth;
@@ -623,9 +677,10 @@ async function captureAndDetect() {
                 
                 try {
                     const results = await detector.detect(canvas);
+                    console.log('BarcodeDetector結果(' + (flipped?'鏡像':'原画') + '):', results ? results.length : 0, '個');
                     if (results && results.length > 0) {
                         const r = results[0];
-                        console.log('✅ BarcodeDetector成功:', r.rawValue, '(flipped=' + flipped + ')');
+                        console.log('✅ BarcodeDetector成功:', r.rawValue);
                         stopScanner();
                         showToast('✅ 識別成功: ' + r.rawValue, 'success');
                         lookupBarcode(r.rawValue);
@@ -633,48 +688,64 @@ async function captureAndDetect() {
                         break;
                     }
                 } catch(e) {
-                    console.warn('BarcodeDetector拋出錯誤(flipped=' + flipped + '):', e);
+                    console.warn('BarcodeDetector錯誤(' + (flipped?'鏡像':'原画') + '):', e);
                 }
             }
         }
         
         if (!found) {
-            // 回退：用獨立 Html5Qrcode 實例掃描截圖（不與主 scanner 衝突）
-            console.log('📷 使用 Html5Qrcode fallback 解析截圖');
-            const blob = await new Promise(resolve => {
-                const c = document.createElement('canvas');
-                c.width = videoEl.videoWidth;
-                c.height = videoEl.videoHeight;
-                const cx = c.getContext('2d');
-                cx.drawImage(videoEl, 0, 0);
-                c.toBlob(resolve, 'image/png');
-            });
+            // 策略2：Html5Qrcode scanFile — 先試 showImage=true 再試 false
+            console.log('📷 BarcodeDetector未找到，使用 Html5Qrcode fallback');
             
-            if (blob) {
-                const file = new File([blob], 'capture.png', { type: 'image/png' });
-                // 使用隱藏的 #scan-helper 作為容器（傳 ID 字串而非 DOM 元素）
-                const helperEl = document.getElementById('scan-helper');
-                const tmpScanner = new Html5Qrcode("scan-helper");
+            // 抓取一幀高清畫面
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = videoEl.videoWidth;
+            captureCanvas.height = videoEl.videoHeight;
+            const cx = captureCanvas.getContext('2d');
+            cx.drawImage(videoEl, 0, 0);
+            
+            const blob = await new Promise(resolve => captureCanvas.toBlob(resolve, 'image/png'));
+            if (!blob) {
+                showToast('画像取得失敗', 'danger');
+                captureBtn.disabled = false;
+                return;
+            }
+            
+            const file = new File([blob], 'capture.png', { type: 'image/png' });
+            
+            // 用獨立 Html5Qrcode 掃描（傳 ID 字串）
+            const helperEl = document.getElementById('scan-helper');
+            helperEl.innerHTML = '';
+            const tmpScanner = new Html5Qrcode("scan-helper");
+            
+            let decodedText = null;
+            try {
+                decodedText = await tmpScanner.scanFile(file, true);
+                console.log('scanFile(true) 結果:', decodedText);
+            } catch(e) {
+                console.warn('scanFile(true) 失敗:', e.message);
                 try {
-                    const decodedText = await tmpScanner.scanFile(file, false);
-                    if (decodedText) {
-                        console.log('✅ scanFile成功:', decodedText);
-                        stopScanner();
-                        showToast('✅ 識別成功: ' + decodedText, 'success');
-                        lookupBarcode(decodedText);
-                        found = true;
-                    }
+                    decodedText = await tmpScanner.scanFile(file, false);
+                    console.log('scanFile(false) 結果:', decodedText);
                 } catch(e2) {
-                    console.warn('scanFile失敗:', e2.message);
+                    console.warn('scanFile(false) 亦失敗:', e2.message);
                 }
-                try { await tmpScanner.clear(); } catch(_) {}
-                // 清理 helper 內部殘留
-                try { helperEl.innerHTML = ''; } catch(_) {}
+            }
+            
+            try { await tmpScanner.clear(); } catch(_) {}
+            helperEl.innerHTML = '';
+            
+            if (decodedText) {
+                console.log('✅ 撮影識別成功:', decodedText);
+                stopScanner();
+                showToast('✅ 識別成功: ' + decodedText, 'success');
+                lookupBarcode(decodedText);
+                found = true;
             }
         }
         
         if (!found) {
-            showToast('❌ 条码が見つかりません。もう一度お試しください', 'warning');
+            showToast('❌ 条码が見つかりません。「画像で識別」ボタンで写真をアップロードしてください', 'warning');
             captureBtn.disabled = false;
             statusText.textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
         }
