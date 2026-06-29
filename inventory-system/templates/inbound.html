@@ -3,168 +3,61 @@
 
 {% block extra_css %}
 <style>
-    .method-card {
-        transition: all 0.3s ease;
-    }
-    .method-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    .method-card.active {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    /* 扫码指示器闪烁 */
-    .pulse-badge {
-        animation: pulse-glow 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse-glow {
-        0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.4); }
-        50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(25, 135, 84, 0); }
-    }
+    .ai-candidate:hover { background: #f8f9fa; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="row g-3">
-    <!-- Left Panel: Input Mode -->
+    <!-- Left Panel: Input -->
     <div class="col-lg-5">
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title mb-3">
-                    <i class="bi bi-box-arrow-in-down me-2"></i><span data-i18n="select_method">选择入库方法</span>
+                    <i class="bi bi-box-arrow-in-down me-2"></i>入库
                 </h5>
                 
-                <!-- Method Selection Cards -->
-                <div class="row g-2 mb-4">
-                    <div class="col-4">
-                        <div class="card h-100 method-card active" id="scanCard" onclick="switchMethod('scan')" 
-                             style="cursor:pointer;border:3px solid #0d6efd;transition:all 0.3s;border-color:#0d6efd !important">
-                            <div class="card-body text-center p-3">
-                                <i class="bi bi-camera-video" style="font-size:2.5rem;color:#0d6efd"></i>
-                                <div class="fw-bold mt-2" style="font-size:0.9rem">📷 <span data-i18n="scan_camera">扫码</span></div>
-                                <div class="small text-muted mt-1"><span data-i18n="scan_mode_short">摄像头读取</span></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="card h-100 method-card" id="photoCard" onclick="switchMethod('photo')" 
-                             style="cursor:pointer;border:3px solid #198754;transition:all 0.3s;border-color:#dee2e6">
-                            <div class="card-body text-center p-3">
-                                <i class="bi bi-camera" style="font-size:2.5rem;color:#198754"></i>
-                                <div class="fw-bold mt-2" style="font-size:0.9rem">🤖 AI实物识别</div>
-                                <div class="small text-muted mt-1">AIで自動マッチ</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="card h-100 method-card" id="manualCard" onclick="switchMethod('manual')" 
-                             style="cursor:pointer;border:3px solid #6c757d;transition:all 0.3s;border-color:#dee2e6">
-                            <div class="card-body text-center p-3">
-                                <i class="bi bi-keyboard" style="font-size:2.5rem;color:#6c757d"></i>
-                                <div class="fw-bold mt-2" style="font-size:0.9rem">⌨️ <span data-i18n="manual_input">手动输入</span></div>
-                                <div class="small text-muted mt-1"><span data-i18n="manual_mode_short">输入号码</span></div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Primary: Manual Input -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">条码号码 <span class="text-danger">*</span></label>
+                    <input class="form-control form-control-lg" id="manualBarcodeInput" 
+                           placeholder="直接输入条码下方的数字，例如: 5000-2301-7896"
+                           autofocus>
+                    <div class="form-text">条码上印的数字直接输入即可，不需要扫码</div>
                 </div>
-
-                <!-- Scan Mode Panel -->
-                <div id="scanPanel" class="method-panel">
-                    <div class="alert alert-primary" id="scanModeHint">
-                        <i class="bi bi-info-circle-fill"></i> 
-                        <strong>バーコード/QR対応：</strong>
-                        <span class="small" id="scanStatusText">JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください</span>
-                    </div>
-                    <div id="scanner-view" style="width:100%;min-height:250px" class="border rounded d-flex align-items-center justify-content-center bg-light mb-2">
-                        <div class="text-center text-muted">
-                            <i class="bi bi-camera-video" style="font-size:4rem"></i>
-                            <div class="mt-2"><span data-i18n="camera_preview">摄像头预览</span></div>
-                            <div class="small"><span data-i18n="click_start_scan">点击"扫码开始"</span></div>
-                        </div>
-                    </div>
-                    <!-- 隱藏容器，用於撮影識別時的獨立 Html5Qrcode 實例 -->
-                    <div id="scan-helper"></div>
-                    <!-- BarcodeDetector 调试缩略图 — 显示扫描器实际看到的内容 -->
-                    <div id="bd-debug" class="text-center mb-1 d-none">
-                        <canvas id="bd-debug-canvas" style="max-width:180px; border:1px solid #ccc; border-radius:6px;"></canvas>
-                        <div class="small text-muted">📷 スキャナーが実際に見ている画像</div>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div id="scanIndicator" class="d-none">
-                            <span class="badge bg-success pulse-badge">🔍 スキャン中... 条码を枠内に入れてください</span>
-                        </div>
-                        <button class="btn btn-sm btn-outline-dark d-none" id="torchBtn" onclick="toggleTorch()" title="ライトON/OFF（暗い場所で有効）">
-                            <i class="bi bi-lightbulb"></i> ライト
-                        </button>
-                    </div>
-                    <div class="d-grid gap-2">
-                        <div class="btn-group" role="group">
-                            <button class="btn btn-primary btn-lg" id="startScanBtn" onclick="startScanner()">
-                                <i class="bi bi-camera-video"></i> 連続スキャン
-                            </button>
-                            <button class="btn btn-success btn-lg" id="captureScanBtn" onclick="captureAndDetect()">
-                                <i class="bi bi-camera"></i> 撮影して識別
-                            </button>
-                        </div>
-                        <div class="d-grid">
-                            <input type="file" id="imageBarcodeInput" accept="image/*" capture="environment" 
-                                   style="display:none" onchange="detectFromImageFile(event)">
-                            <button class="btn btn-outline-warning" onclick="document.getElementById('imageBarcodeInput').click()">
-                                <i class="bi bi-image"></i> 画像で識別（写真アップロード）
-                            </button>
-                        </div>
-                        <div class="d-grid mt-2">
-                            <input type="file" id="aiBarcodeInput" accept="image/*" capture="environment"
-                                   style="display:none" onchange="aiReadBarcode(event)">
-                            <button class="btn btn-outline-danger" onclick="document.getElementById('aiBarcodeInput').click()">
-                                <i class="bi bi-robot"></i> AIで読み取り（Gemini Vision）
-                            </button>
-                        </div>
-                        <button class="btn btn-outline-secondary" id="stopScanBtn" onclick="stopScanner()" disabled>
-                            <i class="bi bi-stop-circle"></i> 停止
-                        </button>
-                    </div>
+                <button class="btn btn-primary btn-lg w-100 mb-3" onclick="manualInbound()">
+                    <i class="bi bi-search"></i> 号码匹配并入库
+                </button>
+                
+                <!-- Secondary: AI Photo Read -->
+                <div class="text-center mb-2">
+                    <span class="text-muted small">—— 或 ——</span>
                 </div>
-
-                <!-- Photo Mode Panel (AI实物识别) -->
-                <div id="photoPanel" class="method-panel d-none">
-                    <div class="alert alert-success" id="photoModeHint">
-                        <i class="bi bi-info-circle-fill"></i> 
-                        <strong>AI实物识别模式：</strong>拍商品照片，AI自动分析实物，匹配进货清单中未入库的商品
-                    </div>
-                    <div class="border rounded p-4 bg-light text-center" id="photoDropZone" style="min-height:200px">
-                        <i class="bi bi-cloud-upload" style="font-size:4rem;color:#999"></i>
-                        <p class="mt-3 mb-1">拍商品实物照片上传</p>
-                        <p class="text-muted small">AI会自动识别商品类型并匹配清单</p>
-                        <input type="file" id="photoInput" accept="image/*" capture="environment" 
-                               class="form-control" onchange="uploadAIPhoto()" style="display:none">
-                        <button class="btn btn-success btn-lg mt-2" onclick="document.getElementById('photoInput').click()">
-                            <i class="bi bi-camera"></i> 📸 拍照上传（AI识别实物）
-                        </button>
-                        <div class="mt-3">
-                            <div id="photoPreview" class="d-none">
-                                <img id="photoImg" class="border rounded shadow" style="max-width:100%;max-height:250px">
-                            </div>
-                        </div>
-                    </div>
-                    <div id="photoResult" class="mt-3"></div>
-                </div>
-
-                <!-- Manual Mode Panel -->
-                <div id="manualPanel" class="method-panel d-none">
-                    <div class="alert alert-secondary" id="manualModeHint">
-                        <i class="bi bi-info-circle-fill"></i> 
-                        <strong><span data-i18n="manual_mode_label">手动输入模式</span>：</strong><span data-i18n="manual_mode_desc">键盘输入条形码号码（当摄像头无法使用时）</span>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold" data-i18n-html="tracking_no">追踪号码（条形码号码）<span class="text-danger">*</span></label>
-                        <input class="form-control form-control-lg" id="manualBarcodeInput" data-i18n-ph="tracking_placeholder" placeholder="例: 5277279290092310244234">
-                        <div class="form-text" data-i18n-hint="enter_tracking_hint">输入外包装条形码下方的号码</div>
-                    </div>
-                    <button class="btn btn-secondary btn-lg w-100" onclick="manualInbound()">
-                        <i class="bi bi-search"></i> <span data-i18n="match_inbound">号码匹配并入库</span>
+                <div class="d-grid gap-2">
+                    <input type="file" id="aiBarcodeInput" accept="image/*" capture="environment"
+                           style="display:none" onchange="aiReadBarcode(event)">
+                    <button class="btn btn-outline-danger" onclick="document.getElementById('aiBarcodeInput').click()">
+                        <i class="bi bi-robot"></i> 拍条码照片 AI 读数字
                     </button>
                 </div>
+                
+                <hr>
+                
+                <!-- AI实物识别 -->
+                <h6><i class="bi bi-camera me-1"></i> AI 实物识别（拍照匹配未入库商品）</h6>
+                <div class="border rounded p-3 bg-light text-center" id="photoDropZone" style="min-height:100px">
+                    <input type="file" id="photoInput" accept="image/*" capture="environment" 
+                           class="form-control" onchange="uploadAIPhoto()" style="display:none">
+                    <button class="btn btn-success" onclick="document.getElementById('photoInput').click()">
+                        <i class="bi bi-camera"></i> 拍商品照片 AI 识别
+                    </button>
+                    <div class="mt-2">
+                        <div id="photoPreview" class="d-none">
+                            <img id="photoImg" class="border rounded shadow" style="max-width:100%;max-height:180px">
+                        </div>
+                    </div>
+                </div>
+                <div id="photoResult" class="mt-3"></div>
             </div>
         </div>
     </div>
@@ -259,7 +152,7 @@
                         </select>
                     </div>
 
-                    <!-- 商品照片上传（所有模式通用） -->
+                    <!-- 商品照片上传 -->
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-primary">
                             <i class="bi bi-camera me-1"></i>商品照片（选填）
@@ -362,14 +255,7 @@
                 <!-- Initial state -->
                 <div id="initialState" class="text-center py-5">
                     <i class="bi bi-upc-scan" style="font-size:3rem;color:#ccc"></i>
-                    <p class="text-muted mt-3"><span data-i18n="scan_or_input">请扫描条形码或输入追踪号码</span></p>
-                    <div class="mt-2 small text-muted">
-                        <div class="d-flex justify-content-center gap-3">
-                            <span><i class="bi bi-camera-video"></i> <span data-i18n="scan_camera">扫码</span></span>
-                            <span><i class="bi bi-camera"></i> <span data-i18n="photo_recog">拍照识别</span></span>
-                            <span><i class="bi bi-keyboard"></i> <span data-i18n="manual_input">手动输入</span></span>
-                        </div>
-                    </div>
+                    <p class="text-muted mt-3">输入条码号码并按「号码匹配并入库」</p>
                 </div>
             </div>
         </div>
@@ -387,934 +273,112 @@
 
 {% block extra_js %}
 <script>
-let scanner = null;
+// ─── State ────────────────────────────────────
 let currentSupplierItem = null;
-let _unmatchedItems = []; // cache for manual search filtering
-let _currentPhotoBase64 = null; // store photo taken during AI recognition
-let currentMethod = 'scan';
+let _unmatchedItems = [];
+let _currentPhotoBase64 = null;
+let _formPhotoBase64 = null;
 
-// ─── Method Switching (Card-based) ─────────────
-function switchMethod(method) {
-    currentMethod = method;
-    
-    // Update card styles
-    ['scan', 'photo', 'manual'].forEach(m => {
-        const card = document.getElementById(m + 'Card');
-        if (card) {
-            if (m === method) {
-                card.style.borderColor = getMethodColor(m);
-                card.classList.add('shadow');
-                card.classList.add('active');
-            } else {
-                card.style.borderColor = '#dee2e6';
-                card.classList.remove('shadow');
-                card.classList.remove('active');
-            }
-        }
-    });
-    
-    // Show/hide panels
-    document.getElementById('scanPanel').classList.toggle('d-none', method !== 'scan');
-    document.getElementById('photoPanel').classList.toggle('d-none', method !== 'photo');
-    document.getElementById('manualPanel').classList.toggle('d-none', method !== 'manual');
-}
-
-function getMethodColor(method) {
-    return { scan: '#0d6efd', photo: '#198754', manual: '#6c757d' }[method] || '#6c757d';
-}
-
-// ─── Helper: get translation string ──────────────
+// ─── Helpers ──────────────────────────────────
 function t(key) {
-    const lang = translations[currentLang] || translations.ja;
-    return lang[key] || key;
+    const el = document.querySelector(`[data-i18n="${key}"]`);
+    return el ? el.textContent : key;
 }
 
-// ─── 判断设备类型，决定摄像头优先级 ──────
-function isMobileDevice() {
-    return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) 
-        || ('ontouchstart' in window && window.innerWidth < 768);
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ─── 手电筒控制 ─────────────────────────────
-let _videoStream = null;
-let _bdLoopTimer = null;  // BarcodeDetector 并行扫描循环定时器
-async function toggleTorch() {
-    if (!_videoStream) return;
-    try {
-        const track = _videoStream.getVideoTracks()[0];
-        const capabilities = track.getCapabilities();
-        if (!capabilities.torch) {
-            showToast('⚠️ このデバイスはライト（トーチ）に対応していません', 'warning');
-            return;
-        }
-        const current = track.getConstraints().advanced?.[0]?.torch || false;
-        await track.applyConstraints({
-            advanced: [{ torch: !current }]
-        });
-        const btn = document.getElementById('torchBtn');
-        btn.classList.toggle('btn-warning', !current);
-        btn.classList.toggle('btn-outline-dark', current);
-        showToast(!current ? '💡 ライトON' : '💡 ライトOFF', 'info');
-    } catch(e) {
-        showToast('ライト制御エラー: ' + e.message, 'danger');
-    }
+function createElementFromHTML(htmlString) {
+    const div = document.createElement('div');
+    div.innerHTML = htmlString.trim();
+    return div.firstChild;
 }
 
-// ─── BarcodeDetector 并行连续扫描循环（蓝色按钮专用）──
-// html5-qrcode 对1D条码识别率低，Chrome原生BarcodeDetector更强
-// 两个引擎同时运行，谁先识别到就停止
-let _bdDetector = null;
-function _startBDLoop(videoEl) {
-    try {
-        _bdDetector = new BarcodeDetector({
-            formats: ['code_128', 'ean_13', 'ean_8', 'code_39', 'code_93',
-                      'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code', 'data_matrix']
-        });
-    } catch(e) {
-        console.warn('BarcodeDetector 初始化失敗:', e.message);
+// ─── Primary: Manual Barcode Input ────────────
+async function manualInbound() {
+    const barcode = document.getElementById('manualBarcodeInput').value.trim();
+    if (!barcode) {
+        showToast('请先输入条码号码', 'warning');
         return;
     }
-    
-    let bdFrameCount = 0;
-    const canvas = document.createElement('canvas');
-    const debugCanvas = document.getElementById('bd-debug-canvas');
-    let lastCode = ''; // 防止重复识别
-    
-    _bdLoopTimer = setInterval(async () => {
-        if (!videoEl || videoEl.readyState < 2 || !_bdDetector) return;
-        
-        try {
-            const vw = videoEl.videoWidth || 1280;
-            const vh = videoEl.videoHeight || 720;
-            if (vw < 100) return; // 视频未就绪
-            
-            canvas.width = vw;
-            canvas.height = vh;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(videoEl, 0, 0);
-            
-            bdFrameCount++;
-            
-            // ── 策略A: 原图检测 ──
-            let results = await _bdDetector.detect(canvas);
-            
-            // ── 策略B: 预处理图检测（二值化+锐化）──
-            if (!results || results.length === 0) {
-                try {
-                    const processed = _applyBarcodeFilter(canvas);
-                    if (processed) results = await _bdDetector.detect(processed);
-                } catch(e) {}
-            }
-            
-            // ── 策略C: 中心裁剪（条码通常在上半部分）──
-            if (!results || results.length === 0) {
-                try {
-                    const cropCanvas = document.createElement('canvas');
-                    cropCanvas.width = vw;
-                    cropCanvas.height = Math.round(vh * 0.5);
-                    cropCanvas.getContext('2d').drawImage(canvas, 0, 0);
-                    results = await _bdDetector.detect(cropCanvas);
-                } catch(e) {}
-            }
-            
-            // ── 策略D: ZXing 引擎（对1D条码最可靠）──
-            let zxingCode = null;
-            if (!results || results.length === 0) {
-                try {
-                    zxingCode = await _zxingDecodeCanvas(canvas);
-                    if (zxingCode) console.log('✅ [ZXing/BD] 原图命中:', zxingCode);
-                } catch(e) {}
-            }
-            if (!zxingCode) {
-                try {
-                    const filtered = _applyBarcodeFilter(canvas);
-                    if (filtered) {
-                        zxingCode = await _zxingDecodeCanvas(filtered);
-                        if (zxingCode) console.log('✅ [ZXing/BD] 二值化命中:', zxingCode);
-                    }
-                } catch(e) {}
-            }
-            
-            // ── ZXing 命中即停 ──
-            if (zxingCode && zxingCode !== lastCode) {
-                console.log('✅ [ZXing/BD]识别成功:', zxingCode);
-                lastCode = zxingCode;
-                _stopBDLoop();
-                stopScanner();
-                lookupBarcode(zxingCode);
-                return;
-            }
-            
-            // ── 调试缩略图（每20帧更新一次）──
-            if (bdFrameCount % 20 === 0 && debugCanvas) {
-                try {
-                    const thumb = document.createElement('canvas');
-                    thumb.width = 200;
-                    thumb.height = Math.round(200 * vh / vw);
-                    thumb.getContext('2d').drawImage(canvas, 0, 0, thumb.width, thumb.height);
-                    const ctx2 = debugCanvas.getContext('2d');
-                    debugCanvas.width = 200;
-                    debugCanvas.height = thumb.height;
-                    ctx2.drawImage(thumb, 0, 0);
-                } catch(_) {}
-            }
-            
-            if (results && results.length > 0) {
-                const code = results[0].rawValue;
-                if (code && code !== lastCode) {
-                    console.log('✅ [BD] 第' + bdFrameCount + '帧:', code);
-                    lastCode = code;
-                    _stopBDLoop();
-                    stopScanner();
-                    lookupBarcode(code);
-                }
-            } else if (bdFrameCount % 20 === 0) {
-                console.log('🔍 [BD] ' + bdFrameCount + '帧 (BD3策略+ZXing2策略均未命中)');
-            }
-        } catch(e) {
-            if (bdFrameCount % 30 === 0) console.warn('[BD] 帧错误:', e.message);
-        }
-    }, 250);
-    
-    // 显示调试面板
-    const debugDiv = document.getElementById('bd-debug');
-    if (debugDiv) debugDiv.classList.remove('d-none');
-    
-    console.log('🚀 BarcodeDetector+ZXing 多策略循环 (250ms)');
+    lookupBarcode(barcode);
 }
 
-// ─── 条码专用滤镜：二值化 + 对比度极值拉伸 + 锐化 ───
-function _applyBarcodeFilter(sourceCanvas) {
-    try {
-        const w = sourceCanvas.width, h = sourceCanvas.height;
-        const out = document.createElement('canvas');
-        out.width = w; out.height = h;
-        const ctx = out.getContext('2d');
-        ctx.drawImage(sourceCanvas, 0, 0);
-        
-        const imageData = ctx.getImageData(0, 0, w, h);
-        const data = imageData.data;
-        const len = data.length;
-        
-        // Step 1: 灰度化 + 找最值
-        let min = 255, max = 0;
-        const gray = new Uint8Array(len / 4);
-        for (let i = 0, j = 0; i < len; i += 4, j++) {
-            const g = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
-            gray[j] = g;
-            if (g < min) min = g;
-            if (g > max) max = g;
-        }
-        
-        // Step 2: 对比度拉伸 + 二值化（自适应阈值 = 均值）
-        const range = max - min || 1;
-        let sum = 0;
-        for (let i = 0; i < gray.length; i++) {
-            let v = ((gray[i] - min) / range * 255);
-            v = Math.max(0, Math.min(255, v));
-            gray[i] = v;
-            sum += v;
-        }
-        const threshold = sum / gray.length;
-        
-        // Step 3: 二值化（白底黑条）
-        for (let i = 0, j = 0; i < len; i += 4, j++) {
-            const v = gray[j] > threshold ? 255 : 0;
-            data[i] = data[i+1] = data[i+2] = v;
-            data[i+3] = 255;
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-        return out;
-    } catch(e) {
-        return null;
-    }
-}
-
-// ─── ZXing 解码引擎（第三方，对1D条码最强） ──
-let _zxingReader = null;
-function _getZxingReader() {
-    if (!_zxingReader && typeof ZXing !== 'undefined') {
-        try {
-            _zxingReader = new ZXing.BrowserMultiFormatReader();
-            console.log('✅ ZXing 初始化成功');
-        } catch(e) {
-            console.warn('ZXing 初始化失敗:', e.message);
-            _zxingReader = null;
-        }
-    }
-    return _zxingReader;
-}
-
-// ZXing 从 video 元素解码单帧
-async function _zxingDecodeVideo(videoEl) {
-    const reader = _getZxingReader();
-    if (!reader) return null;
-    try {
-        const result = await reader.decodeFromVideoElement(videoEl);
-        return result ? result.getText() : null;
-    } catch(e) { return null; }
-}
-
-// ZXing 从 canvas 解码
-async function _zxingDecodeCanvas(canvas) {
-    const reader = _getZxingReader();
-    if (!reader) return null;
-    try {
-        const dataUrl = canvas.toDataURL('image/png');
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-            img.src = dataUrl;
-        });
-        const result = await reader.decodeFromImageElement(img);
-        return result ? result.getText() : null;
-    } catch(e) { return null; }
-}
-
-// ZXing 从 File 解码
-async function _zxingDecodeFile(file) {
-    const reader = _getZxingReader();
-    if (!reader) return null;
-    try {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-            img.src = url;
-        });
-        const result = await _zxingReader.decodeFromImageElement(img);
-        URL.revokeObjectURL(url);
-        return result ? result.getText() : null;
-    } catch(e) { return null; }
-}
-
-function _stopBDLoop() {
-    if (_bdLoopTimer) {
-        clearInterval(_bdLoopTimer);
-        _bdLoopTimer = null;
-        console.log('⏹️ BarcodeDetector 循环已停止');
-    }
-    _bdDetector = null;
-}
-
-function getCameraConfigs() {
-    // 手机：后置摄像头优先（environment），扫描条码时自然使用背面
-    // 笔记本/台式机：前置摄像头优先（user），大多数笔记本只有前置
-    if (isMobileDevice()) {
-        return [{ facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, 
-                { facingMode: "environment" },
-                { facingMode: "user" }, {}];
-    } else {
-        return [{ facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, 
-                { facingMode: "user" }, 
-                { facingMode: "environment" }, {}];
-    }
-}
-let _activeCameraConfig = null;
-
-async function _ensureCameraStarted() {
-    if (scanner) return; // 已经启动了
+async function createManualEntry() {
+    const barcode = document.getElementById('manualBarcodeInput').value.trim() 
+                 || document.getElementById('trackingNo').value.trim();
+    if (!barcode) return;
     
-    const scanView = document.getElementById('scanner-view');
-    scanView.innerHTML = '';
-    
-    scanner = new Html5Qrcode("scanner-view");
-    
-    const cameraConfigs = getCameraConfigs();
-    
-    for (const cfg of cameraConfigs) {
-        try {
-            await scanner.start(
-                cfg,
-                { fps: 15, qrbox: { width: 320, height: 180 }, formatsToSupport: [
-                    Html5QrcodeSupportedFormats.CODE_128,
-                    Html5QrcodeSupportedFormats.EAN_13,
-                    Html5QrcodeSupportedFormats.EAN_8,
-                    Html5QrcodeSupportedFormats.CODE_39,
-                    Html5QrcodeSupportedFormats.CODE_93,
-                    Html5QrcodeSupportedFormats.UPC_A,
-                    Html5QrcodeSupportedFormats.UPC_E,
-                    Html5QrcodeSupportedFormats.ITF,
-                    Html5QrcodeSupportedFormats.CODABAR,
-                    Html5QrcodeSupportedFormats.QR_CODE,
-                    Html5QrcodeSupportedFormats.DATA_MATRIX,
-                ]},
-                () => {},  // onScanSuccess — 绿色按钮不需要连续识别回调
-                () => {}   // onScanFailure
-            );
-            console.log('✅ 摄像头启动成功:', JSON.stringify(cfg));
-            _activeCameraConfig = cfg;
-            
-            // 获取视频流引用（用于手电筒控制）
-            const videoEl = scanView.querySelector('video');
-            if (videoEl && videoEl.srcObject) {
-                _videoStream = videoEl.srcObject;
-                // 显示手电筒按钮
-                const torchBtn = document.getElementById('torchBtn');
-                torchBtn.classList.remove('d-none');
-                try {
-                    const track = _videoStream.getVideoTracks()[0];
-                    const caps = track.getCapabilities();
-                    if (!caps.torch) torchBtn.classList.add('d-none'); // 不支持则隐藏
-                } catch(_) { torchBtn.classList.add('d-none'); }
-            }
-            return;
-        } catch(e) {
-            console.warn('摄像头配置失敗:', JSON.stringify(cfg), e.message);
-            try { await scanner.clear(); } catch(_) {}
-            scanView.innerHTML = '';
-            scanner = new Html5Qrcode("scanner-view");
-        }
-    }
-    
-    // 全部失败
-    scanner = null;
-    throw new Error('カメラを起動できませんでした');
-}
-
-// ─── Mode 1: Camera Scanner (蓝色按钮) ──────
-async function startScanner() {
-    const startBtn = document.getElementById('startScanBtn');
-    const stopBtn = document.getElementById('stopScanBtn');
-    const scanView = document.getElementById('scanner-view');
-    const indicator = document.getElementById('scanIndicator');
-    const statusText = document.getElementById('scanStatusText');
-    
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    indicator.classList.remove('d-none');
-    statusText.textContent = '📷 カメラ起動中...';
-    document.getElementById('manualBarcodeInput').value = '';
-    
-    // 停止旧实例和BarcodeDetector循环
-    if (_bdLoopTimer) { clearInterval(_bdLoopTimer); _bdLoopTimer = null; }
-    if (scanner) {
-        try { await scanner.stop(); } catch(e) {}
-        try { await scanner.clear(); } catch(e) {}
-        scanner = null;
-    }
-    _videoStream = null;
-    _activeCameraConfig = null;
-    scanView.innerHTML = '';
-    
-    // 动态计算扫描框宽度（手机要宽一些，长条码需要更多空间）
-    const isMobile = isMobileDevice();
-    const qrboxWidth = isMobile ? Math.min(340, window.innerWidth - 30) : 380;
-    
-    scanner = new Html5Qrcode("scanner-view");
-    
-    const scanConfig = {
-        fps: 15,
-        qrbox: { width: qrboxWidth, height: 180 },
-        formatsToSupport: [
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.CODE_93,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.CODABAR,
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.DATA_MATRIX,
-        ],
+    const data = {
+        barcode: barcode,
+        product_name: document.getElementById('productName').value || '',
+        category: document.getElementById('category').value || '',
+        weight: parseFloat(document.getElementById('weight').value) || null,
+        dimensions: document.getElementById('dimensions').value || '',
+        unit_cost: parseInt(document.getElementById('unitCost').value) || 0,
+        selling_price: parseInt(document.getElementById('sellingPrice').value) || 0,
+        qty: parseInt(document.getElementById('qty').value) || 1,
+        is_high_value: document.getElementById('isHighValue').checked,
+        location: document.getElementById('location').value
     };
     
-    let scanAttempts = 0;
-    
-    const cameraConfigs = getCameraConfigs();
-    
-    let started = false;
-    for (const cfg of cameraConfigs) {
-        try {
-            await scanner.start(
-                cfg,
-                scanConfig,
-                (decodedText) => {
-                    console.log('✅ [Html5Q] 扫码成功:', decodedText);
-                    _stopBDLoop();
-                    stopScanner();
-                    lookupBarcode(decodedText);
-                },
-                (failure) => {
-                    scanAttempts++;
-                    if (scanAttempts % 30 === 0) {
-                        console.log('🔍 スキャン中...(' + scanAttempts + '帧)');
-                    }
-                }
-            );
-            started = true;
-            statusText.textContent = '🔍 スキャン中... 条码を枠内に合わせてください';
-            console.log('✅ 摄像头启动成功:', JSON.stringify(cfg));
-            _activeCameraConfig = cfg;
-            
-            // 获取视频流引用
-            const videoEl2 = scanView.querySelector('video');
-            if (videoEl2 && videoEl2.srcObject) {
-                _videoStream = videoEl2.srcObject;
-                
-                // 手电筒按钮
-                const torchBtn2 = document.getElementById('torchBtn');
-                torchBtn2.classList.remove('d-none');
-                try {
-                    const t = _videoStream.getVideoTracks()[0];
-                    if (!t.getCapabilities().torch) torchBtn2.classList.add('d-none');
-                } catch(_) { torchBtn2.classList.add('d-none'); }
-                
-                // ★★★ 关键修复：启动 BarcodeDetector 并行扫描循环 ★★★
-                if ('BarcodeDetector' in window && !_bdLoopTimer) {
-                    console.log('🚀 启动 BarcodeDetector 并行扫描循环...');
-                    _startBDLoop(videoEl2);
-                } else if (!('BarcodeDetector' in window)) {
-                    console.log('⚠️ 此浏览器不支持 BarcodeDetector API，仅使用 html5-qrcode');
-                }
-            }
-            break;
-        } catch(e) {
-            console.warn('摄像头配置失敗:', JSON.stringify(cfg), e.message);
-            try { await scanner.clear(); } catch(_) {}
-            scanView.innerHTML = '';
-            scanner = new Html5Qrcode("scanner-view");
-        }
-    }
-    
-    if (!started) {
-        scanner = null;
-        scanView.innerHTML = `<div class="alert alert-danger m-2">
-            <i class="bi bi-camera-video-off"></i> 
-            <strong>カメラを起動できませんでした</strong><br>
-            <small class="text-muted">
-                ブラウザのカメラ権限を確認してください：<br>
-                ① アドレスバー左の鍵アイコンをクリック<br>
-                ② 「カメラ」が「許可」になっているか確認<br>
-                ③ 許可されていない場合は「許可」に変更して再読み込み
-            </small>
-        </div>`;
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        indicator.classList.add('d-none');
-    }
+    const result = await API.post('/api/inbound/manual', data);
+    handleInboundResult(result);
 }
 
-async function stopScanner() {
-    _stopBDLoop();  // 停止 BarcodeDetector 并行循环
-    const debugDiv = document.getElementById('bd-debug');
-    if (debugDiv) debugDiv.classList.add('d-none');
-    if (scanner) {
-        await scanner.stop();
-        scanner = null;
-    }
-    _videoStream = null;
-    _activeCameraConfig = null;
-    document.getElementById('scanIndicator').classList.add('d-none');
-    document.getElementById('torchBtn').classList.add('d-none');
-    document.getElementById('torchBtn').classList.remove('btn-warning');
-    document.getElementById('torchBtn').classList.add('btn-outline-dark');
-    document.getElementById('scanStatusText').textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
-    document.getElementById('startScanBtn').disabled = false;
-    document.getElementById('stopScanBtn').disabled = true;
-    document.getElementById('captureScanBtn').disabled = false;
-}
-
-// ─── AIでバーコード読み取り（Gemini Vision、最強のバックアップ） ──
+// ─── AI Read Barcode from Photo ───────────────
 async function aiReadBarcode(event) {
     const file = event.target.files[0];
     if (!file) return;
     
-    showToast('🤖 AIがバーコード画像を解析中...', 'info');
+    showToast('AI 读取中...', 'info');
     
     try {
         const formData = new FormData();
         formData.append('image', file);
         
-        const res = await fetch('/api/inbound/ai-read-barcode', {
-            method: 'POST',
-            body: formData
-        });
+        const res = await fetch('/api/inbound/ai-read-barcode', { method: 'POST', body: formData });
         const data = await res.json();
         
-        if (data.success && data.barcode) {
-            console.log('✅ [AI] バーコード読み取り成功:', data.barcode, '(原始:', data.raw, ')');
-            showToast('✅ AI識別成功: ' + data.barcode, 'success');
+        if (data.error) {
+            showToast('AI 读取失败: ' + data.error, 'danger');
+        } else if (data.barcode) {
+            showToast('AI 读取成功: ' + data.barcode, 'success');
+            document.getElementById('manualBarcodeInput').value = data.barcode;
             lookupBarcode(data.barcode);
         } else {
-            const msg = data.error || 'AIが番号を見つけられませんでした';
-            console.warn('[AI] 読み取り失敗:', msg);
-            showToast('❌ ' + msg + '<br><small>💡 バーコードがはっきり写った写真を撮って再試行してください</small>', 'warning');
+            showToast('AI 未能识别条码，请手动输入', 'warning');
         }
     } catch(e) {
-        console.error('[AI] 通信エラー:', e);
-        showToast('AI読み取りエラー: ' + (e.message || e), 'danger');
+        showToast('通信错误: ' + e.message, 'danger');
     }
     
     event.target.value = '';
 }
 
-// ─── 画像アップロードで識別（最も信頼性が高い） ──
-async function detectFromImageFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    showToast('🔍 画像解析中...', 'info');
-    
-    try {
-        let decodedText = null;
-        let methodUsed = '';
-        
-        // ── 策略1: Chrome原生 BarcodeDetector (最快最准) ──
-        if ('BarcodeDetector' in window && !decodedText) {
-            try {
-                console.log('🖼️ [画像] 試行 BarcodeDetector...');
-                const img = await createImageBitmap(file);
-                const detector = new BarcodeDetector({
-                    formats: ['code_128', 'ean_13', 'ean_8', 'code_39', 'code_93',
-                              'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code', 'data_matrix']
-                });
-                const results = await detector.detect(img);
-                console.log('🖼️ BarcodeDetector結果:', results?.length || 0, '個');
-                if (results && results.length > 0) {
-                    decodedText = results[0].rawValue;
-                    methodUsed = 'Chrome原生API';
-                    console.log('✅ [画像] BarcodeDetector成功:', decodedText);
-                }
-            } catch(e) {
-                console.warn('🖼️ BarcodeDetector失敗:', e.message);
-            }
-        }
-        
-        // ── 策略2: ZXing 引擎解码（对1D条码最可靠）──
-        if (!decodedText && typeof ZXing !== 'undefined') {
-            console.log('🖼️ [画像] 試行 ZXing...');
-            try {
-                const zxResult = await _zxingDecodeFile(file);
-                if (zxResult) {
-                    decodedText = zxResult;
-                    methodUsed = 'ZXing(原图)';
-                    console.log('✅ [画像] ZXing成功:', decodedText);
-                }
-            } catch(e) {
-                console.warn('🖼️ ZXing(原图)失敗:', e.message);
-            }
-            // ZXing + 预处理图
-            if (!decodedText) {
-                try {
-                    const processedBlob = await preprocessImage(file);
-                    if (processedBlob) {
-                        const processedFile = new File([processedBlob], 'p.png', { type: 'image/png' });
-                        const zxResult2 = await _zxingDecodeFile(processedFile);
-                        if (zxResult2) {
-                            decodedText = zxResult2;
-                            methodUsed = 'ZXing(二值化)';
-                            console.log('✅ [画像] ZXing二值化成功:', decodedText);
-                        }
-                    }
-                } catch(e) {
-                    console.warn('🖼️ ZXing(二值化)失敗:', e.message);
-                }
-            }
-        }
-        
-        // ── 策略3: Html5Qrcode scanFile ──
-        if (!decodedText) {
-            console.log('🖼️ [画像] 試行 Html5Qrcode scanFile...');
-            
-            // 先尝试原图
-            const helperEl = document.getElementById('scan-helper');
-            helperEl.innerHTML = '';
-            const tmpScanner = new Html5Qrcode("scan-helper");
-            
-            try {
-                decodedText = await tmpScanner.scanFile(file, true);
-                methodUsed = 'Html5Qrcode(原图)';
-                console.log('✅ [画像] scanFile(true)成功:', decodedText);
-            } catch(e) {
-                console.warn('🖼️ scanFile(原图)失敗:', e.message);
-                
-                // 尝试预处理后的图像
-                try {
-                    const processedBlob = await preprocessImage(file);
-                    if (processedBlob) {
-                        const processedFile = new File([processedBlob], 'processed.png', { type: 'image/png' });
-                        try { await tmpScanner.clear(); } catch(_) {}
-                        helperEl.innerHTML = '';
-                        const tmp2 = new Html5Qrcode("scan-helper");
-                        decodedText = await tmp2.scanFile(processedFile, false);
-                        methodUsed = 'Html5Qrcode(预处理图)';
-                        console.log('✅ [画像] 预处理后scanFile成功:', decodedText);
-                        try { await tmp2.clear(); } catch(_) {}
-                    }
-                } catch(e2) {
-                    console.warn('🖼️ 预处理後scanFile亦失敗:', e2.message);
-                    
-                    // 最后尝试不显示图像的模式
-                    try { await tmpScanner.clear(); } catch(_) {}
-                    helperEl.innerHTML = '';
-                    const tmp3 = new Html5Qrcode("scan-helper");
-                    try {
-                        decodedText = await tmp3.scanFile(file, false);
-                        methodUsed = 'Html5Qrcode(无显示)';
-                        console.log('✅ [画像] scanFile(false)成功:', decodedText);
-                    } catch(e3) {
-                        console.warn('🖼️ scanFile(false)亦失敗:', e3.message);
-                    }
-                    try { await tmp3.clear(); } catch(_) {}
-                }
-            }
-            
-            try { await tmpScanner.clear(); } catch(_) {}
-            helperEl.innerHTML = '';
-        }
-        
-        if (decodedText) {
-            console.log('✅ 画像識別成功 [' + methodUsed + ']:', decodedText);
-            showToast('✅ 識別成功 (' + methodUsed + '): ' + decodedText, 'success');
-            lookupBarcode(decodedText);
-        } else {
-            showToast('❌ 画像から条码を認識できませんでした。<br><small>💡 ヒント：ライトをONにして、もう一度撮影してみてください</small>', 'warning');
-        }
-    } catch(e) {
-        console.error('画像識別エラー:', e);
-        showToast('識別失敗: ' + (e.message || e), 'danger');
-    }
-    
-    // 重置 input 以便重新選擇同一文件
-    event.target.value = '';
-}
-
-// ─── 图像预处理：灰度化 + 对比度增强 + 二值化 ───
-async function preprocessImage(file) {
-    try {
-        const img = await createImageBitmap(file);
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        
-        ctx.drawImage(img, 0, 0);
-        
-        // 应用条码专用滤镜
-        const processed = _applyBarcodeFilter(canvas);
-        if (processed) {
-            return new Promise(resolve => processed.toBlob(resolve, 'image/png'));
-        }
-        
-        return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-    } catch(e) {
-        console.warn('画像前処理失敗:', e.message);
-        return null;
-    }
-}
-
-// ─── 撮影して識別（備用モード） ──────────────
-async function captureAndDetect() {
-    const statusText = document.getElementById('scanStatusText');
-    const captureBtn = document.getElementById('captureScanBtn');
-    captureBtn.disabled = true;
-    
-    // もし scanner が起動していなければ、先に起動
-    if (!scanner) {
-        statusText.textContent = '📸 カメラ起動中...';
-        document.getElementById('startScanBtn').disabled = true;
-        document.getElementById('stopScanBtn').disabled = false;
-        document.getElementById('scanIndicator').classList.remove('d-none');
-        
-        try { await _ensureCameraStarted(); }
-        catch(e) {
-            showToast('カメラ起動できません: ' + e.message, 'danger');
-            stopScanner();
-            captureBtn.disabled = false;
-            return;
-        }
-    }
-    
-    statusText.textContent = '📸 撮影 & 解析中...';
-    
-    try {
-        const videoEl = document.querySelector('#scanner-view video');
-        if (!videoEl || videoEl.readyState < 2) {
-            showToast('ビデオ準備ができていません', 'warning');
-            captureBtn.disabled = false;
-            statusText.textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
-            return;
-        }
-        
-        console.log('📷 视频尺寸:', videoEl.videoWidth, 'x', videoEl.videoHeight);
-        let found = false;
-        
-        // 策略1：原生 BarcodeDetector（Chrome，最快）
-        if ('BarcodeDetector' in window) {
-            console.log('📷 使用 BarcodeDetector API');
-            const detector = new BarcodeDetector({
-                formats: ['code_128', 'ean_13', 'ean_8', 'code_39', 'code_93', 
-                          'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code', 'data_matrix']
-            });
-            
-            for (const flipped of [false, true]) {
-                const canvas = document.createElement('canvas');
-                canvas.width = videoEl.videoWidth;
-                canvas.height = videoEl.videoHeight;
-                const ctx = canvas.getContext('2d');
-                if (flipped) {
-                    ctx.translate(canvas.width, 0);
-                    ctx.scale(-1, 1);
-                }
-                ctx.drawImage(videoEl, 0, 0);
-                
-                try {
-                    const results = await detector.detect(canvas);
-                    console.log('BarcodeDetector結果(' + (flipped?'鏡像':'原画') + '):', results ? results.length : 0, '個');
-                    if (results && results.length > 0) {
-                        const r = results[0];
-                        console.log('✅ BarcodeDetector成功:', r.rawValue);
-                        stopScanner();
-                        showToast('✅ 識別成功: ' + r.rawValue, 'success');
-                        lookupBarcode(r.rawValue);
-                        found = true;
-                        break;
-                    }
-                } catch(e) {
-                    console.warn('BarcodeDetector錯誤(' + (flipped?'鏡像':'原画') + '):', e);
-                }
-            }
-        }
-        
-        if (!found) {
-            // ── 策略2: ZXing 单帧解码（比Html5Qrcode更擅长1D条码）──
-            console.log('📷 試行 ZXing 单帧解码...');
-            try {
-                const zxResult = await _zxingDecodeVideo(videoEl);
-                if (zxResult) {
-                    console.log('✅ [ZXing/撮影] 成功:', zxResult);
-                    stopScanner();
-                    showToast('✅ 識別成功 (ZXing): ' + zxResult, 'success');
-                    lookupBarcode(zxResult);
-                    found = true;
-                }
-            } catch(e) {
-                console.warn('[ZXing/撮影] 失敗:', e.message);
-            }
-        }
-        
-        if (!found) {
-            // 策略3：Html5Qrcode scanFile — 原图 + 预处理图
-            console.log('📷 ZXing未命中，使用 Html5Qrcode fallback');
-            
-            // 抓取一幀高清畫面
-            const captureCanvas = document.createElement('canvas');
-            captureCanvas.width = videoEl.videoWidth;
-            captureCanvas.height = videoEl.videoHeight;
-            const cx = captureCanvas.getContext('2d');
-            cx.drawImage(videoEl, 0, 0);
-            
-            const blob = await new Promise(resolve => captureCanvas.toBlob(resolve, 'image/png'));
-            if (!blob) {
-                showToast('画像取得失敗', 'danger');
-                captureBtn.disabled = false;
-                return;
-            }
-            
-            const file = new File([blob], 'capture.png', { type: 'image/png' });
-            
-            // 用獨立 Html5Qrcode 掃描（傳 ID 字串）
-            const helperEl = document.getElementById('scan-helper');
-            
-            let decodedText = null;
-            let methodUsed = '';
-            
-            // 2a: 原图扫描
-            for (const [showImg, label] of [[true, '原图(显示)'], [false, '原图(不显示)']]) {
-                if (decodedText) break;
-                try {
-                    helperEl.innerHTML = '';
-                    const tmpS = new Html5Qrcode("scan-helper");
-                    decodedText = await tmpS.scanFile(file, showImg);
-                    methodUsed = 'Html5Qrcode(' + label + ')';
-                    console.log('✅ ' + methodUsed + ':', decodedText);
-                    try { await tmpS.clear(); } catch(_) {}
-                } catch(e) {
-                    console.warn(methodUsed + ' 失敗:', e.message);
-                    try { 
-                        // need to get the scanner instance to clear it
-                        const el = document.getElementById('scan-helper');
-                        el.innerHTML = ''; 
-                    } catch(_) {}
-                }
-            }
-            
-            // 2b: 预处理后的图像扫描
-            if (!decodedText) {
-                console.log('📷 原图扫描失败，尝试预处理图像...');
-                try {
-                    const processedBlob = await preprocessImage(file);
-                    if (processedBlob) {
-                        const processedFile = new File([processedBlob], 'processed.png', { type: 'image/png' });
-                        helperEl.innerHTML = '';
-                        const tmpS2 = new Html5Qrcode("scan-helper");
-                        try {
-                            decodedText = await tmpS2.scanFile(processedFile, false);
-                            methodUsed = 'Html5Qrcode(预处理图)';
-                            console.log('✅ 预处理后成功:', decodedText);
-                        } catch(e) {
-                            console.warn('预处理图扫描失敗:', e.message);
-                        }
-                        try { await tmpS2.clear(); } catch(_) {}
-                        helperEl.innerHTML = '';
-                    }
-                } catch(e) {
-                    console.warn('预处理过程出错:', e.message);
-                }
-            }
-            
-            if (decodedText) {
-                console.log('✅ 撮影識別成功 [' + methodUsed + ']:', decodedText);
-                stopScanner();
-                showToast('✅ 識別成功 (' + methodUsed + '): ' + decodedText, 'success');
-                lookupBarcode(decodedText);
-                found = true;
-            }
-        }
-        
-        if (!found) {
-            showToast('❌ 条码が見つかりません。<br><small>💡 ヒント：「ライト」ボタンをONにする、または「画像で識別」で写真をアップロード</small>', 'warning');
-            captureBtn.disabled = false;
-            statusText.textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
-        }
-        
-    } catch(e) {
-        console.error('撮影識別エラー:', e);
-        showToast('識別失敗: ' + (e.message || e), 'danger');
-        captureBtn.disabled = false;
-    }
-}
-
-// ─── Mode 2: AI Photo Recognition ────────────
+// ─── AI Photo Recognition (实物识别) ──────────
 async function uploadAIPhoto() {
     const fileInput = document.getElementById('photoInput');
     const file = fileInput.files[0];
     if (!file) return;
     
-    // Preview
     const reader = new FileReader();
     reader.onload = (e) => {
         document.getElementById('photoPreview').classList.remove('d-none');
         document.getElementById('photoImg').src = e.target.result;
-        _currentPhotoBase64 = e.target.result; // store for later inbound submission
+        _currentPhotoBase64 = e.target.result;
     };
     reader.readAsDataURL(file);
     
-    // Upload for AI recognition
     const formData = new FormData();
     formData.append('image', file);
     
     const resultDiv = document.getElementById('photoResult');
     resultDiv.innerHTML = `<div class="text-center py-3">
         <div class="spinner-border text-success" style="width:3rem;height:3rem"></div>
-        <p class="mt-2 fw-bold">🤖 AI分析中...</p>
-        <p class="text-muted small">Geminiが写真を見て商品を認識し、<br>仕入れリストと照合しています</p>
+        <p class="mt-2 fw-bold">AI 分析中...</p>
     </div>`;
     
     try {
@@ -1324,50 +388,34 @@ async function uploadAIPhoto() {
         if (data.error) {
             if (data.type === 'no_api_key' || data.type === 'not_configured') {
                 resultDiv.innerHTML = `<div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle"></i> 
-                    AI認識がまだ設定されていません。<br>
-                    <small>管理者にGemini APIキーの設定を依頼してください。</small>
-                </div>
-                <button class="btn btn-outline-secondary btn-sm w-100" onclick="switchMethod('manual')">
-                    ⌨️ 手动输入に切り替える
-                </button>`;
-            } else if (data.type === 'quota_exceeded') {
-                // 429 quota exceeded - show manual fallback
-                showAIFallbackWithManual(data.message || 'AIの利用制限に達しました', resultDiv);
-            } else if (data.type === 'no_unmatched') {
-                resultDiv.innerHTML = `<div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i> ${data.error}
+                    <i class="bi bi-exclamation-triangle"></i> AI 识别尚未配置（需要 Gemini API Key）
                 </div>`;
+            } else if (data.type === 'quota_exceeded') {
+                showAIFallbackWithManual(data.message || 'AI 配额已用完', resultDiv);
+            } else if (data.type === 'no_unmatched') {
+                resultDiv.innerHTML = `<div class="alert alert-info">${data.error}</div>`;
             } else {
-                // Generic error - also show manual fallback
                 showAIFallbackWithManual(data.error, resultDiv);
             }
             return;
         }
         
-        if (data.success) {
-            showAIResults(data, resultDiv);
-        }
+        if (data.success) showAIResults(data, resultDiv);
     } catch (err) {
-        resultDiv.innerHTML = `<div class="alert alert-danger small">通信エラー: ${err.message}</div>`;
+        resultDiv.innerHTML = `<div class="alert alert-danger small">通信错误: ${err.message}</div>`;
     }
 }
 
 function showAIResults(data, resultDiv) {
-    // Get supplier item IDs from candidates
     const candidates = data.candidates || [];
     const matchedItems = candidates.filter(c => c.matched_item);
     
     let html = `<div class="alert alert-success">
-        <i class="bi bi-robot"></i> <strong>AI分析結果：</strong>${data.description || ''}
+        <i class="bi bi-robot"></i> <strong>AI 分析结果：</strong>${data.description || ''}
     </div>`;
     
-    if (data.fallback) {
-        html += `<div class="alert alert-warning small">${data.message || ''}</div>`;
-    }
-    
     if (matchedItems.length > 0) {
-        html += `<div class="mb-2 fw-bold">📋 候補商品（クリックで選択）：</div>`;
+        html += `<div class="mb-2 fw-bold">候选商品（点击选择）：</div>`;
         matchedItems.forEach((c, i) => {
             const item = c.matched_item;
             const isTop = i === 0;
@@ -1376,44 +424,32 @@ function showAIResults(data, resultDiv) {
                 <div class="card-body p-2">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            ${isTop ? '<span class="badge bg-success">最適</span> ' : ''}
+                            ${isTop ? '<span class="badge bg-success">最佳</span> ' : ''}
                             <span class="badge bg-secondary">#${c.rank}</span>
                             <strong>${escapeHtml(item.product_name || '')}</strong>
                         </div>
                     </div>
-                    <div class="small text-muted mt-1">
-                        ${c.reason ? '💡 ' + escapeHtml(c.reason) : ''}
-                    </div>
                     <div class="small mt-1">
-                        ${item.tracking_no ? '<span class="me-2">📦 ' + escapeHtml(item.tracking_no) + '</span>' : ''}
+                        ${item.tracking_no ? '<span class="me-2">' + escapeHtml(item.tracking_no) + '</span>' : ''}
                         ${item.category ? '<span class="badge bg-light text-dark">' + escapeHtml(item.category) + '</span>' : ''}
                         ${item.weight ? ' <span class="ms-1">' + item.weight + 'kg</span>' : ''}
                     </div>
                 </div>
             </div>`;
         });
-        html += `<div class="text-muted small mb-2">※ AIの候補が不正確な場合は、下のボタンで手動選択してください</div>`;
     } else {
-        html += `<div class="alert alert-warning">
-            <i class="bi bi-exclamation-circle"></i> AIが候補を見つけられませんでした。<br>
-            <small>手動選択で仕入れリストから選んでください。</small>
-        </div>`;
+        html += `<div class="alert alert-warning">AI 未找到匹配商品</div>`;
     }
     
     html += `<button class="btn btn-outline-primary btn-sm w-100 mt-2" onclick="showAllUnmatched()">
-        📋 手動でリストから選択する (${data.total_unmatched || '?'}件)
+        手动从列表选择 (${data.total_unmatched || '?'}件)
     </button>`;
     
     resultDiv.innerHTML = html;
 }
 
 async function selectAICandidate(rank, supplierItemId) {
-    // Find the supplier item and fill the form
     try {
-        const res = await fetch(`/api/lookup/${encodeURIComponent(supplierItemId)}`);
-        const data = await res.json();
-        
-        // We need to get the supplier item directly
         const items = await (await fetch('/api/inbound/unmatched')).json();
         const item = items.find(i => i.id === supplierItemId);
         
@@ -1422,82 +458,57 @@ async function selectAICandidate(rank, supplierItemId) {
             document.getElementById('initialState').classList.add('d-none');
             document.getElementById('matchResult').classList.remove('d-none');
             document.getElementById('matchAlert').className = 'alert alert-success';
-            document.getElementById('matchMsg').textContent = 'AIでマッチしました！';
+            document.getElementById('matchMsg').textContent = 'AI 匹配成功！';
             fillSupplierData(item);
-            
-            // Scroll to right panel
             document.getElementById('matchResult').scrollIntoView({ behavior: 'smooth' });
-            
-            showToast(`AI候補 #${rank} を選択しました`, 'success');
+            showToast(`已选择候选 #${rank}`, 'success');
         }
     } catch (err) {
-        showToast('選択エラー: ' + err.message, 'error');
+        showToast('选择错误: ' + err.message, 'error');
     }
 }
 
 async function showAllUnmatched() {
-    // Show all unmatched items with keyword search
     const items = await (await fetch('/api/inbound/unmatched')).json();
-    _unmatchedItems = items; // store for filtering
-    renderManualListWithSearch(items, 'showAllUnmatched');
+    _unmatchedItems = items;
+    renderManualListWithSearch(items, 'list');
 }
 
 async function showAIFallbackWithManual(message, resultDiv) {
-    // When AI fails (quota exceeded, etc.), show manual selection directly
     let html = `<div class="alert alert-warning small">
-        <i class="bi bi-exclamation-triangle"></i> ${message}<br>
-        <small>AI認識が利用できないため、手動で選択してください。</small>
+        <i class="bi bi-exclamation-triangle"></i> ${message}
     </div>`;
     resultDiv.innerHTML = html;
     
     try {
         const items = await (await fetch('/api/inbound/unmatched')).json();
-        _unmatchedItems = items; // store for filtering
+        _unmatchedItems = items;
         if (items.length === 0) {
-            resultDiv.innerHTML += `<div class="alert alert-info">未入库商品はありません</div>`;
+            resultDiv.innerHTML += `<div class="alert alert-info">没有未入库商品</div>`;
         } else {
             renderManualListWithSearch(items, 'fallback');
         }
     } catch (err) {
-        resultDiv.innerHTML += `<div class="alert alert-danger small">リスト取得エラー: ${err.message}</div>`;
+        resultDiv.innerHTML += `<div class="alert alert-danger small">获取列表失败: ${err.message}</div>`;
     }
-    
-    resultDiv.innerHTML += `<button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="switchMethod('manual')">
-        ⌨️ 手动输入に切り替える
-    </button>`;
 }
 
 function renderManualListWithSearch(items, listId) {
     const resultDiv = document.getElementById('photoResult');
-    const appendTarget = resultDiv.querySelector('.card') ? resultDiv : resultDiv;
-    
-    let html = `<div class="card mt-2" id="manual-list-${listId}">
-        <div class="card-body p-2">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="mb-0">📋 未入库商品一覧（<span id="filtered-count-${listId}">${items.length}</span>件）</h6>
-            </div>
-            <input type="text" id="search-manual-${listId}" class="form-control form-control-sm mb-2"
-                   placeholder="🔍 キーワードで絞り込み（商品名・追跡番号・カテゴリ）"
-                   oninput="filterManualList('${listId}')" autocomplete="off">
-            <div id="manual-items-${listId}" style="max-height:300px;overflow-y:auto">`;
-    
+    let html = `<div class="card mt-2"><div class="card-body p-2">
+        <h6 class="mb-2">未入库商品（<span id="filtered-count-${listId}">${items.length}</span>件）</h6>
+        <input type="text" id="search-manual-${listId}" class="form-control form-control-sm mb-2"
+               placeholder="搜索商品名/条码/分类"
+               oninput="filterManualList('${listId}')" autocomplete="off">
+        <div id="manual-items-${listId}" style="max-height:300px;overflow-y:auto">`;
     filterAndRenderManualItems(items, `manual-items-${listId}`, `filtered-count-${listId}`);
-    
     html += `</div></div></div>`;
-    
-    if (appendTarget !== resultDiv) {
-        resultDiv.appendChild(createElementFromHTML(html));
-    } else {
-        resultDiv.innerHTML += html;
-    }
+    resultDiv.innerHTML += html;
 }
 
 function filterManualList(listId) {
     const input = document.getElementById('search-manual-' + listId);
     const keyword = (input ? input.value : '').toLowerCase().trim();
-    const container = document.getElementById('manual-items-' + listId);
-    const countSpan = document.getElementById('filtered-count-' + listId);
-    
     filterAndRenderManualItems(_unmatchedItems, 'manual-items-' + listId, 'filtered-count-' + listId, keyword);
 }
 
@@ -1519,9 +530,7 @@ function filterAndRenderManualItems(items, containerId, countSpanId, keyword) {
     if (countSpan) countSpan.textContent = filtered.length;
     
     if (filtered.length === 0) {
-        container.innerHTML = `<div class="text-center text-muted py-3 small">
-            🔍 条件に一致する商品がありません
-        </div>`;
+        container.innerHTML = `<div class="text-center text-muted py-3 small">没有匹配商品</div>`;
         return;
     }
     
@@ -1529,9 +538,9 @@ function filterAndRenderManualItems(items, containerId, countSpanId, keyword) {
     filtered.forEach(item => {
         html += `<div class="border-bottom py-2 px-1 ai-candidate" style="cursor:pointer"
                      onclick="selectAICandidate(0, ${item.id})">
-            <div class="fw-bold small">${escapeHtml(item.product_name || '不明')}</div>
+            <div class="fw-bold small">${escapeHtml(item.product_name || '未知')}</div>
             <div class="text-muted" style="font-size:0.75rem">
-                ${item.tracking_no ? '📦 ' + escapeHtml(item.tracking_no) : ''}
+                ${item.tracking_no ? escapeHtml(item.tracking_no) : ''}
                 ${item.category ? '<span class="badge bg-light text-dark ms-1">' + escapeHtml(item.category) + '</span>' : ''}
                 ${item.weight ? ' <span class="ms-1">' + item.weight + 'kg</span>' : ''}
             </div>
@@ -1540,18 +549,7 @@ function filterAndRenderManualItems(items, containerId, countSpanId, keyword) {
     container.innerHTML = html;
 }
 
-function createElementFromHTML(htmlString) {
-    const div = document.createElement('div');
-    div.innerHTML = htmlString.trim();
-    return div.firstChild;
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-// Drop zone for AI photo
+// ─── Drop zone for AI photo ────────────────────
 document.getElementById('photoDropZone').addEventListener('dragover', (e) => {
     e.preventDefault();
     e.currentTarget.style.borderColor = '#198754';
@@ -1569,42 +567,7 @@ document.getElementById('photoDropZone').addEventListener('drop', (e) => {
     }
 });
 
-// ─── Mode 3: Manual Entry ──────────────────────
-async function manualInbound() {
-    const barcode = document.getElementById('manualBarcodeInput').value.trim();
-    if (!barcode) {
-        showToast(t('input_tracking_first'), 'warning');
-        return;
-    }
-    lookupBarcode(barcode);
-}
-
-async function createManualEntry() {
-    const barcode = document.getElementById('manualBarcodeInput').value.trim() 
-                 || document.getElementById('trackingNo').value.trim();
-    if (!barcode) {
-        switchMethod('manual');
-        return;
-    }
-    
-    const data = {
-        barcode: barcode,
-        product_name: document.getElementById('productName').value || '',
-        category: document.getElementById('category').value || '',
-        weight: parseFloat(document.getElementById('weight').value) || null,
-        dimensions: document.getElementById('dimensions').value || '',
-        unit_cost: parseInt(document.getElementById('unitCost').value) || 0,
-        selling_price: parseInt(document.getElementById('sellingPrice').value) || 0,
-        qty: parseInt(document.getElementById('qty').value) || 1,
-        is_high_value: document.getElementById('isHighValue').checked,
-        location: document.getElementById('location').value
-    };
-    
-    const result = await API.post('/api/inbound/manual', data);
-    handleInboundResult(result);
-}
-
-// ─── Common: Barcode Lookup ────────────────────
+// ─── Barcode Lookup ────────────────────────────
 async function lookupBarcode(barcode) {
     if (!barcode) return;
     
@@ -1619,9 +582,9 @@ async function lookupBarcode(barcode) {
         document.getElementById('noMatch').classList.remove('d-none');
         let msg;
         if (data.type === 'product') {
-            msg = `「${barcode}」` + t('already_inbound');
+            msg = `「${barcode}」已入库`;
         } else {
-            msg = `「${barcode}」` + t('not_found_list');
+            msg = `「${barcode}」未在进货清单中找到`;
         }
         document.getElementById('noMatchMsg').textContent = msg;
         document.getElementById('manualBarcodeInput').value = barcode;
@@ -1633,13 +596,13 @@ async function lookupBarcode(barcode) {
         currentSupplierItem = data;
         document.getElementById('matchResult').classList.remove('d-none');
         document.getElementById('matchAlert').className = 'alert alert-success';
-        document.getElementById('matchMsg').textContent = t('matched_list');
+        document.getElementById('matchMsg').textContent = '与进货清单匹配成功！';
         fillSupplierData(data);
     } else if (data.type === 'product') {
         currentSupplierItem = data;
         document.getElementById('matchResult').classList.remove('d-none');
         document.getElementById('matchAlert').className = 'alert alert-info';
-        document.getElementById('matchMsg').textContent = `${t('existing_product')}: 库存 ${data.current_stock}件`;
+        document.getElementById('matchMsg').textContent = `已有商品: 库存 ${data.current_stock}件`;
         fillProductData(data);
     }
 }
@@ -1651,7 +614,6 @@ function fillSupplierData(data) {
     document.getElementById('category').value = data.category || '';
     document.getElementById('weight').value = data.weight || '';
     document.getElementById('dimensions').value = data.dimensions || '';
-    // 默认进货价500日元，用户可修改
     document.getElementById('unitCost').value = '500';
     document.getElementById('sellingPrice').value = '';
     document.getElementById('qty').value = data.expected_qty || 1;
@@ -1670,14 +632,11 @@ function fillProductData(data) {
     document.getElementById('sellingPrice').value = data.selling_price || '';
 }
 
-// ─── Inbound Photo (通用照片上传) ─────────────
-let _formPhotoBase64 = null; // 表单中的通用照片
-
+// ─── Inbound Photo ─────────────────────────────
 function previewInboundPhoto() {
     const fileInput = document.getElementById('inboundPhotoInput');
     const file = fileInput.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (e) => {
         _formPhotoBase64 = e.target.result;
@@ -1704,13 +663,13 @@ async function doInbound() {
     
     const unitCost = parseInt(document.getElementById('unitCost').value) || 0;
     if (!unitCost) {
-        showToast(t('input_cost_first'), 'warning');
+        showToast('请输入进货单价', 'warning');
         return;
     }
     
     const btn = document.getElementById('inboundBtn');
     btn.disabled = true;
-    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${t('processing')}...`;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>处理中...`;
     
     const data = {
         supplier_item_id: currentSupplierItem.id,
@@ -1720,7 +679,6 @@ async function doInbound() {
         is_high_value: document.getElementById('isHighValue').checked,
         location: document.getElementById('location').value,
         inbound_date: document.getElementById('inboundDate').value || null,
-        // 优先使用表单上传的照片，其次是AI识别时拍摄的照片
         photo_base64: _formPhotoBase64 || _currentPhotoBase64 || null
     };
     
@@ -1731,31 +689,30 @@ async function doInbound() {
 function handleInboundResult(result, btn) {
     if (btn) {
         btn.disabled = false;
-        btn.innerHTML = `<i class="bi bi-box-arrow-in-down me-1"></i> ${t('inbound_register_print')}`;
+        btn.innerHTML = `<i class="bi bi-box-arrow-in-down me-1"></i> 入库登记 & 标签生成`;
     }
     
     if (result.success) {
         document.getElementById('qrResult').classList.remove('d-none');
         document.getElementById('qrImage').src = 'data:image/png;base64,' + result.qr_code;
         document.getElementById('internalCode').textContent = result.product.internal_code;
-        // Show photo thumbnail if available
         const photoEl = document.getElementById('inboundPhoto');
         if (result.photo_url && photoEl) {
             photoEl.src = result.photo_url;
             document.getElementById('photoThumbnail').classList.remove('d-none');
         }
-        showToast(`${t('inbound_complete')}: ${result.product.internal_code}`, 'success');
+        showToast(`入库完成: ${result.product.internal_code}`, 'success');
         loadRecentInbound();
-        _currentPhotoBase64 = null; // clear after successful inbound
+        _currentPhotoBase64 = null;
     } else {
-        showToast(result.error || t('error'), 'error');
+        showToast(result.error || '错误', 'error');
     }
 }
 
 function resetInbound() {
     currentSupplierItem = null;
     _currentPhotoBase64 = null;
-    _formPhotoBase64 = null; // 清除表单照片
+    _formPhotoBase64 = null;
     document.getElementById('photoThumbnail').classList.add('d-none');
     document.getElementById('matchResult').classList.add('d-none');
     document.getElementById('qrResult').classList.add('d-none');
@@ -1763,13 +720,14 @@ function resetInbound() {
     document.getElementById('initialState').classList.remove('d-none');
     document.getElementById('manualBarcodeInput').value = '';
     document.getElementById('photoInput').value = '';
-    document.getElementById('inboundPhotoInput').value = ''; // 清除照片输入
-    document.getElementById('inboundPhotoPreviewArea').classList.add('d-none'); // 隐藏预览
+    document.getElementById('inboundPhotoInput').value = '';
+    document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
     document.getElementById('photoPreview').classList.add('d-none');
     document.getElementById('photoResult').innerHTML = '';
     document.getElementById('manualBarcodeInput').focus();
 }
 
+// ─── Label Print ───────────────────────────────
 async function printLabel() {
     const code = document.getElementById('internalCode').textContent;
     const name = document.getElementById('productName').value;
@@ -1798,7 +756,6 @@ async function printLabel() {
     `);
 }
 
-// ─── Thermal Label Print (48mm, for 印臣B21 etc.) ───
 function printThermalLabel() {
     const code = document.getElementById('internalCode').textContent;
     const name = document.getElementById('productName').value;
@@ -1810,36 +767,13 @@ function printThermalLabel() {
         <html><head><title>热敏标签打印 (48mm)</title>
         <style>
             @page { size: 48mm 35mm; margin: 1mm; }
-            body { 
-                font-family: 'MS Gothic', 'Microsoft YaHei', sans-serif; 
-                margin: 0; padding: 0; 
-                width: 46mm;
-            }
-            .thermal-label { 
-                text-align: center; 
-                padding: 1mm;
-                border: 1px dashed #ccc;
-            }
-            .thermal-label img { 
-                width: 30mm; height: 30mm; 
-                display: block; margin: 0 auto;
-            }
-            .thermal-label .code { 
-                font-size: 10px; font-weight: bold; 
-                margin: 1mm 0; letter-spacing: 0.5px;
-            }
-            .thermal-label .name { 
-                font-size: 7px; margin: 0.5mm 0; 
-                word-break: break-all; line-height: 1.2;
-            }
-            .thermal-label .price { 
-                font-size: 14px; font-weight: bold; 
-                color: #000; margin: 1mm 0;
-            }
-            @media print { 
-                body { -webkit-print-color-adjust: exact; }
-                .thermal-label { border: none; }
-            }
+            body { font-family: 'MS Gothic', 'Microsoft YaHei', sans-serif; margin: 0; padding: 0; width: 46mm; }
+            .thermal-label { text-align: center; padding: 1mm; border: 1px dashed #ccc; }
+            .thermal-label img { width: 30mm; height: 30mm; display: block; margin: 0 auto; }
+            .thermal-label .code { font-size: 10px; font-weight: bold; margin: 1mm 0; letter-spacing: 0.5px; }
+            .thermal-label .name { font-size: 7px; margin: 0.5mm 0; word-break: break-all; line-height: 1.2; }
+            .thermal-label .price { font-size: 14px; font-weight: bold; color: #000; margin: 1mm 0; }
+            @media print { body { -webkit-print-color-adjust: exact; } .thermal-label { border: none; } }
         </style></head><body>
         <div class="thermal-label">
             <img src="${qrSrc}">
@@ -1851,31 +785,23 @@ function printThermalLabel() {
     `);
 }
 
-// ─── Download QR Code as image (for phone print via 印臣APP) ───
 function downloadQR() {
     const qrSrc = document.getElementById('qrImage').src;
     const code = document.getElementById('internalCode').textContent;
     
-    // Create a canvas to add product info below QR
     const img = new Image();
     img.onload = function() {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        
-        // Canvas size: QR + text below
         const padding = 20;
         const textHeight = 60;
         canvas.width = img.width + padding * 2;
         canvas.height = img.height + padding * 2 + textHeight;
         
-        // White background
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw QR code
         ctx.drawImage(img, padding, padding, img.width, img.height);
         
-        // Draw product info below QR
         ctx.fillStyle = '#000000';
         ctx.font = 'bold 18px "MS Gothic", "Microsoft YaHei", sans-serif';
         ctx.textAlign = 'center';
@@ -1887,7 +813,6 @@ function downloadQR() {
         ctx.fillStyle = '#555555';
         ctx.fillText(name.substring(0, 40), canvas.width / 2, textY + 22);
         
-        // Download
         const link = document.createElement('a');
         link.download = `QR_${code}.png`;
         link.href = canvas.toDataURL('image/png');
@@ -1898,30 +823,21 @@ function downloadQR() {
     img.src = qrSrc;
 }
 
+// ─── Recent Inbound ────────────────────────────
 async function loadRecentInbound() {
     const data = await API.get('/api/inventory/list');
     const recent = data.filter(p => p.total_in > 0).slice(0, 10);
-    const stockLabel = t('stock');
-    const noDataMsg = t('no_inbound_yet');
     document.getElementById('recentInbound').innerHTML = recent.map(p => `
         <div class="d-flex justify-content-between py-1 border-bottom">
             <span><code>${p.internal_code}</code> ${(p.product_name||'').substring(0,30)}</span>
-            <span>${stockLabel}: <strong>${p.current_stock}</strong></span>
-        </div>`).join('') || `<span class="text-muted">${noDataMsg}</span>`;
+            <span>库存: <strong>${p.current_stock}</strong></span>
+        </div>`).join('') || `<span class="text-muted">暂无入库记录</span>`;
 }
 
-// Initialize
-loadRecentInbound();
-(function() {
-    const today = new Date().toISOString().slice(0,10);
-    const dateInput = document.getElementById('inboundDate');
-    if (dateInput) dateInput.value = today;
-})();
-
-// ─── Scrap Functions ─────────────────────
+// ─── Scrap ─────────────────────────────────────
 function openScrapModal() {
     if (!currentSupplierItem && !window.currentProduct) {
-        showToast('请先扫描或输入商品条码', 'warning');
+        showToast('请先输入或匹配商品条码', 'warning');
         return;
     }
     document.getElementById('scrapNote').value = '';
@@ -1929,27 +845,22 @@ function openScrapModal() {
 }
 
 async function markAsScrap(reason) {
-    // Get product ID from current context
     let productId = null;
     if (window.currentProduct && window.currentProduct.id) {
         productId = window.currentProduct.id;
     } else if (currentSupplierItem && currentSupplierItem.id) {
-        // Need to find the product for this supplier item
         const data = await API.get(`/api/lookup/${encodeURIComponent(currentSupplierItem.tracking_no || currentSupplierItem.barcode || '')}`);
-        if (data && data.type === 'product') {
-            productId = data.id;
-        }
+        if (data && data.type === 'product') productId = data.id;
     }
     
     if (!productId) {
-        showToast('无法找到对应商品，请先完成入库操作', 'warning');
+        showToast('无法找到对应商品，请先完成入库', 'warning');
         return;
     }
     
     const note = document.getElementById('scrapNote').value;
     const result = await API.post(`/api/products/${productId}/scrap`, {
-        reason: reason,
-        note: note
+        reason: reason, note: note
     });
     
     if (result.success) {
@@ -1961,15 +872,12 @@ async function markAsScrap(reason) {
     }
 }
 
-// ─── 引擎可用性诊断（页面加载时） ──
+// ─── Init ──────────────────────────────────────
+loadRecentInbound();
 (function() {
-    setTimeout(function() {
-        const engines = [];
-        engines.push(typeof Html5Qrcode !== 'undefined' ? '✅ html5-qrcode' : '❌ html5-qrcode');
-        engines.push('BarcodeDetector' in window ? '✅ BarcodeDetector' : '❌ BarcodeDetector');
-        engines.push(typeof ZXing !== 'undefined' ? '✅ ZXing v' + (ZXing.version || '?') : '❌ ZXing');
-        console.log('🔧 条码引擎状态:', engines.join(' | '));
-    }, 1000);
+    const today = new Date().toISOString().slice(0,10);
+    const dateInput = document.getElementById('inboundDate');
+    if (dateInput) dateInput.value = today;
 })();
 </script>
 {% endblock %}
