@@ -83,6 +83,25 @@
                 <div id="photoResult" class="mt-3"></div>
             </div>
         </div>
+
+        <!-- 未入库商品列表（常驻显示） -->
+        <div class="card mt-3">
+            <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="bi bi-list-task me-1"></i>未入庫商品
+                        <span class="badge bg-secondary" id="unmatchedCount">-</span>
+                    </h6>
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadUnmatchedList()" title="リフレッシュ">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <input type="text" id="unmatchedSearch" class="form-control form-control-sm mb-2"
+                       placeholder="商品名/跟踪番号で検索..." oninput="filterUnmatchedList()" autocomplete="off">
+                <div id="unmatchedListContainer" style="max-height:350px;overflow-y:auto">
+                    <div class="text-center text-muted py-3 small">読み込み中...</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Right Panel: Match Result & Entry -->
@@ -637,6 +656,105 @@ function filterAndRenderManualItems(items, containerId, countSpanId, keyword) {
     container.innerHTML = html;
 }
 
+// ─── 常驻未入库商品列表（左侧面板）───────────────
+let _unmatchedAllItems = [];
+
+async function loadUnmatchedList() {
+    const container = document.getElementById('unmatchedListContainer');
+    const countBadge = document.getElementById('unmatchedCount');
+    if (!container) return;
+    container.innerHTML = '<div class="text-center text-muted py-3 small">読み込み中...</div>';
+
+    try {
+        const items = await (await fetch('/api/inbound/unmatched')).json();
+        _unmatchedAllItems = items;
+        countBadge.textContent = items.length;
+        renderUnmatchedList(items);
+    } catch (err) {
+        container.innerHTML = `<div class="text-center text-danger py-3 small">読み込みエラー: ${err.message}</div>`;
+        countBadge.textContent = '?';
+    }
+}
+
+function renderUnmatchedList(items) {
+    const container = document.getElementById('unmatchedListContainer');
+    if (!container) return;
+
+    if (!items || items.length === 0) {
+        container.innerHTML = `<div class="text-center text-muted py-3 small">
+            <i class="bi bi-check-circle text-success"></i> 未入庫商品はありません
+        </div>`;
+        return;
+    }
+
+    let html = '';
+    items.forEach(item => {
+        const inboundQty = item.inbound_qty || 0;
+        const expectedQty = item.expected_qty || 1;
+        const isPartial = inboundQty > 0 && inboundQty < expectedQty;
+
+        let badge = '';
+        if (isPartial) {
+            badge = `<span class="badge bg-warning ms-1">${inboundQty}/${expectedQty}</span>`;
+        } else if (expectedQty > 1) {
+            badge = `<span class="badge bg-info ms-1">${expectedQty}件</span>`;
+        }
+
+        html += `<div class="border-bottom py-2 px-2" style="cursor:pointer" 
+                     onclick="selectUnmatchedItem(${item.id})" 
+                     onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background=''">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="fw-bold small text-truncate" style="max-width:180px">
+                    ${escapeHtml(item.product_name || '未知')} ${badge}
+                </div>
+                <small class="text-muted" style="font-size:0.7rem;flex-shrink:0">#${item.id}</small>
+            </div>
+            <div class="text-muted" style="font-size:0.72rem">
+                <code>${escapeHtml(item.tracking_no || '')}</code>
+                ${isPartial ? '<span class="text-warning ms-1">⚠ あと' + (expectedQty - inboundQty) + '件</span>' : ''}
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function filterUnmatchedList() {
+    const keyword = (document.getElementById('unmatchedSearch').value || '').toLowerCase().trim();
+    if (!keyword) {
+        renderUnmatchedList(_unmatchedAllItems);
+        return;
+    }
+    const filtered = _unmatchedAllItems.filter(item => {
+        const name = (item.product_name || '').toLowerCase();
+        const tracking = (item.tracking_no || '').toLowerCase();
+        return name.includes(keyword) || tracking.includes(keyword);
+    });
+    renderUnmatchedList(filtered);
+}
+
+function selectUnmatchedItem(itemId) {
+    const item = _unmatchedAllItems.find(i => i.id === itemId);
+    if (!item) return;
+    currentSupplierItem = item;
+
+    // 切换到右侧匹配区域
+    document.getElementById('initialState').classList.add('d-none');
+    document.getElementById('matchResult').classList.remove('d-none');
+
+    // 如果是部分入库中的项目，用警告色
+    const inboundQty = item.inbound_qty || 0;
+    if (inboundQty > 0) {
+        document.getElementById('matchAlert').className = 'alert alert-warning';
+        document.getElementById('matchMsg').textContent = '部分入庫済みの商品を選択しました';
+    } else {
+        document.getElementById('matchAlert').className = 'alert alert-success';
+        document.getElementById('matchMsg').textContent = '未入庫商品を選択しました';
+    }
+
+    fillSupplierData(item);
+    document.getElementById('matchResult').scrollIntoView({ behavior: 'smooth' });
+}
+
 // ─── Drop zone for AI photo ────────────────────
 document.getElementById('photoDropZone').addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -710,32 +828,44 @@ function fillSupplierData(data) {
     document.getElementById('highValueReason').classList.add('d-none');
     document.getElementById('forceNewCheck').checked = false;
 
-    // 显示部分入库进度
+    // 显示部分入库进度（首次匹配也显示，让用户知道预报数量）
     const inboundQty = data.inbound_qty || 0;
     const expectedQty = data.expected_qty || 1;
-    const progressPct = data.progress_pct || 0;
+    const progressPct = expectedQty > 0 ? Math.round((inboundQty / expectedQty) * 100) : 0;
     const progressArea = document.getElementById('progressArea');
     const forceNewArea = document.getElementById('forceNewArea');
 
-    if (inboundQty > 0 && inboundQty < expected_qty) {
-        // 部分入库中
+    // 始终显示进度区域（只要预报数量>1）
+    if (expectedQty > 1) {
         progressArea.classList.remove('d-none');
-        document.getElementById('progressText').textContent = `${inboundQty}/${expectedQty} (${progressPct}%)`;
-        document.getElementById('progressBar').style.width = progressPct + '%';
-        document.getElementById('progressHint').textContent = `あと${expectedQty - inboundQty}件の入庫が必要です`;
-        document.getElementById('matchAlert').className = 'alert alert-warning';
-        document.getElementById('matchMsg').textContent = `部分的に入庫済み（${inboundQty}/${expectedQty}件）— 続けて入庫できます`;
-        forceNewArea.classList.remove('d-none');
-    } else if (inboundQty >= expectedQty) {
-        // 已全部入库（理论上不会显示在此，但防御性处理）
-        progressArea.classList.remove('d-none');
-        document.getElementById('progressText').textContent = `${inboundQty}/${expected_qty} (100%)`;
-        document.getElementById('progressBar').style.width = '100%';
-        document.getElementById('progressBar').className = 'progress-bar bg-success';
-        document.getElementById('progressHint').textContent = '入庫完了！';
-        forceNewArea.classList.remove('d-none');
+
+        if (inboundQty > 0 && inboundQty < expectedQty) {
+            // 部分入库中
+            document.getElementById('progressText').textContent = `${inboundQty}/${expectedQty} (${progressPct}%)`;
+            document.getElementById('progressBar').style.width = progressPct + '%';
+            document.getElementById('progressBar').className = 'progress-bar bg-warning';
+            document.getElementById('progressHint').textContent = `あと${expectedQty - inboundQty}件の入庫が必要です`;
+            document.getElementById('matchAlert').className = 'alert alert-warning';
+            document.getElementById('matchMsg').textContent = `部分的に入庫済み（${inboundQty}/${expectedQty}件）— 続けて入庫できます`;
+            forceNewArea.classList.remove('d-none');
+        } else if (inboundQty >= expectedQty) {
+            // 已全部入库
+            document.getElementById('progressText').textContent = `${inboundQty}/${expectedQty} (100%)`;
+            document.getElementById('progressBar').style.width = '100%';
+            document.getElementById('progressBar').className = 'progress-bar bg-success';
+            document.getElementById('progressHint').textContent = '入庫完了！';
+            document.getElementById('matchAlert').className = 'alert alert-info';
+            document.getElementById('matchMsg').textContent = `全件入庫完了（${expectedQty}件）`;
+            forceNewArea.classList.remove('d-none');
+        } else {
+            // 未入库 (inboundQty=0, 首次匹配)
+            document.getElementById('progressText').textContent = `0/${expectedQty} (0%)`;
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressBar').className = 'progress-bar bg-primary';
+            document.getElementById('progressHint').innerHTML = `<span class="text-primary">この跟踪番号は <strong>${expectedQty}件</strong> の商品が含まれています</span>`;
+            forceNewArea.classList.remove('d-none');
+        }
     } else {
-        // 未入库
         progressArea.classList.add('d-none');
         forceNewArea.classList.add('d-none');
     }
@@ -1083,6 +1213,7 @@ function stopInboundScanner() {
 
 // ─── Init ──────────────────────────────────────
 loadRecentInbound();
+loadUnmatchedList();  // 加载左侧未入库商品列表
 (function() {
     const today = new Date().toISOString().slice(0,10);
     const dateInput = document.getElementById('inboundDate');
