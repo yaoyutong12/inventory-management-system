@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo">(v20260629-2)</small></h4>
+    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo">(v20260629-3)</small></h4>
     <div class="d-flex gap-2">
         <select class="form-select form-select-sm" id="categoryFilter" onchange="filterInventory()">
             <option value="">全カテゴリ</option>
@@ -75,6 +75,7 @@
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-primary" onclick="window.open('/sales','_self')" title="販売"><i class="bi bi-cart"></i></button>
                                     <button class="btn btn-outline-info" onclick="showDetail({{ p.id }}, {{ p | tojson | safe }})" title="詳細"><i class="bi bi-info-circle"></i></button>
+                                    <button class="btn btn-outline-danger" onclick="deleteProduct({{ p.id }}, '{{ p.product_name | replace("'", "\\'") }}', '{{ p.internal_code }}')" title="削除して仕入リストに戻す"><i class="bi bi-trash"></i></button>
                                 </div>
                             </td>
                         </tr>
@@ -176,6 +177,38 @@ function showDetail(id, pdata) {
           '\n販売価格: ' + formatJPY(pdata.selling_price||0) +
           '\n在庫: ' + pdata.current_stock + '個' +
           '\n売上: ' + formatJPY(pdata.total_revenue||0));
+}
+
+// ─── 删除商品并退回采购清单 ────────────────────
+async function deleteProduct(productId, productName, internalCode) {
+    const confirmed = confirm(
+        '⚠️ 以下の商品を削除しますか？\n\n' +
+        'コード: ' + internalCode + '\n' +
+        '商品名: ' + productName + '\n\n' +
+        '削除後：\n' +
+        '  • 在庫・売上データが削除されます\n' +
+        '  • 仕入リストに商品が戻ります\n\n' +
+        'この操作は取り消せません。'
+    );
+    if (!confirmed) return;
+
+    try {
+        const resp = await fetch('/api/product/' + productId + '/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const result = await resp.json();
+
+        if (result.success) {
+            showToast('「' + productName + '」を削除し、仕入リストに戻しました', 'success');
+            // 刷新页面
+            setTimeout(() => location.reload(), 800);
+        } else {
+            alert('削除エラー: ' + (result.error || '不明なエラー'));
+        }
+    } catch(e) {
+        alert('通信エラー: ' + e.message);
+    }
 }
 
 // ─── 内联编辑售价 ─────────────────────────────

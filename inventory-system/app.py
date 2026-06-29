@@ -1202,6 +1202,65 @@ def api_update_product_price(product_id):
     return jsonify({'success': True, 'new_price': new_price})
 
 
+@app.route('/api/product/<int:product_id>/delete', methods=['POST'])
+def api_delete_product(product_id):
+    """删除已入库商品，并退回采购清单"""
+    db = get_db()
+    product = db.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
+    if not product:
+        return jsonify({'success': False, 'error': '商品が見つかりません'}), 404
+
+    supplier_item_id = product.get('supplier_item_id')
+
+    # 收集关联照片路径（删除前获取）
+    photos = []
+    try:
+        rows = db.execute(
+            "SELECT photo FROM inbound_records WHERE product_id=? AND photo IS NOT NULL",
+            (product_id,)
+        ).fetchall()
+        for r in rows:
+            if r.get('photo'):
+                photos.append(r['photo'])
+    except Exception:
+        pass
+
+    # 删除产品 → inbound_records / sales_records 级联删除
+    product_name = product.get('product_name', '')
+    internal_code = product.get('internal_code', '')
+    try:
+        db.execute("DELETE FROM products WHERE id=?", (product_id,))
+    except Exception as e:
+        app.logger.error(f'[DeleteProduct] Failed to delete product {product_id}: {e}')
+        return jsonify({'success': False, 'error': f'削除に失敗しました: {str(e)}'}), 500
+
+    # 退回采购清单：重置 supplier_item.matched
+    if supplier_item_id:
+        db.execute(
+            "UPDATE supplier_items SET matched=FALSE, matched_date=NULL WHERE id=?",
+            (supplier_item_id,)
+        )
+        app.logger.info(f'[DeleteProduct] supplier_item {supplier_item_id} returned to purchase list')
+
+    # 清理照片文件
+    for fname in photos:
+        try:
+            fp = UPLOAD_DIR / fname
+            if fp.exists():
+                fp.unlink()
+                app.logger.info(f'[DeleteProduct] Deleted photo: {fname}')
+        except Exception as e:
+            app.logger.warning(f'[DeleteProduct] Could not delete photo {fname}: {e}')
+
+    app.logger.info(f'[DeleteProduct] Product {product_id} ({internal_code} - {product_name}) deleted; supplier_item returned to list')
+    return jsonify({
+        'success': True,
+        'message': f'「{product_name}」を削除し、仕入リストに戻しました',
+        'product_name': product_name,
+        'supplier_item_id': supplier_item_id
+    })
+
+
 # ─── API: Labels ────────────────────────────────────────────────
 @app.route('/api/labels/generate', methods=['POST'])
 def api_labels_generate():
