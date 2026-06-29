@@ -955,6 +955,46 @@ function _playBeep() {
     } catch(e) { /* 静默失败 */ }
 }
 
+// ─── 本次结算数据累积 ──────────────────────────
+function addToLastCheckout(result, productName, internalCode, sellingPrice, qty) {
+    const now = new Date().toLocaleString('ja-JP', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const newItem = {
+        product_name: productName || result.product_name || '',
+        internal_code: internalCode || result.internal_code || '',
+        selling_price: sellingPrice || result.unit_price || 0,
+        qty: qty || result.qty || 1
+    };
+    
+    if (_lastCheckoutData) {
+        // 追加到现有批次
+        _lastCheckoutData.time = now;
+        _lastCheckoutData.items.push(newItem);
+        _lastCheckoutData.total_qty = (_lastCheckoutData.total_qty || 0) + newItem.qty;
+        _lastCheckoutData.total_amount = (Number(_lastCheckoutData.total_amount) || 0) + Number(result.total_amount || 0);
+        _lastCheckoutData.total_profit = (Number(_lastCheckoutData.total_profit) || 0) + Number(result.net_profit || result.profit || 0);
+        _lastCheckoutData.shipping_fee = (Number(_lastCheckoutData.shipping_fee) || 0) + Number(result.shipping_fee || 0);
+        _lastCheckoutData.platform_fee = (Number(_lastCheckoutData.platform_fee) || 0) + Number(result.platform_fee || 0);
+        _lastCheckoutData.other_fee = (Number(_lastCheckoutData.other_fee) || 0) + Number(result.other_fee || 0);
+        if (result.sale_id) _lastCheckoutData.sale_ids.push(result.sale_id);
+    } else {
+        // 新建批次
+        _lastCheckoutData = {
+            time: now,
+            items: [newItem],
+            payment_method: cartPaymentMethodText(document.getElementById('paymentMethod').value),
+            platform: cartPlatformText(document.getElementById('salesPlatform').value),
+            shipping_fee: result.shipping_fee || 0,
+            platform_fee: result.platform_fee || 0,
+            other_fee: result.other_fee || 0,
+            total_qty: newItem.qty,
+            total_amount: result.total_amount,
+            total_profit: result.net_profit || result.profit || 0,
+            sale_ids: result.sale_id ? [result.sale_id] : []
+        };
+    }
+    renderLastCheckout();
+}
+
 // ─── 连续扫码自动销售（摄像头常开，每扫即售） ──
 async function quickSale() {
     if (!currentProduct) return;
@@ -969,26 +1009,7 @@ async function quickSale() {
     
     if (result.success) {
         _playBeep();
-        // 更新本次结算面板（单件模式）
-        _lastCheckoutData = {
-            time: new Date().toLocaleString('ja-JP', {hour:'2-digit',minute:'2-digit',second:'2-digit'}),
-            items: [{
-                product_name: result.product_name || currentProduct.product_name || '',
-                internal_code: result.internal_code || currentProduct.internal_code || '',
-                selling_price: result.unit_price || currentProduct.selling_price || 0,
-                qty: result.qty || 1
-            }],
-            payment_method: cartPaymentMethodText(document.getElementById('paymentMethod').value),
-            platform: cartPlatformText(document.getElementById('salesPlatform').value),
-            shipping_fee: result.shipping_fee || 0,
-            platform_fee: result.platform_fee || 0,
-            other_fee: result.other_fee || 0,
-            total_qty: result.qty || 1,
-            total_amount: result.total_amount,
-            total_profit: result.net_profit || result.profit || 0,
-            sale_ids: [result.sale_id]
-        };
-        renderLastCheckout();
+        addToLastCheckout(result, currentProduct.product_name, currentProduct.internal_code, currentProduct.selling_price, 1);
         const name = (result.product_name||'').substring(0, 15);
         showToast(`${name} 已售出 ¥${Number(result.total_amount).toLocaleString()}`, 'success');
         document.getElementById('salesBarcode').value = '';
@@ -1024,6 +1045,9 @@ async function doSale() {
     
     if (result.success) {
         showToast(`销售完成: ${result.product_name} ${formatJPY(result.total_amount)} (利润: ${formatJPY(result.profit)})`, 'success');
+        
+        // 累积到本次结算
+        addToLastCheckout(result, currentProduct.product_name, currentProduct.internal_code, currentProduct.selling_price, qty);
         
         if (wantReceipt) {
             await printReceipt(result.sale_id);
