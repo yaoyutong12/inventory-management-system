@@ -46,6 +46,17 @@
                     </button>
                 </div>
                 
+                <!-- Continuous Scanner -->
+                <div class="mt-2 d-flex gap-2 align-items-center">
+                    <button class="btn btn-sm btn-outline-info" id="inboundScanBtn" onclick="startInboundScanner()">
+                        <i class="bi bi-camera-video"></i> 连续扫码
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger d-none" id="inboundStopBtn" onclick="stopInboundScanner()">
+                        <i class="bi bi-stop-circle"></i> 停止
+                    </button>
+                </div>
+                <div id="inboundScannerView" class="mt-2"></div>
+                
                 <hr>
                 
                 <!-- AI实物识别 -->
@@ -915,6 +926,92 @@ async function markAsScrap(reason) {
     } else {
         showToast(result.error || '标记失败', 'error');
     }
+}
+
+// ─── Continuous Scanner (same engine as sales page) ──
+let _inScanStream = null;
+let _inScanTimer = null;
+let _inScanRunning = false;
+
+async function startInboundScanner() {
+    if (_inScanRunning) return;
+    _inScanRunning = true;
+    
+    document.getElementById('inboundScanBtn').classList.add('d-none');
+    document.getElementById('inboundStopBtn').classList.remove('d-none');
+    
+    const view = document.getElementById('inboundScannerView');
+    view.innerHTML = '<video id="inScanVideo" autoplay playsinline style="width:100%;max-width:360px;border-radius:8px;background:#000"></video>'
+                   + '<div id="inScanStatus" class="text-center small mt-1 text-muted">对准条码...</div>';
+    
+    try {
+        _inScanStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        });
+        
+        const video = document.getElementById('inScanVideo');
+        video.srcObject = _inScanStream;
+        await video.play();
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        _inScanTimer = setInterval(async () => {
+            if (!_inScanRunning || !_inScanStream) return;
+            try {
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                ctx.drawImage(video, 0, 0);
+                
+                // BarcodeDetector first
+                if (window.BarcodeDetector) {
+                    try {
+                        const bd = new BarcodeDetector({ formats: ['code_128','code_39','code_93','ean_13','ean_8','upc_a','upc_e','itf','codabar'] });
+                        const barcodes = await bd.detect(canvas);
+                        if (barcodes.length > 0) { onInboundScan(barcodes[0].rawValue); return; }
+                        const gc = document.createElement('canvas'); gc.width=canvas.width; gc.height=canvas.height;
+                        const gctx = gc.getContext('2d');
+                        gctx.filter = 'grayscale(1) contrast(1.2)';
+                        gctx.drawImage(canvas, 0, 0);
+                        const barcodes2 = await bd.detect(gc);
+                        if (barcodes2.length > 0) { onInboundScan(barcodes2[0].rawValue); return; }
+                    } catch(e) {}
+                }
+                
+                // pyzbar server
+                canvas.toBlob(async (blob) => {
+                    if (!_inScanRunning || !blob) return;
+                    try {
+                        const fd = new FormData();
+                        fd.append('frame', blob, 'frame.jpg');
+                        const res = await fetch('/api/barcode/scan-frame', { method: 'POST', body: fd });
+                        const data = await res.json();
+                        if (data.found && data.barcode) onInboundScan(data.barcode);
+                    } catch(e) {}
+                }, 'image/jpeg', 0.6);
+            } catch(e) {}
+        }, 350);
+        
+    } catch(err) {
+        stopInboundScanner();
+        showToast('摄像头不可用: ' + err.message, 'danger');
+    }
+}
+
+function onInboundScan(barcode) {
+    document.getElementById('manualBarcodeInput').value = barcode;
+    stopInboundScanner();
+    lookupBarcode(barcode);
+}
+
+function stopInboundScanner() {
+    _inScanRunning = false;
+    if (_inScanTimer) { clearInterval(_inScanTimer); _inScanTimer = null; }
+    if (_inScanStream) { _inScanStream.getTracks().forEach(t => t.stop()); _inScanStream = null; }
+    document.getElementById('inboundScannerView').innerHTML = '';
+    document.getElementById('inboundScanBtn').classList.remove('d-none');
+    document.getElementById('inboundStopBtn').classList.add('d-none');
 }
 
 // ─── Init ──────────────────────────────────────
