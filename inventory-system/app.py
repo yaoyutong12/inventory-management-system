@@ -1844,7 +1844,7 @@ def api_mercari_stock():
             d['photo_url'] = f'/uploads/{d["photo"]}'
         else:
             d['photo_url'] = None
-    result.append(d)
+        result.append(d)
     return jsonify(result)
 
 
