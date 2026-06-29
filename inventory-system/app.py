@@ -1802,13 +1802,16 @@ def api_mercari_draft(product_id):
 @app.route('/api/mercari/high-value')
 def api_mercari_high_value():
     db = get_db()
-    products = db.execute("SELECT * FROM products WHERE is_high_value=TRUE AND status='in_stock' ORDER BY selling_price DESC").fetchall()
+    raw_products = db.execute("SELECT * FROM products WHERE is_high_value=TRUE ORDER BY selling_price DESC").fetchall()
     result = []
-    for p in products:
+    for p in raw_products:
         total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]
         total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        current_stock = total_in - total_out
+        if current_stock <= 0:
+            continue
         d = dict(p)
-        d['current_stock'] = total_in - total_out
+        d['current_stock'] = current_stock
         d['has_listing'] = bool(db.execute("SELECT id FROM mercari_listings WHERE product_id=?", (p['id'],)).fetchone())
         result.append(d)
     return jsonify(result)
@@ -1816,19 +1819,23 @@ def api_mercari_high_value():
 
 @app.route('/api/mercari/stock')
 def api_mercari_stock():
-    """获取所有在库商品供煤炉上架（不限高额）"""
+    """获取所有在库商品供煤炉上架（不限高额，以实际库存>0为准）"""
     db = get_db()
-    # 关联查询照片
-    products = db.execute("""SELECT p.*, 
+    # 关联查询照片 — 不依赖status字段，改用实际库存计算
+    raw_products = db.execute("""SELECT p.*, 
         (SELECT photo FROM inbound_records WHERE product_id=p.id AND photo IS NOT NULL AND photo != '' ORDER BY id DESC LIMIT 1) as photo,
         (SELECT photo_data FROM inbound_records WHERE product_id=p.id AND photo_data IS NOT NULL AND photo_data != '' ORDER BY id DESC LIMIT 1) as photo_data 
-        FROM products p WHERE p.status='in_stock' ORDER BY p.updated_at DESC""").fetchall()
+        FROM products p ORDER BY p.updated_at DESC""").fetchall()
     result = []
-    for p in products:
+    for p in raw_products:
         total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (p['id'],)).fetchone()[0]
         total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        current_stock = total_in - total_out
+        # 只返回有实际库存的商品（不依赖status字段）
+        if current_stock <= 0:
+            continue
         d = dict(p)
-        d['current_stock'] = total_in - total_out
+        d['current_stock'] = current_stock
         d['has_listing'] = bool(db.execute("SELECT id FROM mercari_listings WHERE product_id=?", (p['id'],)).fetchone())
         # 添加照片URL（DB优先）
         if d.get('photo_data'):
