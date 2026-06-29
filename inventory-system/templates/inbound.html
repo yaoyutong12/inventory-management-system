@@ -86,11 +86,16 @@
                         <span class="badge bg-success pulse-badge">🔍 スキャン中... 条码を枠内に入れてください</span>
                     </div>
                     <div class="d-grid gap-2">
-                        <button class="btn btn-primary btn-lg" id="startScanBtn" onclick="startScanner()">
-                            <i class="bi bi-camera-video"></i> <span data-i18n="scan_start">扫码开始</span>
-                        </button>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-primary btn-lg" id="startScanBtn" onclick="startScanner()">
+                                <i class="bi bi-camera-video"></i> 連続スキャン
+                            </button>
+                            <button class="btn btn-success btn-lg" id="captureScanBtn" onclick="captureAndDetect()">
+                                <i class="bi bi-camera"></i> 撮影して識別
+                            </button>
+                        </div>
                         <button class="btn btn-outline-secondary" id="stopScanBtn" onclick="stopScanner()" disabled>
-                            <i class="bi bi-stop-circle"></i> <span data-i18n="stop">停止</span>
+                            <i class="bi bi-stop-circle"></i> 停止
                         </button>
                     </div>
                 </div>
@@ -408,8 +413,7 @@ function startScanner() {
     
     scanner = new Html5Qrcode("scanner-view");
     
-    // 扫码配置：去掉 qrbox 用全帧扫描（笔记本相机对焦/距离不稳定时更可靠）
-    // 去掉 aspectRatio 避免视频变形导致条码不可读
+    // 扫码配置：全帧扫描（无 qrbox 约束，摄像头视野内任意位置都能识别）
     const scanConfig = {
         fps: 10,
         qrbox: { width: 380, height: 200 },
@@ -426,6 +430,9 @@ function startScanner() {
             Html5QrcodeSupportedFormats.CODABAR,
             Html5QrcodeSupportedFormats.DATA_MATRIX,
         ],
+        experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true  // Chrome 原生条码 API 更快更准
+        }
     };
     
     // 视频约束：1080p 提高识别率
@@ -493,6 +500,81 @@ async function stopScanner() {
     document.getElementById('scanStatusText').textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
     document.getElementById('startScanBtn').disabled = false;
     document.getElementById('stopScanBtn').disabled = true;
+    document.getElementById('captureScanBtn').disabled = false;
+}
+
+// ─── 撮影して識別（備用モード） ──────────────
+async function captureAndDetect() {
+    if (!scanner) {
+        // 先启动扫描仪
+        document.getElementById('scanIndicator').classList.remove('d-none');
+        document.getElementById('scanStatusText').textContent = '📸 カメラ起動中...';
+        document.getElementById('startScanBtn').disabled = true;
+        document.getElementById('stopScanBtn').disabled = false;
+        
+        scanner = new Html5Qrcode("scanner-view");
+        const cameraConfig = { facingMode: "user", width: { ideal: 1920 }, height: { ideal: 1080 } };
+        
+        try {
+            await scanner.start(cameraConfig, { fps: 10 }, () => {}, () => {});
+        } catch(e) {
+            try {
+                await scanner.start({}, { fps: 10 }, () => {}, () => {});
+            } catch(e2) {
+                showToast('カメラ起動できません', 'danger');
+                stopScanner();
+                return;
+            }
+        }
+    }
+    
+    document.getElementById('scanStatusText').textContent = '📸 撮影中...';
+    document.getElementById('captureScanBtn').disabled = true;
+    
+    try {
+        // 从视频流捕获一帧图片
+        const captureCanvas = document.createElement('canvas');
+        const videoEl = document.querySelector('#scanner-view video');
+        
+        if (!videoEl) {
+            showToast('ビデオ要素が見つかりません', 'danger');
+            return;
+        }
+        
+        captureCanvas.width = videoEl.videoWidth;
+        captureCanvas.height = videoEl.videoHeight;
+        const ctx = captureCanvas.getContext('2d');
+        ctx.drawImage(videoEl, 0, 0, captureCanvas.width, captureCanvas.height);
+        
+        const imageDataUrl = captureCanvas.toDataURL('image/png');
+        
+        document.getElementById('scanStatusText').textContent = '🔍 画像解析中...';
+        
+        // 先用独立方式扫描（不依赖连续扫码实例）
+        // dataURL → Blob → File
+        const blob = await (await fetch(imageDataUrl)).blob();
+        const file = new File([blob], 'capture.png', { type: 'image/png' });
+        
+        // Html5Qrcode.scanFile 是静态方法，独立解析图片
+        const decodedText = await Html5Qrcode.scanFile(file, false);
+        console.log('✅ 撮影識別成功:', decodedText);
+        
+        stopScanner();
+        if (decodedText) {
+            showToast('✅ 識別成功: ' + decodedText, 'success');
+            lookupBarcode(decodedText);
+        } else {
+            showToast('❌ 条码が見つかりませんでした。もう一度試してください', 'warning');
+            document.getElementById('captureScanBtn').disabled = false;
+            document.getElementById('scanStatusText').textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
+        }
+    } catch(e) {
+        console.error('撮影識別エラー:', e);
+        showToast('識別失敗: ' + e.message, 'danger');
+        stopScanner();
+    } finally {
+        document.getElementById('captureScanBtn').disabled = false;
+    }
 }
 
 // ─── Mode 2: AI Photo Recognition ────────────
