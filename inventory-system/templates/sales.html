@@ -19,9 +19,14 @@
                             <i class="bi bi-search"></i>
                         </button>
                     </div>
-                    <div class="mt-2 d-flex gap-2 align-items-center">
+                    <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
                         <button class="btn btn-sm btn-outline-secondary" id="salesScanBtn" onclick="startSalesScanner()">
-                            <i class="bi bi-camera"></i> 摄像头扫码
+                            <i class="bi bi-camera-video"></i> 连续扫码
+                        </button>
+                        <input type="file" id="salesPhotoInput" accept="image/*" capture="environment"
+                               style="display:none" onchange="photoScanBarcode(this)">
+                        <button class="btn btn-sm btn-outline-success" onclick="document.getElementById('salesPhotoInput').click()">
+                            <i class="bi bi-camera"></i> 拍照扫码
                         </button>
                         <button class="btn btn-sm btn-outline-danger d-none" id="salesStopBtn" onclick="stopSalesScanner()">
                             <i class="bi bi-stop-circle"></i> 停止
@@ -224,9 +229,28 @@ function startSalesScanner() {
     document.getElementById('salesStopBtn').classList.remove('d-none');
     
     salesScanner = new Html5Qrcode("salesScannerView");
+    
+    const config = {
+        fps: 15,
+        qrbox: { width: 350, height: 180 },
+        formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.DATA_MATRIX
+        ]
+    };
+    
     salesScanner.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 150 } },
+        config,
         (decodedText) => {
             document.getElementById('salesBarcode').value = decodedText;
             stopSalesScanner();
@@ -234,7 +258,7 @@ function startSalesScanner() {
         },
         () => {}
     ).catch(err => {
-        showToast('摄像头错误: ' + err, 'error');
+        showToast('摄像头错误: ' + err, 'danger');
         document.getElementById('salesScanBtn').classList.remove('d-none');
         document.getElementById('salesStopBtn').classList.add('d-none');
     });
@@ -492,6 +516,35 @@ async function loadTodaySummary() {
     } catch (err) {
         console.error('加载今日汇总失败:', err);
     }
+}
+
+// ─── Photo Scan Barcode (拍照→pyzbar后端解码→自动查商品) ──
+async function photoScanBarcode(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    showToast('解码中...', 'info');
+    
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        const res = await fetch('/api/inbound/ai-read-barcode', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.success && data.barcode) {
+            showToast('识别: ' + data.barcode, 'success');
+            document.getElementById('salesBarcode').value = data.barcode;
+            // Auto-trigger product lookup
+            await scanProduct();
+        } else {
+            showToast('未识别到条码，请重拍或手动输入', 'warning');
+        }
+    } catch(e) {
+        showToast('解码失败: ' + e.message, 'danger');
+    }
+    
+    input.value = '';
 }
 
 // ─── Init ─────────────────────────────
