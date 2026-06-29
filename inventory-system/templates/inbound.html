@@ -84,6 +84,11 @@
                     </div>
                     <!-- 隱藏容器，用於撮影識別時的獨立 Html5Qrcode 實例 -->
                     <div id="scan-helper"></div>
+                    <!-- BarcodeDetector 调试缩略图 — 显示扫描器实际看到的内容 -->
+                    <div id="bd-debug" class="text-center mb-1 d-none">
+                        <canvas id="bd-debug-canvas" style="max-width:180px; border:1px solid #ccc; border-radius:6px;"></canvas>
+                        <div class="small text-muted">📷 スキャナーが実際に見ている画像</div>
+                    </div>
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <div id="scanIndicator" class="d-none">
                             <span class="badge bg-success pulse-badge">🔍 スキャン中... 条码を枠内に入れてください</span>
@@ -465,39 +470,130 @@ function _startBDLoop(videoEl) {
     
     let bdFrameCount = 0;
     const canvas = document.createElement('canvas');
+    const debugCanvas = document.getElementById('bd-debug-canvas');
     let lastCode = ''; // 防止重复识别
     
     _bdLoopTimer = setInterval(async () => {
         if (!videoEl || videoEl.readyState < 2 || !_bdDetector) return;
         
         try {
-            canvas.width = videoEl.videoWidth || 1280;
-            canvas.height = videoEl.videoHeight || 720;
+            const vw = videoEl.videoWidth || 1280;
+            const vh = videoEl.videoHeight || 720;
+            if (vw < 100) return; // 视频未就绪
+            
+            canvas.width = vw;
+            canvas.height = vh;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(videoEl, 0, 0);
             
-            const results = await _bdDetector.detect(canvas);
             bdFrameCount++;
+            
+            // ── 策略A: 原图检测 ──
+            let results = await _bdDetector.detect(canvas);
+            
+            // ── 策略B: 预处理图检测（二值化+锐化）──
+            if (!results || results.length === 0) {
+                try {
+                    const processed = _applyBarcodeFilter(canvas);
+                    if (processed) results = await _bdDetector.detect(processed);
+                } catch(e) {}
+            }
+            
+            // ── 策略C: 中心裁剪（条码通常在上半部分）──
+            if (!results || results.length === 0) {
+                try {
+                    const cropCanvas = document.createElement('canvas');
+                    cropCanvas.width = vw;
+                    cropCanvas.height = Math.round(vh * 0.5);
+                    cropCanvas.getContext('2d').drawImage(canvas, 0, 0);
+                    results = await _bdDetector.detect(cropCanvas);
+                } catch(e) {}
+            }
+            
+            // ── 调试缩略图（每20帧更新一次）──
+            if (bdFrameCount % 20 === 0 && debugCanvas) {
+                try {
+                    const thumb = document.createElement('canvas');
+                    thumb.width = 200;
+                    thumb.height = Math.round(200 * vh / vw);
+                    thumb.getContext('2d').drawImage(canvas, 0, 0, thumb.width, thumb.height);
+                    const ctx2 = debugCanvas.getContext('2d');
+                    debugCanvas.width = 200;
+                    debugCanvas.height = thumb.height;
+                    ctx2.drawImage(thumb, 0, 0);
+                } catch(_) {}
+            }
             
             if (results && results.length > 0) {
                 const code = results[0].rawValue;
                 if (code && code !== lastCode) {
-                    console.log('✅ [BD循环] 第' + bdFrameCount + '帧识别成功:', code);
+                    console.log('✅ [BD] 第' + bdFrameCount + '帧:', code);
                     lastCode = code;
                     _stopBDLoop();
                     stopScanner();
                     lookupBarcode(code);
                 }
             } else if (bdFrameCount % 20 === 0) {
-                console.log('🔍 [BD循环] 扫描中...(' + bdFrameCount + '帧)');
+                console.log('🔍 [BD] ' + bdFrameCount + '帧 (3策略均未命中)');
             }
         } catch(e) {
-            // 静默忽略单帧错误（视频流可能暂时不可用）
-            if (bdFrameCount % 30 === 0) console.warn('[BD循环] 帧错误:', e.message);
+            if (bdFrameCount % 30 === 0) console.warn('[BD] 帧错误:', e.message);
         }
-    }, 400); // 每400ms检测一帧（比html5-qrcode的15fps更节省资源）
+    }, 250);
     
-    console.log('🚀 BarcodeDetector 循环已启动 (间隔: 400ms)');
+    // 显示调试面板
+    const debugDiv = document.getElementById('bd-debug');
+    if (debugDiv) debugDiv.classList.remove('d-none');
+    
+    console.log('🚀 BarcodeDetector 3策略循环 (250ms)');
+}
+
+// ─── 条码专用滤镜：二值化 + 对比度极值拉伸 + 锐化 ───
+function _applyBarcodeFilter(sourceCanvas) {
+    try {
+        const w = sourceCanvas.width, h = sourceCanvas.height;
+        const out = document.createElement('canvas');
+        out.width = w; out.height = h;
+        const ctx = out.getContext('2d');
+        ctx.drawImage(sourceCanvas, 0, 0);
+        
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
+        const len = data.length;
+        
+        // Step 1: 灰度化 + 找最值
+        let min = 255, max = 0;
+        const gray = new Uint8Array(len / 4);
+        for (let i = 0, j = 0; i < len; i += 4, j++) {
+            const g = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+            gray[j] = g;
+            if (g < min) min = g;
+            if (g > max) max = g;
+        }
+        
+        // Step 2: 对比度拉伸 + 二值化（自适应阈值 = 均值）
+        const range = max - min || 1;
+        let sum = 0;
+        for (let i = 0; i < gray.length; i++) {
+            let v = ((gray[i] - min) / range * 255);
+            v = Math.max(0, Math.min(255, v));
+            gray[i] = v;
+            sum += v;
+        }
+        const threshold = sum / gray.length;
+        
+        // Step 3: 二值化（白底黑条）
+        for (let i = 0, j = 0; i < len; i += 4, j++) {
+            const v = gray[j] > threshold ? 255 : 0;
+            data[i] = data[i+1] = data[i+2] = v;
+            data[i+3] = 255;
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return out;
+    } catch(e) {
+        return null;
+    }
 }
 
 function _stopBDLoop() {
@@ -711,6 +807,8 @@ async function startScanner() {
 
 async function stopScanner() {
     _stopBDLoop();  // 停止 BarcodeDetector 并行循环
+    const debugDiv = document.getElementById('bd-debug');
+    if (debugDiv) debugDiv.classList.add('d-none');
     if (scanner) {
         await scanner.stop();
         scanner = null;
@@ -826,7 +924,7 @@ async function detectFromImageFile(event) {
     event.target.value = '';
 }
 
-// ─── 图像预处理：灰度化 + 对比度增强 + 锐化 ───
+// ─── 图像预处理：灰度化 + 对比度增强 + 二值化 ───
 async function preprocessImage(file) {
     try {
         const img = await createImageBitmap(file);
@@ -835,28 +933,13 @@ async function preprocessImage(file) {
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         
-        // 绘制灰度图像
         ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
         
-        // 灰度化 + 对比度增强 (拉伸直方图)
-        let min = 255, max = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
-            data[i] = data[i+1] = data[i+2] = gray;
-            if (gray < min) min = gray;
-            if (gray > max) max = gray;
+        // 应用条码专用滤镜
+        const processed = _applyBarcodeFilter(canvas);
+        if (processed) {
+            return new Promise(resolve => processed.toBlob(resolve, 'image/png'));
         }
-        // 对比度拉伸
-        const range = max - min || 1;
-        for (let i = 0; i < data.length; i += 4) {
-            let v = ((data[i] - min) / range * 255);
-            v = Math.max(0, Math.min(255, v)); // clamp
-            data[i] = data[i+1] = data[i+2] = v;
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
         
         return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     } catch(e) {
