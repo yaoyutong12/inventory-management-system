@@ -2067,6 +2067,75 @@ def _barcode_result(decoded_list, method):
     })
 
 
+def _pyzbar_try_decode(img):
+    """Run pyzbar multi-strategy decode on a PIL Image, return cleaned barcode or None.
+    Optimized for speed: fewer strategies, smaller image sizes."""
+    import numpy as np
+    
+    strategies = [
+        # (name, image, desc)
+        ('gray', lambda: img.convert('L')),
+        ('bin128', lambda: img.convert('L').point(lambda x: 255 if x > 128 else 0, '1')),
+        ('bin80', lambda: img.convert('L').point(lambda x: 255 if x > 80 else 0, '1')),
+        ('contrast', lambda: _make_contrast(img.convert('L'))),
+        ('upscale2x_bin', lambda: img.resize((img.width*2, img.height*2), Image.LANCZOS).convert('L').point(lambda x: 255 if x > 128 else 0, '1')),
+    ]
+    
+    for name, make_img in strategies:
+        try:
+            proc = make_img()
+            decoded = pyzbar_decode(proc)
+            if decoded:
+                raw = decoded[0].data.decode('utf-8', errors='replace').strip()
+                if raw:
+                    cleaned = re.sub(r'^[^\d\-]*', '', raw)
+                    cleaned = re.sub(r'[^\d\-]*$', '', cleaned)
+                    cleaned = re.sub(r'^\]\w\d+', '', cleaned)
+                    if cleaned and re.search(r'\d', cleaned):
+                        print(f'[scan-frame] {name}: "{raw}" → "{cleaned}"')
+                        return cleaned
+        except Exception as e:
+            print(f'[scan-frame] {name} error: {e}')
+    
+    return None
+
+
+def _make_contrast(gray_img):
+    """Stretch contrast of a grayscale image."""
+    import numpy as np
+    arr = np.array(gray_img)
+    p5, p95 = np.percentile(arr, (5, 95))
+    if p95 > p5:
+        arr = np.clip((arr - p5) * 255.0 / (p95 - p5), 0, 255).astype(np.uint8)
+    return Image.fromarray(arr)
+
+
+@app.route('/api/barcode/scan-frame', methods=['POST'])
+def api_barcode_scan_frame():
+    """Receive a video frame, try to decode barcode with pyzbar. For continuous scanning."""
+    file = request.files.get('frame')
+    if not file:
+        return jsonify({'found': False}), 200
+    
+    try:
+        img = Image.open(file.stream)
+        
+        # Resize for speed: max 800px wide
+        if img.width > 800:
+            ratio = 800 / img.width
+            img = img.resize((800, int(img.height * ratio)), Image.LANCZOS)
+        
+        barcode = _pyzbar_try_decode(img)
+        
+        if barcode:
+            return jsonify({'found': True, 'barcode': barcode})
+        else:
+            return jsonify({'found': False})
+    
+    except Exception as e:
+        return jsonify({'found': False, 'error': str(e)}), 200
+
+
 @app.route('/api/inbound/manual', methods=['POST'])
 def api_inbound_manual():
     """手动输入条码入库，不需要扫描"""

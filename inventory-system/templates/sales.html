@@ -220,55 +220,118 @@
 
 {% block extra_js %}
 <script>
-let salesScanner = null;
 let currentProduct = null;
 let externalProduct = null;
 
-function startSalesScanner() {
+// ─── Continuous Scanner (getUserMedia + pyzbar后端) ──
+let _scanStream = null;
+let _scanTimer = null;
+let _scanRunning = false;
+
+async function startSalesScanner() {
+    if (_scanRunning) return;
+    _scanRunning = true;
+    
     document.getElementById('salesScanBtn').classList.add('d-none');
     document.getElementById('salesStopBtn').classList.remove('d-none');
     
-    salesScanner = new Html5Qrcode("salesScannerView");
+    const view = document.getElementById('salesScannerView');
+    view.innerHTML = '<video id="scanVideo" autoplay playsinline style="width:100%;max-width:360px;border-radius:8px;background:#000"></video>'
+                   + '<div id="scanStatus" class="text-center small mt-1 text-muted">对准条码...</div>';
     
-    const config = {
-        fps: 15,
-        qrbox: { width: 350, height: 180 },
-        formatsToSupport: [
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.CODE_93,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.CODABAR,
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.DATA_MATRIX
-        ]
-    };
-    
-    salesScanner.start(
-        { facingMode: "environment" },
-        config,
-        (decodedText) => {
-            document.getElementById('salesBarcode').value = decodedText;
-            stopSalesScanner();
-            scanProduct();
-        },
-        () => {}
-    ).catch(err => {
-        showToast('摄像头错误: ' + err, 'danger');
-        document.getElementById('salesScanBtn').classList.remove('d-none');
-        document.getElementById('salesStopBtn').classList.add('d-none');
-    });
+    try {
+        _scanStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        });
+        
+        const video = document.getElementById('scanVideo');
+        video.srcObject = _scanStream;
+        await video.play();
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Main scan loop: run every 350ms
+        _scanTimer = setInterval(async () => {
+            if (!_scanRunning || !_scanStream) return;
+            
+            try {
+                // Grab frame
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                ctx.drawImage(video, 0, 0);
+                
+                // Strategy 1: Try BarcodeDetector (fast, no network)
+                if (window.BarcodeDetector) {
+                    try {
+                        const bd = new BarcodeDetector({ formats: ['code_128', 'code_39', 'code_93', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar'] });
+                        const barcodes = await bd.detect(canvas);
+                        if (barcodes.length > 0) {
+                            onBarcodeFound(barcodes[0].rawValue, 'BarcodeDetector');
+                            return;
+                        }
+                        // Also try grayscale version
+                        const grayCanvas = document.createElement('canvas');
+                        grayCanvas.width = canvas.width;
+                        grayCanvas.height = canvas.height;
+                        const gctx = grayCanvas.getContext('2d');
+                        gctx.filter = 'grayscale(1) contrast(1.2)';
+                        gctx.drawImage(canvas, 0, 0);
+                        const barcodes2 = await bd.detect(grayCanvas);
+                        if (barcodes2.length > 0) {
+                            onBarcodeFound(barcodes2[0].rawValue, 'BarcodeDetector(gray)');
+                            return;
+                        }
+                    } catch(e) { /* BarcodeDetector may not support all formats */ }
+                }
+                
+                // Strategy 2: Send frame to server pyzbar (reliable but needs network)
+                canvas.toBlob(async (blob) => {
+                    if (!_scanRunning || !blob) return;
+                    try {
+                        const fd = new FormData();
+                        fd.append('frame', blob, 'frame.jpg');
+                        const res = await fetch('/api/barcode/scan-frame', { method: 'POST', body: fd });
+                        const data = await res.json();
+                        if (data.found && data.barcode) {
+                            onBarcodeFound(data.barcode, 'pyzbar');
+                        }
+                    } catch(e) { /* network error, will retry next frame */ }
+                }, 'image/jpeg', 0.6);
+                
+            } catch(e) { /* frame grab fails sometimes, skip */ }
+            
+        }, 350);
+        
+        document.getElementById('scanStatus').textContent = '对准条码...';
+        
+    } catch (err) {
+        stopSalesScanner();
+        showToast('摄像头不可用: ' + err.message, 'danger');
+    }
+}
+
+function onBarcodeFound(barcode, method) {
+    console.log('[SalesScan] ' + method + ' 识别: ' + barcode);
+    document.getElementById('salesBarcode').value = barcode;
+    stopSalesScanner();
+    scanProduct();
 }
 
 async function stopSalesScanner() {
-    if (salesScanner) {
-        await salesScanner.stop();
-        salesScanner = null;
+    _scanRunning = false;
+    
+    if (_scanTimer) {
+        clearInterval(_scanTimer);
+        _scanTimer = null;
     }
+    if (_scanStream) {
+        _scanStream.getTracks().forEach(t => t.stop());
+        _scanStream = null;
+    }
+    
+    document.getElementById('salesScannerView').innerHTML = '';
     document.getElementById('salesScanBtn').classList.remove('d-none');
     document.getElementById('salesStopBtn').classList.add('d-none');
 }
