@@ -669,6 +669,14 @@ function onBarcodeFound(barcode, method) {
         }
         _lastScannedBarcode = barcode;
         _lastScanTime = now;
+    } else {
+        // 非购物篮模式也做去重，防止同一帧反复触发
+        const now = Date.now();
+        if (barcode === _lastScannedBarcode && (now - _lastScanTime) < 2000) {
+            return;
+        }
+        _lastScannedBarcode = barcode;
+        _lastScanTime = now;
     }
     
     document.getElementById('salesBarcode').value = barcode;
@@ -681,8 +689,11 @@ function onBarcodeFound(barcode, method) {
             if (scanStatus) scanStatus.textContent = '对准条码...';
         });
     } else {
-        stopSalesScanner();
-        scanProduct();
+        // 非购物篮模式：连续扫码自动销售，不停摄像头
+        if (scanStatus) scanStatus.textContent = '处理中...';
+        scanProduct(barcode).finally(() => {
+            if (scanStatus) scanStatus.textContent = '对准条码...';
+        });
     }
 }
 
@@ -711,8 +722,8 @@ async function scanProduct(barcodeOverride) {
     
     if (data.error || data.type !== 'product') {
         showToast('未找到商品: ' + barcode, 'warning');
-        if (_cartMode) {
-            // 购物篮模式：清空输入方便手动输入，扫描继续
+        if (_cartMode || _scanRunning) {
+            // 购物篮/连续扫码模式：清空输入，摄像头继续
             document.getElementById('salesBarcode').value = '';
         } else {
             document.getElementById('productInfo').classList.add('d-none');
@@ -723,8 +734,12 @@ async function scanProduct(barcodeOverride) {
     if (_cartMode) {
         // 购物篮模式：直接加入购物篮，不清空，继续扫码
         addToCart(data);
+    } else if (_scanRunning) {
+        // 连续扫码模式：自动销售（默认 qty=1，使用当前支付方式/平台），摄像头常开
+        currentProduct = data;
+        await quickSale();
     } else {
-        // 单件模式：显示商品信息，等待确认销售
+        // 手动输入模式：显示商品信息，等待确认销售
         currentProduct = data;
         document.getElementById('productInfo').classList.remove('d-none');
         document.getElementById('prodName').textContent = (data.product_name||'').substring(0,60);
@@ -732,6 +747,30 @@ async function scanProduct(barcodeOverride) {
         document.getElementById('prodStock').textContent = data.current_stock;
         document.getElementById('prodPrice').textContent = formatJPY(data.selling_price || 0);
         updateSaleTotal();
+    }
+}
+
+// ─── 连续扫码自动销售（摄像头常开，每扫即售） ──
+async function quickSale() {
+    if (!currentProduct) return;
+    
+    const result = await API.post('/api/sales/create', {
+        product_id: currentProduct.id,
+        qty: 1,
+        unit_price: currentProduct.selling_price,
+        payment_method: document.getElementById('paymentMethod').value,
+        platform: document.getElementById('salesPlatform').value
+    });
+    
+    if (result.success) {
+        const name = (result.product_name||'').substring(0, 15);
+        showToast(`${name} 已售出 ¥${Number(result.total_amount).toLocaleString()}`, 'success');
+        document.getElementById('salesBarcode').value = '';
+        currentProduct = null;
+        loadSalesHistory();
+        loadTodaySummary();
+    } else {
+        showToast(result.error || '销售失败', 'error');
     }
 }
 
