@@ -660,8 +660,18 @@ async function startSalesScanner() {
 function onBarcodeFound(barcode, method) {
     console.log('[SalesScan] ' + method + ' 识别: ' + barcode);
     document.getElementById('salesBarcode').value = barcode;
-    stopSalesScanner();
-    scanProduct();
+    if (_cartMode) {
+        // 购物篮模式：扫码成功后自动继续扫码，无需手动点击
+        stopSalesScanner();
+        scanProduct().finally(() => {
+            if (_cartMode) {
+                setTimeout(() => startSalesScanner(), 500);
+            }
+        });
+    } else {
+        stopSalesScanner();
+        scanProduct();
+    }
 }
 
 async function stopSalesScanner() {
