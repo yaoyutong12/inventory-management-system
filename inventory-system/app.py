@@ -1953,139 +1953,102 @@ def api_inbound_ai_recognize():
 
 @app.route('/api/inbound/ai-read-barcode', methods=['POST'])
 def api_ai_read_barcode():
-    """读取条码：优先使用pyzbar解码，失败则用Gemini AI"""
+    """读取条码：pyzbar多策略解码，不回退到AI（AI配额不可靠）"""
     file = request.files.get('image')
     if not file:
         return jsonify({'error': '画像がありません'}), 400
 
     try:
         img = Image.open(file.stream)
-
-        # ── Step 1: Try pyzbar (reliable CODE-128 decoder) ──
-        # Preprocess: grayscale + enhance contrast for better detection
+        
+        # ── Strategy 1: Original image ──
+        decoded = pyzbar_decode(img)
+        if decoded:
+            return _barcode_result(decoded, 'pyzbar_original')
+        
+        # ── Strategy 2: Grayscale ──
         img_gray = img.convert('L')
         decoded = pyzbar_decode(img_gray)
         if decoded:
-            barcodes_found = []
-            for d in decoded:
-                text = d.data.decode('utf-8').strip()
-                if text:
-                    barcodes_found.append(text)
-            if barcodes_found:
-                barcode = barcodes_found[0]
-                print(f'[pyzbar] 解码成功: "{barcode}"')
-                return jsonify({
-                    'success': True,
-                    'barcode': barcode,
-                    'method': 'pyzbar',
-                    'all_barcodes': barcodes_found
-                })
-
-        # ── Step 2: pyzbar failed, try with enhanced preprocessing ──
+            return _barcode_result(decoded, 'pyzbar_gray')
+        
+        # ── Strategy 3: Binarize (binary threshold) ──
+        img_bin = img_gray.point(lambda x: 255 if x > 128 else 0, '1')
+        decoded = pyzbar_decode(img_bin)
+        if decoded:
+            return _barcode_result(decoded, 'pyzbar_binary')
+        
+        # ── Strategy 4: Upscale 2x then grayscale ──
+        w, h = img.size
+        img_big = img.resize((w * 2, h * 2), Image.LANCZOS).convert('L')
+        decoded = pyzbar_decode(img_big)
+        if decoded:
+            return _barcode_result(decoded, 'pyzbar_upscale2x')
+        
+        # ── Strategy 5: Upscale 3x then binary ──
+        img_big3 = img.resize((w * 3, h * 3), Image.LANCZOS).convert('L')
+        img_big3_bin = img_big3.point(lambda x: 255 if x > 128 else 0, '1')
+        decoded = pyzbar_decode(img_big3_bin)
+        if decoded:
+            return _barcode_result(decoded, 'pyzbar_upscale3x')
+        
+        # ── Strategy 6: Contrast stretch + binary ──
         import numpy as np
         img_arr = np.array(img_gray)
-        # Stretch contrast: map 5th-95th percentile to 0-255
-        p5, p95 = np.percentile(img_arr, (5, 95))
-        if p95 > p5:
-            img_arr = np.clip((img_arr - p5) * 255.0 / (p95 - p5), 0, 255).astype(np.uint8)
-        img_enhanced = Image.fromarray(img_arr)
-        decoded2 = pyzbar_decode(img_enhanced)
-        if decoded2:
-            barcodes_found = []
-            for d in decoded2:
-                text = d.data.decode('utf-8').strip()
-                if text:
-                    barcodes_found.append(text)
-            if barcodes_found:
-                barcode = barcodes_found[0]
-                print(f'[pyzbar-enhanced] 解码成功: "{barcode}"')
-                return jsonify({
-                    'success': True,
-                    'barcode': barcode,
-                    'method': 'pyzbar_enhanced',
-                    'all_barcodes': barcodes_found
-                })
-
-        # ── Step 3: pyzbar failed, fall back to Gemini AI ──
-        print('[pyzbar] 解码失败，回退到 Gemini AI')
-
-        if not GEMINI_AVAILABLE:
-            return jsonify({
-                'success': False,
-                'error': '条码解码失败（pyzbar无法识别，AI未配置）',
-                'type': 'decode_failed'
-            }), 422
-
-        api_key = os.environ.get('GEMINI_API_KEY', '')
-        if not api_key:
-            return jsonify({
-                'success': False,
-                'error': '条码解码失败（pyzbar无法识别，AI Key未设置）',
-                'type': 'decode_failed'
-            }), 422
-
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash')
-
-        buf = io.BytesIO()
-        img.save(buf, format='JPEG', quality=85)
-        buf.seek(0)
-        image_bytes = buf.getvalue()
-
-        prompt = """あなたはバーコード読み取りアシスタントです。
-この画像には商品のバーコードが写っています。
-
-バーコードの下に書かれている数字（人間が読める数字）をそのまま読み取ってください。
-ハイフン(-)やスペースが含まれている場合は、そのまま含めてください。
-
-ルール：
-- バーコードの数字だけを返してください
-- 説明や余計な文字は一切含めないでください
-- 数字が見えない/読めない場合は "NOT_FOUND" とだけ返してください
-- JSONではなく、数字の文字列だけを返してください
-
-例：
-5000-2301-7896
-または
-4901234567890"""
-
-        response = model.generate_content([
-            {'mime_type': 'image/jpeg', 'data': image_bytes},
-            prompt
-        ])
-
-        raw_text = response.text.strip()
-
-        # Clean up
-        clean_text = raw_text.replace('```', '').replace('"', '').replace("'", '').strip()
-
-        if not clean_text or clean_text.upper() == 'NOT_FOUND':
-            return jsonify({
-                'success': False,
-                'error': '条码解码失败（pyzbar和AI都无法识别）',
-                'type': 'not_found'
-            })
-
-        import re
-        barcode = re.sub(r'[^\d\-\s]', '', clean_text).strip()
-
-        print(f'[Gemini] 解码成功: 原始="{raw_text}" → "{barcode}"')
-
+        p2, p98 = np.percentile(img_arr, (2, 98))
+        if p98 > p2:
+            img_arr = np.clip((img_arr - p2) * 255.0 / (p98 - p2), 0, 255).astype(np.uint8)
+        img_contrast = Image.fromarray(img_arr)
+        decoded = pyzbar_decode(img_contrast)
+        if decoded:
+            return _barcode_result(decoded, 'pyzbar_contrast')
+        
+        # ── Strategy 7: Adaptive threshold (local binarization) ──
+        try:
+            from PIL import ImageFilter
+            blur = img_gray.filter(ImageFilter.GaussianBlur(radius=15))
+            img_arr = np.array(img_gray).astype(np.float32)
+            blur_arr = np.array(blur).astype(np.float32)
+            diff = img_arr - blur_arr
+            adaptive = ((diff > 0) * 255).astype(np.uint8)
+            img_adaptive = Image.fromarray(adaptive, 'L')
+            decoded = pyzbar_decode(img_adaptive)
+            if decoded:
+                return _barcode_result(decoded, 'pyzbar_adaptive')
+        except:
+            pass
+        
+        # ── All strategies failed ──
+        print('[pyzbar] 全部7种策略解码失败')
         return jsonify({
-            'success': True,
-            'barcode': barcode,
-            'method': 'gemini',
-            'raw': raw_text
-        })
-
+            'success': False,
+            'error': '条码解码失败。请确保照片清晰、条码完整可见、光线充足。',
+            'type': 'decode_failed'
+        }), 422
+        
     except Exception as e:
         err_str = str(e)
-        if '429' in err_str or 'ResourceExhausted' in err_str or 'quota' in err_str.lower():
-            return jsonify({
-                'error': 'AIの利用制限に達しました。しばらく待ってから再試行してください。',
-                'type': 'quota_exceeded'
-            }), 429
+        print(f'[barcode] 异常: {err_str}')
         return jsonify({'error': f'条码读取错误: {err_str}'}), 500
+
+
+def _barcode_result(decoded_list, method):
+    """Helper: extract barcode data from pyzbar result"""
+    texts = []
+    for d in decoded_list:
+        text = d.data.decode('utf-8').strip()
+        if text:
+            texts.append(text)
+    if not texts:
+        return None
+    barcode = texts[0]
+    print(f'[pyzbar-{method}] 解码成功: "{barcode}"')
+    return jsonify({
+        'success': True,
+        'barcode': barcode,
+        'method': method,
+        'all_barcodes': texts
+    })
 
 
 @app.route('/api/inbound/manual', methods=['POST'])
