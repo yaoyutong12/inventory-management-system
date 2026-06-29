@@ -620,9 +620,6 @@ async function detectFromImageFile(event) {
     
     // 重置 input 以便重新選擇同一文件
     event.target.value = '';
-    } finally {
-        captureBtn.disabled = false;
-    }
 }
 
 // ─── 撮影して識別（備用モード） ──────────────
