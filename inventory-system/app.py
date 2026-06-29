@@ -396,6 +396,9 @@ def _init_sqlite():
             total_amount REAL,
             cost_amount REAL,
             profit_amount REAL,
+            shipping_fee REAL DEFAULT 0,
+            platform_fee REAL DEFAULT 0,
+            other_fee REAL DEFAULT 0,
             payment_method TEXT DEFAULT 'cash',
             platform TEXT,
             sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -439,6 +442,9 @@ def _init_sqlite():
         "ALTER TABLE products ADD COLUMN scrapped_at TIMESTAMP",
         "ALTER TABLE inbound_records ADD COLUMN photo TEXT",
         "ALTER TABLE mercari_listings ADD COLUMN brand TEXT",
+        "ALTER TABLE sales_records ADD COLUMN shipping_fee REAL DEFAULT 0",
+        "ALTER TABLE sales_records ADD COLUMN platform_fee REAL DEFAULT 0",
+        "ALTER TABLE sales_records ADD COLUMN other_fee REAL DEFAULT 0",
     ]:
         try: db.execute(sql)
         except: pass
@@ -484,6 +490,7 @@ def _init_postgres():
             id {pk}, product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
             qty INTEGER DEFAULT 1, unit_price REAL, total_amount REAL,
             cost_amount REAL, profit_amount REAL,
+            shipping_fee REAL DEFAULT 0, platform_fee REAL DEFAULT 0, other_fee REAL DEFAULT 0,
             payment_method TEXT DEFAULT 'cash', platform TEXT,
             sale_date TIMESTAMP DEFAULT NOW(), notes TEXT
         )""",
@@ -523,6 +530,9 @@ def _init_postgres():
         "ALTER TABLE inbound_records ADD COLUMN IF NOT EXISTS photo TEXT",
         "ALTER TABLE inbound_records ADD COLUMN IF NOT EXISTS photo_data TEXT",
         "ALTER TABLE mercari_listings ADD COLUMN IF NOT EXISTS brand TEXT",
+        "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS shipping_fee REAL DEFAULT 0",
+        "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS platform_fee REAL DEFAULT 0",
+        "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS other_fee REAL DEFAULT 0",
     ]:
         try: cur.execute(col_sql)
         except: pass
@@ -630,10 +640,14 @@ def inventory_page():
                 total_out = total_out[0] if total_out else 0
                 total_revenue = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records WHERE product_id=?", (p_dict.get('id'),)).fetchone()
                 total_revenue = total_revenue[0] if total_revenue else 0
+                total_fees = db.execute("SELECT COALESCE(SUM(shipping_fee+platform_fee+other_fee),0) FROM sales_records WHERE product_id=?", (p_dict.get('id'),)).fetchone()
+                total_fees = total_fees[0] if total_fees else 0
                 p_dict['current_stock'] = total_in - total_out
                 p_dict['total_in'] = total_in
                 p_dict['total_out'] = total_out
                 p_dict['total_revenue'] = total_revenue
+                p_dict['total_fees'] = total_fees
+                p_dict['net_profit'] = total_revenue - (p_dict.get('unit_cost') or 0) * total_out - total_fees
                 # 添加照片URL（优先DB base64 → 磁盘文件兜底）
                 if p_dict.get('photo_data'):
                     p_dict['photo_url'] = f"data:image/jpeg;base64,{p_dict['photo_data']}"
@@ -1077,6 +1091,7 @@ def api_sales_create():
     unit_price = data.get('unit_price', 0)
     payment_method = data.get('payment_method', 'cash')
     platform = data.get('platform', '')
+    note = data.get('note', '')
     
     db = get_db()
     product = db.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
@@ -1092,12 +1107,17 @@ def api_sales_create():
     
     total_amount = unit_price * qty
     cost_amount = (product['unit_cost'] or 0) * qty
-    profit_amount = total_amount - cost_amount
+    # Fees (only for platform sales: mercari, yahoo, rakuten)
+    shipping_fee = data.get('shipping_fee', 0) or 0
+    platform_fee = data.get('platform_fee', 0) or 0
+    other_fee = data.get('other_fee', 0) or 0
+    profit_amount = total_amount - cost_amount - shipping_fee - platform_fee - other_fee
     
     cur = db.execute("""
-        INSERT INTO sales_records (product_id, qty, unit_price, total_amount, cost_amount, profit_amount, payment_method, platform)
-        VALUES (?,?,?,?,?,?,?,?)
-    """, (product_id, qty, unit_price, total_amount, cost_amount, profit_amount, payment_method, platform))
+        INSERT INTO sales_records (product_id, qty, unit_price, total_amount, cost_amount, profit_amount, shipping_fee, platform_fee, other_fee, payment_method, platform, notes)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (product_id, qty, unit_price, total_amount, cost_amount, profit_amount,
+          shipping_fee, platform_fee, other_fee, payment_method, platform, note))
     
     # Check if still in stock
     new_stock = current_stock - qty
@@ -1114,7 +1134,9 @@ def api_sales_create():
         'product_name': product['product_name'],
         'internal_code': product['internal_code'],
         'qty': qty, 'unit_price': unit_price, 'total_amount': total_amount,
-        'profit': profit_amount, 'new_stock': new_stock,
+        'profit': profit_amount, 'net_profit': profit_amount,
+        'shipping_fee': shipping_fee, 'platform_fee': platform_fee, 'other_fee': other_fee,
+        'new_stock': new_stock,
         'payment_method': payment_method
     })
 
@@ -1141,6 +1163,8 @@ def api_inventory_list():
         d['total_in'] = total_in
         d['total_out'] = total_out
         d['total_revenue'] = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        d['total_fees'] = db.execute("SELECT COALESCE(SUM(shipping_fee+platform_fee+other_fee),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
+        d['net_profit'] = d['total_revenue'] - (d.get('unit_cost') or 0) * total_out - d['total_fees']
         # 添加照片URL（优先DB base64 → 磁盘文件兜底）
         if d.get('photo_data'):
             d['photo_url'] = f"data:image/jpeg;base64,{d['photo_data']}"
@@ -1780,19 +1804,95 @@ def api_sales_report():
     start_date = request.args.get('start_date', '')
     end_date = request.args.get('end_date', '')
     platform = request.args.get('platform', '')
+    no_filter = request.args.get('no_filter', '') == '1'
     
     db = get_db()
+    
+    # If no_filter, skip date/platform filtering to show all records
+    if no_filter:
+        try:
+            platform_stats = db.execute("""
+                SELECT 
+                    COALESCE(s.platform, '未分類') as platform,
+                    COUNT(*) as sale_count,
+                    COALESCE(SUM(s.total_amount),0) as total_revenue,
+                    COALESCE(SUM(s.cost_amount),0) as total_cost,
+                    COALESCE(SUM(s.shipping_fee),0) as total_shipping_fee,
+                    COALESCE(SUM(s.platform_fee),0) as total_platform_fee,
+                    COALESCE(SUM(s.other_fee),0) as total_other_fee,
+                    COALESCE(SUM(s.profit_amount),0) as total_profit,
+                    COALESCE(AVG(NULLIF(s.total_amount,0)/NULLIF(s.qty,0)),0) as avg_price
+                FROM sales_records s
+                GROUP BY s.platform
+                ORDER BY total_revenue DESC
+            """).fetchall()
+            daily_stats = db.execute("""
+                SELECT 
+                    """ + ("DATE(s.sale_date)" if USE_POSTGRES else "date(s.sale_date)") + """ as sale_date,
+                    COALESCE(s.platform, '未分類') as platform,
+                    COUNT(*) as sale_count,
+                    COALESCE(SUM(s.total_amount),0) as total_revenue,
+                    COALESCE(SUM(s.cost_amount),0) as total_cost,
+                    COALESCE(SUM(s.shipping_fee+s.platform_fee+s.other_fee),0) as total_fees,
+                    COALESCE(SUM(s.profit_amount),0) as total_profit
+                FROM sales_records s
+                GROUP BY """ + ("DATE(s.sale_date)" if USE_POSTGRES else "date(s.sale_date)") + """, s.platform
+                ORDER BY sale_date DESC
+                LIMIT 90
+            """).fetchall()
+            
+            # Individual sales detail for no_filter mode
+            if USE_POSTGRES:
+                sales_detail = db.execute("""
+                    SELECT s.id, s.product_id, p.product_name, p.internal_code,
+                           s.qty, s.unit_price, s.total_amount, s.cost_amount,
+                           s.shipping_fee, s.platform_fee, s.other_fee, s.profit_amount,
+                           s.payment_method, s.platform,
+                           TO_CHAR(s.sale_date, 'YYYY-MM-DD HH24:MI') as sale_time,
+                           DATE(s.sale_date) as sale_date
+                    FROM sales_records s
+                    LEFT JOIN products p ON s.product_id = p.id
+                    ORDER BY s.sale_date DESC
+                    LIMIT 200
+                """).fetchall()
+            else:
+                sales_detail = db.execute("""
+                    SELECT s.id, s.product_id, p.product_name, p.internal_code,
+                           s.qty, s.unit_price, s.total_amount, s.cost_amount,
+                           s.shipping_fee, s.platform_fee, s.other_fee, s.profit_amount,
+                           s.payment_method, s.platform,
+                           s.sale_date as sale_time,
+                           date(s.sale_date) as sale_date
+                    FROM sales_records s
+                    LEFT JOIN products p ON s.product_id = p.id
+                    ORDER BY s.sale_date DESC
+                    LIMIT 200
+                """).fetchall()
+            
+            return jsonify({
+                'platform_stats': [dict(row) for row in platform_stats],
+                'daily_stats': [dict(row) for row in daily_stats],
+                'sales_detail': [dict(row) for row in sales_detail]
+            })
+        except Exception as e:
+            return jsonify({
+                'error': f'查询失败(全期间): {type(e).__name__}: {str(e)}',
+                'platform_stats': [],
+                'daily_stats': [],
+                'sales_detail': []
+            }), 200
+    
     where = "1=1"
     params = []
     if start_date:
         if USE_POSTGRES:
-            where += " AND s.sale_date >= %s"
+            where += " AND s.sale_date::date >= %s"
         else:
             where += " AND date(s.sale_date) >= ?"
         params.append(start_date)
     if end_date:
         if USE_POSTGRES:
-            where += " AND s.sale_date <= %s"
+            where += " AND s.sale_date::date <= %s"
         else:
             where += " AND date(s.sale_date) <= ?"
         params.append(end_date)
@@ -1800,54 +1900,101 @@ def api_sales_report():
         where += " AND s.platform = %s" if USE_POSTGRES else " AND s.platform = ?"
         params.append(platform)
     
-    # 按平台统计
-    platform_stats = db.execute(f"""
-        SELECT 
-            COALESCE(s.platform, '未分類') as platform,
-            COUNT(*) as sale_count,
-            COALESCE(SUM(s.total_amount),0) as total_revenue,
-            COALESCE(SUM(s.profit_amount),0) as total_profit,
-            COALESCE(AVG(s.total_amount/s.qty),0) as avg_price
-        FROM sales_records s
-        WHERE {where}
-        GROUP BY s.platform
-        ORDER BY total_revenue DESC
-    """, params).fetchall()
-    
-    # 按日期统计（最近30天）
-    if USE_POSTGRES:
-        daily_stats = db.execute(f"""
+    try:
+        # 按平台统计
+        platform_stats = db.execute(f"""
             SELECT 
-                DATE(s.sale_date) as sale_date,
                 COALESCE(s.platform, '未分類') as platform,
                 COUNT(*) as sale_count,
                 COALESCE(SUM(s.total_amount),0) as total_revenue,
-                COALESCE(SUM(s.profit_amount),0) as total_profit
+                COALESCE(SUM(s.cost_amount),0) as total_cost,
+                COALESCE(SUM(s.shipping_fee),0) as total_shipping_fee,
+                COALESCE(SUM(s.platform_fee),0) as total_platform_fee,
+                COALESCE(SUM(s.other_fee),0) as total_other_fee,
+                COALESCE(SUM(s.profit_amount),0) as total_profit,
+                COALESCE(AVG(NULLIF(s.total_amount,0)/NULLIF(s.qty,0)),0) as avg_price
             FROM sales_records s
             WHERE {where}
-            GROUP BY DATE(s.sale_date), s.platform
-            ORDER BY sale_date DESC
-            LIMIT 90
+            GROUP BY s.platform
+            ORDER BY total_revenue DESC
         """, params).fetchall()
-    else:
-        daily_stats = db.execute(f"""
-            SELECT 
-                date(s.sale_date) as sale_date,
-                COALESCE(s.platform, '未分類') as platform,
-                COUNT(*) as sale_count,
-                COALESCE(SUM(s.total_amount),0) as total_revenue,
-                COALESCE(SUM(s.profit_amount),0) as total_profit
-            FROM sales_records s
-            WHERE {where}
-            GROUP BY date(s.sale_date), s.platform
-            ORDER BY sale_date DESC
-            LIMIT 90
-        """, params).fetchall()
-    
-    return jsonify({
-        'platform_stats': [dict(row) for row in platform_stats],
-        'daily_stats': [dict(row) for row in daily_stats]
-    })
+        
+        # 按日期统计（最近30天）
+        if USE_POSTGRES:
+            daily_stats = db.execute(f"""
+                SELECT 
+                    DATE(s.sale_date) as sale_date,
+                    COALESCE(s.platform, '未分類') as platform,
+                    COUNT(*) as sale_count,
+                    COALESCE(SUM(s.total_amount),0) as total_revenue,
+                    COALESCE(SUM(s.cost_amount),0) as total_cost,
+                    COALESCE(SUM(s.shipping_fee+s.platform_fee+s.other_fee),0) as total_fees,
+                    COALESCE(SUM(s.profit_amount),0) as total_profit
+                FROM sales_records s
+                WHERE {where}
+                GROUP BY DATE(s.sale_date), s.platform
+                ORDER BY sale_date DESC
+                LIMIT 90
+            """, params).fetchall()
+        else:
+            daily_stats = db.execute(f"""
+                SELECT 
+                    date(s.sale_date) as sale_date,
+                    COALESCE(s.platform, '未分類') as platform,
+                    COUNT(*) as sale_count,
+                    COALESCE(SUM(s.total_amount),0) as total_revenue,
+                    COALESCE(SUM(s.cost_amount),0) as total_cost,
+                    COALESCE(SUM(s.shipping_fee+s.platform_fee+s.other_fee),0) as total_fees,
+                    COALESCE(SUM(s.profit_amount),0) as total_profit
+                FROM sales_records s
+                WHERE {where}
+                GROUP BY date(s.sale_date), s.platform
+                ORDER BY sale_date DESC
+                LIMIT 90
+            """, params).fetchall()
+        
+        # 个別販売明細（逐条记录）
+        if USE_POSTGRES:
+            sales_detail = db.execute(f"""
+                SELECT s.id, s.product_id, p.product_name, p.internal_code,
+                       s.qty, s.unit_price, s.total_amount, s.cost_amount,
+                       s.shipping_fee, s.platform_fee, s.other_fee, s.profit_amount,
+                       s.payment_method, s.platform,
+                       TO_CHAR(s.sale_date, 'YYYY-MM-DD HH24:MI') as sale_time,
+                       DATE(s.sale_date) as sale_date
+                FROM sales_records s
+                LEFT JOIN products p ON s.product_id = p.id
+                WHERE {where}
+                ORDER BY s.sale_date DESC
+                LIMIT 200
+            """, params).fetchall()
+        else:
+            sales_detail = db.execute(f"""
+                SELECT s.id, s.product_id, p.product_name, p.internal_code,
+                       s.qty, s.unit_price, s.total_amount, s.cost_amount,
+                       s.shipping_fee, s.platform_fee, s.other_fee, s.profit_amount,
+                       s.payment_method, s.platform,
+                       s.sale_date as sale_time,
+                       date(s.sale_date) as sale_date
+                FROM sales_records s
+                LEFT JOIN products p ON s.product_id = p.id
+                WHERE {where}
+                ORDER BY s.sale_date DESC
+                LIMIT 200
+            """, params).fetchall()
+        
+        return jsonify({
+            'platform_stats': [dict(row) for row in platform_stats],
+            'daily_stats': [dict(row) for row in daily_stats],
+            'sales_detail': [dict(row) for row in sales_detail]
+        })
+    except Exception as e:
+        return jsonify({
+            'error': f'查询失败: {type(e).__name__}: {str(e)}',
+            'platform_stats': [],
+            'daily_stats': [],
+            'sales_detail': []
+        }), 200
 
 
 # ─── API: Search ────────────────────────────────────────────────

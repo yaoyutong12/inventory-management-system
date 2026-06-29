@@ -206,6 +206,36 @@
                         <input type="text" class="form-control" id="externalOrderNo" placeholder="选填">
                     </div>
                 </div>
+                <!-- 费用扣除（平台贩售时自动展开） -->
+                <div id="feeSection" class="border rounded p-2 mb-3 bg-light">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="fw-bold text-muted"><i class="bi bi-cash-stack"></i> 费用扣除（运费·手续费·杂费）</small>
+                        <small class="text-muted" id="feeSubtotal">¥0</small>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label small mb-0">运费</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">¥</span>
+                                <input type="number" class="form-control" id="externalShippingFee" value="0" min="0" oninput="updateFeeSubtotal()">
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">平台手续费</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">¥</span>
+                                <input type="number" class="form-control" id="externalPlatformFee" value="0" min="0" oninput="updateFeeSubtotal()">
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">其他费用</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">¥</span>
+                                <input type="number" class="form-control" id="externalOtherFee" value="0" min="0" oninput="updateFeeSubtotal()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -429,8 +459,19 @@ function openExternalSaleModal() {
     document.getElementById('externalPrice').value = '';
     document.getElementById('externalQty').value = '1';
     document.getElementById('externalOrderNo').value = '';
+    document.getElementById('externalShippingFee').value = '0';
+    document.getElementById('externalPlatformFee').value = '0';
+    document.getElementById('externalOtherFee').value = '0';
+    document.getElementById('feeSubtotal').textContent = '¥0';
     externalProduct = null;
     new bootstrap.Modal(document.getElementById('externalSaleModal')).show();
+}
+
+function updateFeeSubtotal() {
+    const shipping = parseInt(document.getElementById('externalShippingFee').value) || 0;
+    const platform = parseInt(document.getElementById('externalPlatformFee').value) || 0;
+    const other = parseInt(document.getElementById('externalOtherFee').value) || 0;
+    document.getElementById('feeSubtotal').textContent = formatJPY(shipping + platform + other);
 }
 
 async function lookupExternalProduct() {
@@ -461,6 +502,9 @@ async function registerExternalSale() {
     const platform = document.getElementById('externalPlatform').value;
     const price = parseInt(document.getElementById('externalPrice').value) || 0;
     const qty = parseInt(document.getElementById('externalQty').value) || 1;
+    const shippingFee = parseInt(document.getElementById('externalShippingFee').value) || 0;
+    const platformFee = parseInt(document.getElementById('externalPlatformFee').value) || 0;
+    const otherFee = parseInt(document.getElementById('externalOtherFee').value) || 0;
     
     if (price <= 0) {
         showToast('请输入实际售价', 'warning');
@@ -473,11 +517,15 @@ async function registerExternalSale() {
         unit_price: price,
         payment_method: 'other',
         platform: platform,
+        shipping_fee: shippingFee,
+        platform_fee: platformFee,
+        other_fee: otherFee,
         note: '外部销售登记' + (document.getElementById('externalOrderNo').value ? ' 订单:' + document.getElementById('externalOrderNo').value : '')
     });
     
     if (result.success) {
-        showToast(`外部销售已登记: ${result.product_name} (${platform})`, 'success');
+        const netProfit = result.net_profit || result.profit || 0;
+        showToast(`外部销售已登记: ${result.product_name} (${platform}) 净利润 ¥${netProfit.toLocaleString()}`, 'success');
         bootstrap.Modal.getInstance(document.getElementById('externalSaleModal')).hide();
         loadSalesHistory();
         loadTodaySummary();
@@ -530,6 +578,10 @@ async function loadSalesHistory() {
                         <small class="${s.profit_amount >= 0 ? 'text-success' : 'text-danger'}">
                             利润 ${formatJPY(s.profit_amount || 0)}
                         </small>
+                        ${(s.shipping_fee || s.platform_fee || s.other_fee) ? `
+                        <small class="text-danger d-block" style="font-size:10px">
+                            費用 -${formatJPY((s.shipping_fee||0)+(s.platform_fee||0)+(s.other_fee||0))}
+                        </small>` : ''}
                         <div class="mt-1">
                             ${s.receipt_id ? `
                                 <button class="btn btn-outline-secondary btn-sm py-0 px-1" 

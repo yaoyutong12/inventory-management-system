@@ -45,6 +45,7 @@
                     <button class="btn btn-outline-primary" onclick="setPeriod('month')">今月</button>
                     <button class="btn btn-outline-primary" onclick="setPeriod('last30')">30日</button>
                     <button class="btn btn-outline-primary" onclick="setPeriod('all')">全期間</button>
+                    <button class="btn btn-outline-danger btn-sm ms-2" onclick="loadReport(true)">🔍 全期間(無条件)</button>
                 </div>
             </div>
         </div>
@@ -114,6 +115,8 @@
                                 <th>チャネル</th>
                                 <th class="text-end">件数</th>
                                 <th class="text-end">売上</th>
+                                <th class="text-end">仕入</th>
+                                <th class="text-end">費用</th>
                                 <th class="text-end">利益</th>
                                 <th class="text-end">利益率</th>
                                 <th class="text-end">平均単価</th>
@@ -138,15 +141,44 @@
                                 <th>チャネル</th>
                                 <th class="text-end">件数</th>
                                 <th class="text-end">売上</th>
+                                <th class="text-end">費用</th>
                                 <th class="text-end">利益</th>
                             </tr>
                         </thead>
                         <tbody id="dailyTableBody">
-                            <tr><td colspan="5" class="text-center text-muted py-3">読み込み中...</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted py-3">読み込み中...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Individual Sales Detail -->
+<div class="card mt-3">
+    <div class="card-body">
+        <h6 class="card-title"><i class="bi bi-list-ul me-2"></i>販売明細 <small class="text-muted">（1件ずつ表示）</small></h6>
+        <div style="max-height:500px;overflow-y:auto">
+            <table class="table table-sm table-hover">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th>日時</th>
+                        <th>商品名</th>
+                        <th>コード</th>
+                        <th>チャネル</th>
+                        <th class="text-end">数量</th>
+                        <th class="text-end">単価</th>
+                        <th class="text-end">売上</th>
+                        <th class="text-end">仕入</th>
+                        <th class="text-end">費用</th>
+                        <th class="text-end">利益</th>
+                    </tr>
+                </thead>
+                <tbody id="detailTableBody">
+                    <tr><td colspan="10" class="text-center text-muted py-3">読み込み中...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -166,15 +198,24 @@ const platformLabels = {
     '': '未分類'
 };
 
+function fmtLocalDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
 function setPeriod(type) {
     const today = new Date();
-    const end = today.toISOString().slice(0,10);
+    const end = fmtLocalDate(today);
     let start;
     
     if (type === 'month') {
-        start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
+        start = fmtLocalDate(new Date(today.getFullYear(), today.getMonth(), 1));
     } else if (type === 'last30') {
-        start = new Date(today.getTime() - 30*86400000).toISOString().slice(0,10);
+        const d = new Date(today);
+        d.setDate(d.getDate() - 30);
+        start = fmtLocalDate(d);
     } else {
         start = '';
     }
@@ -184,27 +225,41 @@ function setPeriod(type) {
     loadReport();
 }
 
-async function loadReport() {
+async function loadReport(noFilter = false) {
     const start = document.getElementById('startDate').value;
     const end = document.getElementById('endDate').value;
     const platform = document.getElementById('platformFilter').value;
     
     let url = '/api/sales/report?';
-    if (start) url += `start_date=${start}&`;
-    if (end) url += `end_date=${end}&`;
-    if (platform) url += `platform=${platform}&`;
+    if (noFilter) url += 'no_filter=1&';
+    else {
+        if (start) url += `start_date=${start}&`;
+        if (end) url += `end_date=${end}&`;
+        if (platform) url += `platform=${platform}&`;
+    }
     
     try {
-        const data = await (await fetch(url)).json();
+        const resp = await fetch(url);
+        const data = await resp.json();
+        
+        // Show error if API returned one
+        if (data.error) {
+            showToast(data.error, 'error');
+            document.getElementById('platformTableBody').innerHTML =
+                `<tr><td colspan="8" class="text-center text-danger py-3">エラー: ${data.error}</td></tr>`;
+            document.getElementById('dailyTableBody').innerHTML =
+                '<tr><td colspan="6" class="text-center text-danger py-3">同上のエラー</td></tr>';
+        }
         renderReport(data);
     } catch (err) {
-        showToast('レポート読み込みエラー', 'error');
+        showToast('レポート読み込みエラー: ' + err.message, 'error');
     }
 }
 
 function renderReport(data) {
     const platformStats = data.platform_stats || [];
     const dailyStats = data.daily_stats || [];
+    const salesDetail = data.sales_detail || [];
     
     // Summary
     let totalCount = 0, totalRevenue = 0, totalProfit = 0;
@@ -222,14 +277,17 @@ function renderReport(data) {
     
     // Platform Table
     document.getElementById('platformTableBody').innerHTML = platformStats.length === 0
-        ? '<tr><td colspan="6" class="text-center text-muted py-3">データがありません</td></tr>'
+        ? '<tr><td colspan="8" class="text-center text-muted py-3">データがありません</td></tr>'
         : platformStats.map(p => {
             const margin = p.total_revenue > 0 ? Math.round(p.total_profit / p.total_revenue * 100) : 0;
+            const totalFees = (p.total_shipping_fee || 0) + (p.total_platform_fee || 0) + (p.total_other_fee || 0);
             const label = platformLabels[p.platform] || p.platform || '未分類';
             return `<tr>
                 <td><strong>${label}</strong></td>
                 <td class="text-end">${p.sale_count}件</td>
                 <td class="text-end fw-bold">${formatJPY(p.total_revenue)}</td>
+                <td class="text-end text-muted">${formatJPY(p.total_cost || 0)}</td>
+                <td class="text-end text-danger small">${totalFees > 0 ? '-' + formatJPY(totalFees) : '¥0'}</td>
                 <td class="text-end text-success">${formatJPY(p.total_profit)}</td>
                 <td class="text-end">${margin}%</td>
                 <td class="text-end">${formatJPY(Math.round(p.avg_price))}</td>
@@ -237,11 +295,18 @@ function renderReport(data) {
         }).join('');
     
     // Platform Table Foot (total)
+    let totalCost = 0, totalFees = 0;
+    platformStats.forEach(p => {
+        totalCost += (p.total_cost || 0);
+        totalFees += (p.total_shipping_fee || 0) + (p.total_platform_fee || 0) + (p.total_other_fee || 0);
+    });
     document.getElementById('platformTableFoot').innerHTML = platformStats.length > 1 ? `
         <tr class="table-primary fw-bold">
             <td>合計</td>
             <td class="text-end">${totalCount}件</td>
             <td class="text-end">${formatJPY(totalRevenue)}</td>
+            <td class="text-end">${formatJPY(totalCost)}</td>
+            <td class="text-end text-danger small">${totalFees > 0 ? '-' + formatJPY(totalFees) : '¥0'}</td>
             <td class="text-end text-success">${formatJPY(totalProfit)}</td>
             <td class="text-end">${totalRevenue > 0 ? Math.round(totalProfit / totalRevenue * 100) : 0}%</td>
             <td class="text-end">-</td>
@@ -249,15 +314,39 @@ function renderReport(data) {
     
     // Daily Table
     document.getElementById('dailyTableBody').innerHTML = dailyStats.length === 0
-        ? '<tr><td colspan="5" class="text-center text-muted py-3">データがありません</td></tr>'
+        ? '<tr><td colspan="6" class="text-center text-muted py-3">データがありません</td></tr>'
         : dailyStats.slice(0, 60).map(d => {
             const label = platformLabels[d.platform] || d.platform || '未分類';
+            const dailyFees = d.total_fees || 0;
             return `<tr>
                 <td><small>${d.sale_date}</small></td>
                 <td><small>${label}</small></td>
                 <td class="text-end"><small>${d.sale_count}件</small></td>
                 <td class="text-end"><small>${formatJPY(d.total_revenue)}</small></td>
+                <td class="text-end text-danger"><small>${dailyFees > 0 ? '-'+formatJPY(dailyFees) : '¥0'}</small></td>
                 <td class="text-end text-success"><small>${formatJPY(d.total_profit)}</small></td>
+            </tr>`;
+        }).join('');
+    
+    // Individual Sales Detail Table
+    const paymentLabels = {'cash':'現金','paypay':'PayPay','card':'カード','mercari':'メルカリ','other':'その他'};
+    document.getElementById('detailTableBody').innerHTML = salesDetail.length === 0
+        ? '<tr><td colspan="10" class="text-center text-muted py-3">データがありません</td></tr>'
+        : salesDetail.map(s => {
+            const platform = platformLabels[s.platform] || s.platform || '未分類';
+            const fees = (s.shipping_fee||0) + (s.platform_fee||0) + (s.other_fee||0);
+            const profitClass = (s.profit_amount || 0) >= 0 ? 'text-success' : 'text-danger';
+            return `<tr>
+                <td><small>${s.sale_time || s.sale_date || ''}</small></td>
+                <td><strong>${s.product_name || '(已削除)'}</strong></td>
+                <td><code class="small">${s.internal_code || ''}</code></td>
+                <td><span class="badge bg-secondary">${platform}</span></td>
+                <td class="text-end">${s.qty}</td>
+                <td class="text-end">${formatJPY(s.unit_price)}</td>
+                <td class="text-end fw-bold">${formatJPY(s.total_amount)}</td>
+                <td class="text-end text-muted">${formatJPY(s.cost_amount || 0)}</td>
+                <td class="text-end text-danger small">${fees > 0 ? '-'+formatJPY(fees) : '¥0'}</td>
+                <td class="text-end ${profitClass} fw-bold">${formatJPY(s.profit_amount || 0)}</td>
             </tr>`;
         }).join('');
     
@@ -318,7 +407,7 @@ function renderProfitChart(stats) {
 }
 
 function exportReportCSV() {
-    const rows = [['チャネル','件数','売上','利益','利益率','平均単価']];
+    const rows = [['チャネル','件数','売上','仕入','費用','利益','利益率','平均単価']];
     const tbody = document.getElementById('platformTableBody');
     const platforms = [];
     tbody.querySelectorAll('tr').forEach(tr => {

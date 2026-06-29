@@ -30,7 +30,7 @@
                         <th>写真</th><th>追跡番号</th><th>内部コード</th><th>商品名</th><th>カテゴリ</th>
                         <th>仕入単価</th><th>販売価格</th>
                         <th>入庫数</th><th>販売数</th><th>在庫数</th>
-                        <th>売上</th><th>利益</th><th>状態</th><th>操作</th>
+                        <th>売上</th><th>利益</th><th>費用</th><th>状態</th><th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="invTbody">
@@ -74,7 +74,8 @@
                                 <span class="badge bg-{{ stock_class }}" style="font-size:0.9rem;min-width:32px">{{ p.current_stock }}</span>
                             </td>
                             <td class="text-end">¥{{ '%d' | format(p.total_revenue or 0) | int }}</td>
-                            <td class="text-end text-success">¥{{ '%d' | format((p.total_revenue or 0) - (p.unit_cost or 0) * (p.total_out or 0)) | int }}</td>
+                            <td class="text-end text-success">¥{{ '%d' | format(p.net_profit or 0) | int }}</td>
+                            <td class="text-end text-muted small">¥{{ '%d' | format(p.total_fees or 0) | int }}</td>
                             <td>{{ status_badge | safe }}</td>
                             <td>
                                 <div class="btn-group btn-group-sm">
@@ -86,7 +87,7 @@
                         </tr>
                         {% endfor %}
                     {% else %}
-                        <tr><td colspan="13" class="text-center py-5 text-muted">
+                        <tr><td colspan="14" class="text-center py-5 text-muted">
                             <i class="bi bi-inbox" style="font-size:3rem;display:block;margin-bottom:1rem"></i>
                             <p class="mb-2"><strong>まだ商品が登録されていません</strong></p>
                             <p class="small mb-3">手順：<br>
@@ -231,11 +232,11 @@ function filterInventory() {
 }
 
 function exportCSV() {
-    const rows = [['内部コード','商品名','カテゴリ','仕入単価','販売価格','入庫数','販売数','在庫数','売上','利益']];
+    const rows = [['内部コード','商品名','カテゴリ','仕入単価','販売価格','入庫数','販売数','在庫数','売上','利益','費用']];
     allProducts.forEach(p => {
         rows.push([p.internal_code, p.product_name, p.category, p.unit_cost, p.selling_price,
                   p.total_in, p.total_out, p.current_stock, p.total_revenue,
-                  (p.total_revenue||0) - (p.unit_cost||0)*p.total_out]);
+                  p.net_profit || 0, p.total_fees || 0]);
     });
     const csv = rows.map(r => r.map(v => '"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
     const BOM = '\uFEFF';
