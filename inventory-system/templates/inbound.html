@@ -13,6 +13,14 @@
     .method-card.active {
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
+    /* 扫码指示器闪烁 */
+    .pulse-badge {
+        animation: pulse-glow 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+        0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.4); }
+        50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(25, 135, 84, 0); }
+    }
 </style>
 {% endblock %}
 
@@ -65,14 +73,17 @@
                     <div class="alert alert-primary" id="scanModeHint">
                         <i class="bi bi-info-circle-fill"></i> 
                         <strong>バーコード/QR対応：</strong>
-                        <span class="small">JAN / CODE-128 / QR / EAN-13 など自動判別｜緑枠の中にバーコードを入れてください</span>
+                        <span class="small" id="scanStatusText">JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください</span>
                     </div>
-                    <div id="scanner-view" style="width:100%;min-height:250px" class="border rounded d-flex align-items-center justify-content-center bg-light mb-3">
+                    <div id="scanner-view" style="width:100%;min-height:250px" class="border rounded d-flex align-items-center justify-content-center bg-light mb-2">
                         <div class="text-center text-muted">
                             <i class="bi bi-camera-video" style="font-size:4rem"></i>
                             <div class="mt-2"><span data-i18n="camera_preview">摄像头预览</span></div>
                             <div class="small"><span data-i18n="click_start_scan">点击"扫码开始"</span></div>
                         </div>
+                    </div>
+                    <div id="scanIndicator" class="text-center mb-2 d-none">
+                        <span class="badge bg-success pulse-badge">🔍 スキャン中... 条码を枠内に入れてください</span>
                     </div>
                     <div class="d-grid gap-2">
                         <button class="btn btn-primary btn-lg" id="startScanBtn" onclick="startScanner()">
@@ -391,14 +402,17 @@ function t(key) {
 function startScanner() {
     document.getElementById('startScanBtn').disabled = true;
     document.getElementById('stopScanBtn').disabled = false;
+    document.getElementById('scanIndicator').classList.remove('d-none');
+    document.getElementById('scanStatusText').textContent = '🔍 スキャン中... 条码を枠内に合わせてください';
     document.getElementById('manualBarcodeInput').value = '';
     
     scanner = new Html5Qrcode("scanner-view");
     
-    // 扫码配置：支持二维码 + 常见1D条形码格式
+    // 扫码配置：去掉 qrbox 用全帧扫描（笔记本相机对焦/距离不稳定时更可靠）
+    // 去掉 aspectRatio 避免视频变形导致条码不可读
     const scanConfig = {
-        fps: 15,
-        qrbox: { width: 350, height: 180 },  // 条形码横长，加宽扫描框
+        fps: 10,
+        qrbox: { width: 380, height: 200 },
         formatsToSupport: [
             Html5QrcodeSupportedFormats.CODE_128,
             Html5QrcodeSupportedFormats.CODE_39,
@@ -409,21 +423,36 @@ function startScanner() {
             Html5QrcodeSupportedFormats.UPC_E,
             Html5QrcodeSupportedFormats.ITF,
             Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.DATA_MATRIX,
         ],
-        // 笔记本前置摄像头通常离条码远，降低最小识别尺寸要求
-        aspectRatio: 1.777,
-        disableFlip: false,
     };
     
+    // 视频约束：1080p 提高识别率
+    const cameraConfig = {
+        facingMode: "user",
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+    };
+    
+    // 统计识别尝试次数用于调试
+    let scanAttempts = 0;
+    
     scanner.start(
-        { facingMode: "user" },
+        cameraConfig,
         scanConfig,
         (decodedText) => {
-            console.log('✅ 扫码成功:', decodedText);
+            console.log('✅ 扫码成功:', decodedText, '(第' + scanAttempts + '次尝试)');
             stopScanner();
             lookupBarcode(decodedText);
         },
-        () => {}
+        (failure) => {
+            // 每 30 帧输出一次日志，确认引擎在运行
+            scanAttempts++;
+            if (scanAttempts % 30 === 0) {
+                console.log('🔍 扫描中...(' + scanAttempts + '帧)', failure);
+            }
+        }
     ).catch(err => {
         // user 模式失败，尝试不指定 facingMode
         console.warn('facingMode "user" 失败，尝试默认摄像头:', err);
@@ -435,7 +464,12 @@ function startScanner() {
                 stopScanner();
                 lookupBarcode(decodedText);
             },
-            () => {}
+            (failure) => {
+                scanAttempts++;
+                if (scanAttempts % 30 === 0) {
+                    console.log('🔍 扫描中...(' + scanAttempts + '帧)', failure);
+                }
+            }
         ).catch(err2 => {
             console.error('摄像头启动失败:', err2);
             const scanView = document.getElementById('scanner-view');
@@ -455,6 +489,8 @@ async function stopScanner() {
         await scanner.stop();
         scanner = null;
     }
+    document.getElementById('scanIndicator').classList.add('d-none');
+    document.getElementById('scanStatusText').textContent = 'JAN / CODE-128 / QR / EAN-13 など｜緑枠内に合わせてください';
     document.getElementById('startScanBtn').disabled = false;
     document.getElementById('stopScanBtn').disabled = true;
 }
