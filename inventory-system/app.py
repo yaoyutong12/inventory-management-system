@@ -2875,6 +2875,42 @@ def api_sales_receipt(sale_id):
 
 
 # ─── API: Scrap (报废) ──────────────────────────────
+
+# ─── API: Delete Sale (撤销销售) ──────────────────────────────
+@app.route('/api/sales/<int:sale_id>/delete', methods=['POST'])
+def api_sales_delete(sale_id):
+    """撤销一笔销售记录，恢复库存"""
+    db = get_db()
+    sale = db.execute("SELECT * FROM sales_records WHERE id=?", (sale_id,)).fetchone()
+    if not sale:
+        return jsonify({'error': '販売記録が見つかりません'}), 404
+    
+    product_id = sale['product_id']
+    qty = sale['qty']
+    
+    # 删除销售记录
+    db.execute("DELETE FROM sales_records WHERE id=?", (sale_id,))
+    
+    # 删除关联收据
+    db.execute("DELETE FROM receipts WHERE sale_id=?", (sale_id,))
+    
+    # 恢复商品状态
+    product = db.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
+    if product:
+        total_in = db.execute("SELECT COALESCE(SUM(qty),0) FROM inbound_records WHERE product_id=?", (product_id,)).fetchone()[0]
+        total_out = db.execute("SELECT COALESCE(SUM(qty),0) FROM sales_records WHERE product_id=?", (product_id,)).fetchone()[0]
+        new_stock = total_in - total_out
+        if new_stock > 0 and product['status'] == 'sold_out':
+            db.execute("UPDATE products SET status='in_stock', updated_at=CURRENT_TIMESTAMP WHERE id=?", (product_id,))
+    
+    db.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'已撤销: {product["product_name"] if product else "未知商品"} x{qty}',
+        'product_name': product['product_name'] if product else '',
+        'qty': qty
+    })
 @app.route('/api/products/<int:product_id>/scrap', methods=['POST'])
 def api_scrap_product(product_id):
     """标记商品为报废（仿品/损坏）"""

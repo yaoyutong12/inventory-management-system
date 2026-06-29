@@ -838,6 +838,25 @@ async function reprintReceipt(saleId) {
     loadSalesHistory();
 }
 
+async function undoSale(saleId, productName, qty) {
+    if (!confirm(`确定撤销此笔销售？\n${productName} × ${qty}件\n\n撤销后库存会自动恢复。`)) return;
+    
+    try {
+        const res = await fetch(`/api/sales/${saleId}/delete`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast(data.message, 'success');
+            loadSalesHistory();
+            loadTodaySummary();
+        } else {
+            showToast(data.error || '撤销失败', 'error');
+        }
+    } catch (err) {
+        showToast('撤销错误: ' + err.message, 'error');
+    }
+}
+
 // ─── External Sale Registration ──────────────────────────────
 function openExternalSaleModal() {
     document.getElementById('externalBarcode').value = '';
@@ -973,14 +992,19 @@ async function loadSalesHistory() {
                                 <button class="btn btn-outline-secondary btn-sm py-0 px-1" 
                                         onclick="reprintReceipt(${s.id})" 
                                         title="补打（已打印${s.printed_count || 0}次）">
-                                    <i class="bi bi-printer-fill"></i> 补打
+                                    <i class="bi bi-printer-fill"></i>
                                 </button>
                             ` : `
                                 <button class="btn btn-outline-primary btn-sm py-0 px-1" 
                                         onclick="printReceipt(${s.id})">
-                                    <i class="bi bi-printer"></i> 打印
+                                    <i class="bi bi-printer"></i>
                                 </button>
                             `}
+                            <button class="btn btn-outline-danger btn-sm py-0 px-1 ms-1" 
+                                    onclick="undoSale(${s.id}, '${(s.product_name||'').replace(/'/g, "\\'").substring(0,15)}', ${s.qty})"
+                                    title="撤销此笔销售">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
