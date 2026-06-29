@@ -2562,6 +2562,44 @@ def generate_receipt_html(sale, product):
 </body></html>"""
 
 
+@app.route('/api/sales/<int:sale_id>/update-fees', methods=['POST'])
+def api_sales_update_fees(sale_id):
+    """更新销售记录的费用并重算利润"""
+    db = get_db()
+    data = request.get_json()
+    
+    shipping_fee = int(data.get('shipping_fee', 0) or 0)
+    platform_fee = int(data.get('platform_fee', 0) or 0)
+    other_fee = int(data.get('other_fee', 0) or 0)
+    
+    # Get existing record to recalculate profit
+    sale = db.execute(
+        "SELECT total_amount, cost_amount FROM sales_records WHERE id=?", (sale_id,)
+    ).fetchone()
+    if not sale:
+        return jsonify({'error': '販売記録が見つかりません'}), 404
+    
+    profit_amount = sale[0] - (sale[1] or 0) - shipping_fee - platform_fee - other_fee
+    
+    db.execute("""
+        UPDATE sales_records SET 
+            shipping_fee = ?, platform_fee = ?, other_fee = ?,
+            profit_amount = ?
+        WHERE id = ?
+    """, (shipping_fee, platform_fee, other_fee, profit_amount, sale_id))
+    db.commit()
+    
+    return jsonify({
+        'success': True,
+        'sale_id': sale_id,
+        'shipping_fee': shipping_fee,
+        'platform_fee': platform_fee,
+        'other_fee': other_fee,
+        'total_fees': shipping_fee + platform_fee + other_fee,
+        'profit_amount': profit_amount
+    })
+
+
 @app.route('/api/sales/<int:sale_id>/receipt', methods=['POST'])
 def api_sales_receipt(sale_id):
     """生成/补打小票"""
