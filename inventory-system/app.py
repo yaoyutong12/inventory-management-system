@@ -9,6 +9,7 @@ import json
 import uuid
 import base64
 from datetime import datetime
+import re
 from pathlib import Path
 
 from flask import Flask, request, jsonify, render_template, send_file, g, send_from_directory, make_response
@@ -2033,20 +2034,35 @@ def api_ai_read_barcode():
 
 
 def _barcode_result(decoded_list, method):
-    """Helper: extract barcode data from pyzbar result"""
+    """Helper: extract barcode data from pyzbar result, clean noise"""
     texts = []
     for d in decoded_list:
-        text = d.data.decode('utf-8').strip()
-        if text:
-            texts.append(text)
+        raw = d.data.decode('utf-8', errors='replace').strip()
+        if raw:
+            texts.append(raw)
     if not texts:
         return None
-    barcode = texts[0]
-    print(f'[pyzbar-{method}] 解码成功: "{barcode}"')
+    
+    raw_barcode = texts[0]
+    print(f'[pyzbar-{method}] 原始解码: "{raw_barcode}"')
+    
+    # Clean: strip leading/trailing non-digit chars (CODE-128 start/stop artifacts)
+    # Also strip FNC1 prefix like "]C1" or "]d2"
+    cleaned = re.sub(r'^[^\d\-]*', '', raw_barcode)  # strip leading junk
+    cleaned = re.sub(r'[^\d\-]*$', '', cleaned)       # strip trailing junk
+    # Remove FNC1/AI prefixes like "]C1", "]e0", "]d2", etc.
+    cleaned = re.sub(r'^\]\w\d+', '', cleaned)
+    # If after cleaning it's empty, keep original
+    if not cleaned or not re.search(r'\d', cleaned):
+        cleaned = re.sub(r'[^\d]', '', raw_barcode)  # last resort: digits only
+    
+    print(f'[pyzbar-{method}] 清理后: "{cleaned}"')
+    
     return jsonify({
         'success': True,
-        'barcode': barcode,
+        'barcode': cleaned,
         'method': method,
+        'raw': raw_barcode,
         'all_barcodes': texts
     })
 
