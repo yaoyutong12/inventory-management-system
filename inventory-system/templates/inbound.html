@@ -224,8 +224,18 @@
                             <i class="bi bi-camera me-1"></i>商品照片（选填）
                             <small class="text-muted fw-normal">- 入库时上传，库存和煤炉页面可预览</small>
                         </label>
-                        <input type="file" id="inboundPhotoInput" accept="image/*"
-                               class="form-control form-control-sm" onchange="previewInboundPhoto()">
+                        <input type="file" id="inboundPhotoInput" accept="image/*" capture="environment"
+                               style="display:none" onchange="previewInboundPhoto(this)">
+                        <input type="file" id="inboundPhotoFileInput" accept="image/*"
+                               style="display:none" onchange="previewInboundPhoto(this)">
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-success flex-fill" onclick="document.getElementById('inboundPhotoInput').click()">
+                                <i class="bi bi-camera"></i> 拍照
+                            </button>
+                            <button class="btn btn-outline-secondary flex-fill" onclick="document.getElementById('inboundPhotoFileInput').click()">
+                                <i class="bi bi-folder2-open"></i> 选文件
+                            </button>
+                        </div>
                         <div id="inboundPhotoPreviewArea" class="mt-2 d-none">
                             <img id="inboundPhotoPreviewImg" style="max-width:200px;max-height:150px;border-radius:8px;border:1px solid #ddd">
                             <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearInboundPhoto()">
@@ -815,6 +825,7 @@ async function lookupBarcode(barcode) {
     _currentPhotoBase64 = null;
     _formPhotoBase64 = null;
     document.getElementById('inboundPhotoInput').value = '';
+    document.getElementById('inboundPhotoFileInput').value = '';
     document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
     document.getElementById('photoPreview').classList.add('d-none');
     document.getElementById('photoResult').innerHTML = '';
@@ -941,8 +952,8 @@ function fillProductData(data) {
 }
 
 // ─── Inbound Photo ─────────────────────────────
-function previewInboundPhoto() {
-    const fileInput = document.getElementById('inboundPhotoInput');
+function previewInboundPhoto(inputEl) {
+    const fileInput = inputEl || document.getElementById('inboundPhotoInput');
     const file = fileInput.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -957,6 +968,9 @@ function previewInboundPhoto() {
 function clearInboundPhoto() {
     _formPhotoBase64 = null;
     document.getElementById('inboundPhotoInput').value = '';
+    document.getElementById('inboundPhotoFileInput').value = '';
+    document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
+}
     document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
 }
 
@@ -1060,6 +1074,7 @@ function resetInbound() {
     document.getElementById('photoInput').value = '';
     document.getElementById('photoFileInput').value = '';
     document.getElementById('inboundPhotoInput').value = '';
+    document.getElementById('inboundPhotoFileInput').value = '';
     document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
     document.getElementById('photoPreview').classList.add('d-none');
     document.getElementById('photoResult').innerHTML = '';
