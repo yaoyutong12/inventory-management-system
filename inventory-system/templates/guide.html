@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}導入ガイド - 托盘杂货进销存{% endblock %}
+{% block title %}使用指南 - 托盘杂货进销存{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -22,15 +22,15 @@
                     <strong>専用スキャナー不要！</strong> 今すぐスマホのカメラで始められます。</span>
                 </div>
 
-                <h6 class="mt-3"><span data-i18n="guide_scan_methods">📱 対応方法 3つ</span></h6>
+                <h6 class="mt-3"><span data-i18n="guide_methods_title">📱 対応方法 3つ</span></h6>
 
                 <div class="row g-3 mt-2">
                     <div class="col-md-4">
                         <div class="card border-success h-100">
                             <div class="card-body">
                                 <h6 class="text-success"><i class="bi bi-camera-video me-1"></i><span data-i18n="guide_method1_title">方式① リアルタイムスキャン</span></h6>
-                                <p class="small mb-2">「入庫」→「スキャン」タブ → カメラ起動</p>
-                                <ul class="small text-muted mb-0">
+                                <p class="small mb-2" data-i18n="guide_method_1_desc">「入庫」→「スキャン」タブ → カメラ起動</p>
+                                <ul class="small text-muted mb-0" data-i18n-html="guide_method1_features_html">
                                     <li>QRコード / バーコード対応</li>
                                     <li>スマホをかざすだけ</li>
                                     <li>WiFi/4Gで本体PCと連携</li>
@@ -38,7 +38,7 @@
                                 </ul>
                                 <p class="small mt-2 mb-0">
                                     <span class="badge bg-success" data-i18n="badge_recommended">おすすめ</span>
-                                    スマホで <code>http://[PCのIP]:5000</code> にアクセス
+                                    <span data-i18n-html="guide_method1_access">スマホで <code>http://[PCのIP]:5000</code> にアクセス</span>
                                 </p>
                             </div>
                         </div>
@@ -47,8 +47,8 @@
                         <div class="card border-primary h-100">
                             <div class="card-body">
                                 <h6 class="text-primary"><i class="bi bi-camera me-1"></i><span data-i18n="guide_method2_title">方式② 写真撮影→自動認識</span></h6>
-                                <p class="small mb-2">「入庫」→「写真認識」タブ</p>
-                                <ul class="small text-muted mb-0">
+                                <p class="small mb-2" data-i18n="guide_method_2_desc">「入庫」→「写真認識」タブ</p>
+                                <ul class="small text-muted mb-0" data-i18n-html="guide_method2_features_html">
                                     <li>商品/バーコードを撮影</li>
                                     <li>自動でバーコード検出</li>
                                     <li>1枚で複数バーコード対応</li>
@@ -56,7 +56,7 @@
                                 </ul>
                                 <p class="small mt-2 mb-0">
                                     <span class="badge bg-primary" data-i18n="badge_convenient">便利</span>
-                                    バーコードが読みづらい時に
+                                    <span data-i18n="guide_method2_note">バーコードが読みづらい時に</span>
                                 </p>
                             </div>
                         </div>
@@ -65,8 +65,8 @@
                         <div class="card border-secondary h-100">
                             <div class="card-body">
                                 <h6 class="text-secondary"><i class="bi bi-keyboard me-1"></i><span data-i18n="guide_method3_title">方式③ 手動入力</span></h6>
-                                <p class="small mb-2">「入庫」→「手動入力」タブ</p>
-                                <ul class="small text-muted mb-0">
+                                <p class="small mb-2" data-i18n="guide_method_3_desc">「入庫」→「手動入力」タブ</p>
+                                <ul class="small text-muted mb-0" data-i18n-html="guide_method3_features_html">
                                     <li>バーコード番号を直接入力</li>
                                     <li>カメラ不要</li>
                                     <li>新規商品の手動登録も可</li>
@@ -74,7 +74,7 @@
                                 </ul>
                                 <p class="small mt-2 mb-0">
                                     <span class="badge bg-secondary" data-i18n="badge_backup">予備</span>
-                                    スキャンできない時の最終手段
+                                    <span data-i18n="guide_method3_note">スキャンできない時の最終手段</span>
                                 </p>
                             </div>
                         </div>
@@ -84,10 +84,10 @@
                 <h6 class="mt-4"><span data-i18n="guide_access_method">🔧 スマホからPC版システムにアクセスする方法</span></h6>
                 <div class="bg-dark text-light p-3 rounded small">
                     <ol class="mb-0">
-                        <li>PCで <code>ipconfig</code>（Windows）を実行 → IPv4アドレスを確認（例: <code>192.168.1.100</code>）</li>
-                        <li>スマホを同じWiFiに接続</li>
-                        <li>スマホのブラウザで <code>http://192.168.1.100:5000</code> を開く</li>
-                        <li>「入庫」ページを開いてスキャン開始</li>
+                        <li data-i18n-html="guide_access_step1">PCで <code>ipconfig</code>（Windows）を実行 → IPv4アドレスを確認（例: <code>192.168.1.100</code>）</li>
+                        <li data-i18n="guide_access_step2">スマホを同じWiFiに接続</li>
+                        <li data-i18n-html="guide_access_step3">スマホのブラウザで <code>http://192.168.1.100:5000</code> を開く</li>
+                        <li data-i18n="guide_access_step4">「入庫」ページを開いてスキャン開始</li>
                     </ol>
                 </div>
             </div>
@@ -104,7 +104,7 @@
                 <h6 class="border-bottom pb-2">
                     <span class="badge bg-danger me-2" data-i18n="badge_label">ラベル</span> <span data-i18n="guide_barcode_printer">バーコード・QRラベルプリンター</span>
                 </h6>
-                <p class="small text-muted">商品に貼る内部管理ラベル（62mm×40mm）の印刷用</p>
+                <p class="small text-muted" data-i18n="guide_label_printer_desc">商品に貼る内部管理ラベル（62mm×40mm）の印刷用</p>
 
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered small">
@@ -120,7 +120,7 @@
                             <tr>
                                 <td><strong>Brother QL-820NWB</strong></td>
                                 <td>¥25,000〜30,000</td>
-                                <td class="small">
+                                <td class="small" data-i18n-html="guide_barcode_features_brother">
                                     ✅ 62mm幅ラベル対応<br>
                                     ✅ WiFi / USB / Bluetooth対応<br>
                                     ✅ スマホアプリでデザイン可<br>
@@ -132,7 +132,7 @@
                             <tr>
                                 <td><strong>TSC TE200</strong></td>
                                 <td>¥15,000〜20,000</td>
-                                <td class="small">
+                                <td class="small" data-i18n-html="guide_barcode_features_tsc">
                                     ✅ サーマル方式（インク不要）<br>
                                     ✅ 汎用ラベル使用可<br>
                                     ✅ コスパ良好<br>
@@ -142,29 +142,29 @@
                                 <td><span class="badge bg-primary">★★★★</span></td>
                             </tr>
                             <tr>
-                                <td><strong>スマホ + 普通のプリンター</strong></td>
-                                <td>¥0（既存機材）</td>
-                                <td class="small">
+                                <td><strong data-i18n="guide_barcode_model_smartphone">スマホ + 普通のプリンター</strong></td>
+                                <td data-i18n="guide_barcode_price_smartphone">¥0（既存機材）</td>
+                                <td class="small" data-i18n-html="guide_barcode_features_smartphone">
                                     ✅ コストゼロでスタート<br>
                                     ✅ A4用紙にラベル印刷→カット<br>
                                     ⚠️ 手間がかかる<br>
                                     ⚠️ 見栄えは劣る
                                 </td>
-                                <td><span class="badge bg-secondary">★★★</span><br><small>まずはこれで</small></td>
+                                <td><span class="badge bg-secondary">★★★</span><br><small data-i18n="guide_barcode_rec_smartphone">まずはこれで</small></td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
 
                 <div class="alert alert-light border small mt-2">
-                    <strong>💡 ラベル用紙:</strong> 62mm×40mmのサーマルラベル（Amazon/楽天で購入可）。Brother純正 DK-22205 か、汎用品。
+                    💡 <strong data-i18n="guide_label_paper">ラベル用紙:</strong> <span data-i18n="guide_label_paper_tip">62mm×40mmのサーマルラベル（Amazon/楽天で購入可）。Brother純正 DK-22205 か、汎用品。</span>
                 </div>
 
                 <!-- Receipt Printer -->
                 <h6 class="border-bottom pb-2 mt-4">
                     <span class="badge bg-info me-2" data-i18n="badge_receipt">レシート</span> <span data-i18n="guide_receipt_printer">レシートプリンター（小票機）</span>
                 </h6>
-                <p class="small text-muted">お客様に渡す領収書の印刷用。当面は「印刷しない」設定も可能。</p>
+                <p class="small text-muted" data-i18n="guide_receipt_printer_desc">お客様に渡す領収書の印刷用。当面は「印刷しない」設定も可能。</p>
 
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered small">
@@ -180,48 +180,48 @@
                             <tr>
                                 <td><strong>EPSON TM-T88VII</strong></td>
                                 <td>¥30,000〜40,000</td>
-                                <td class="small">
+                                <td class="small" data-i18n-html="guide_receipt_features_epson">
                                     ✅ 業界標準の定番機<br>
                                     ✅ 80mm感熱ロール紙<br>
                                     ✅ USB + LAN + Bluetooth<br>
                                     ✅ 高速印刷（500mm/秒）<br>
                                     ⚠️ 価格高め
                                 </td>
-                                <td><span class="badge bg-success">★★★★★</span><br><small>本格運用向け</small></td>
+                                <td><span class="badge bg-success">★★★★★</span><br><small data-i18n="guide_receipt_rec_epson">本格運用向け</small></td>
                             </tr>
                             <tr>
                                 <td><strong>Star Micronics mC-Print3</strong></td>
                                 <td>¥20,000〜28,000</td>
-                                <td class="small">
+                                <td class="small" data-i18n-html="guide_receipt_features_star">
                                     ✅ コンパクト設計<br>
                                     ✅ Bluetooth/WiFi対応<br>
                                     ✅ スマホから直接印刷可<br>
                                     ✅ 音が静か<br>
                                     ⚠️ ロール紙交換がやや面倒
                                 </td>
-                                <td><span class="badge bg-primary">★★★★</span><br><small>小規模店舗向け</small></td>
+                                <td><span class="badge bg-primary">★★★★</span><br><small data-i18n="guide_receipt_rec_star">小規模店舗向け</small></td>
                             </tr>
                             <tr>
-                                <td><strong>汎用58mmサーマルプリンター</strong></td>
+                                <td><strong data-i18n="guide_receipt_model_generic">汎用58mmサーマルプリンター</strong></td>
                                 <td>¥3,000〜6,000</td>
-                                <td class="small">
+                                <td class="small" data-i18n-html="guide_receipt_features_generic">
                                     ✅ 超低価格<br>
                                     ✅ Amazonで多数販売<br>
                                     ✅ USB接続<br>
                                     ⚠️ 耐久性・信頼性は不明<br>
                                     ⚠️ ドライバ設定が必要
                                 </td>
-                                <td><span class="badge bg-warning">★★★</span><br><small>お試し用</small></td>
+                                <td><span class="badge bg-warning">★★★</span><br><small data-i18n="guide_receipt_rec_generic">お試し用</small></td>
                             </tr>
                             <tr>
-                                <td><strong>印刷しない設定</strong></td>
+                                <td><strong data-i18n="guide_receipt_print_setting">印刷しない設定</strong></td>
                                 <td>¥0</td>
-                                <td class="small">
+                                <td class="small" data-i18n-html="guide_receipt_features_off">
                                     ✅ 販売画面の「レシート」スイッチOFF<br>
                                     ✅ 必要な時だけ履歴から再印刷<br>
                                     ✅ スマホに表示してお客様に見せる
                                 </td>
-                                <td><span class="badge bg-secondary">推奨</span><br><small>まずはこれ</small></td>
+                                <td><span class="badge bg-secondary" data-i18n="guide_receipt_rec_off_badge">推奨</span><br><small data-i18n="guide_receipt_rec_off">まずはこれ</small></td>
                             </tr>
                         </tbody>
                     </table>
@@ -231,7 +231,7 @@
                 <h6 class="border-bottom pb-2 mt-4">
                     <span class="badge bg-success me-2" data-i18n="badge_scanner">スキャナー</span> <span data-i18n="guide_barcode_scanner">バーコードスキャナー（任意）</span>
                 </h6>
-                <p class="small text-muted">スマホで十分ですが、大量処理するなら専用機が便利。</p>
+                <p class="small text-muted" data-i18n="guide_barcode_scanner_desc">スマホで十分ですが、大量処理するなら専用機が便利。</p>
 
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered small">
@@ -244,19 +244,19 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td><strong>スマホカメラ（現在）</strong></td>
+                                <td><strong data-i18n="guide_scanner_model_phone">スマホカメラ（現在）</strong></td>
                                 <td>¥0</td>
-                                <td>バーコード・QR両対応。本システムで3方式対応済み。</td>
+                                <td data-i18n="guide_scanner_features_phone">バーコード・QR両対応。本システムで3方式対応済み。</td>
                             </tr>
                             <tr>
                                 <td>Honeywell Voyager 1250g</td>
                                 <td>¥8,000〜12,000</td>
-                                <td>USB接続。1次元バーコード専用。キーボード入力として認識。</td>
+                                <td data-i18n="guide_scanner_features_honeywell">USB接続。1次元バーコード専用。キーボード入力として認識。</td>
                             </tr>
                             <tr>
                                 <td>Zebra DS2208</td>
                                 <td>¥15,000〜20,000</td>
-                                <td>1D/2D対応。USB接続。自動検出モードで高速。</td>
+                                <td data-i18n="guide_scanner_features_zebra">1D/2D対応。USB接続。自動検出モードで高速。</td>
                             </tr>
                         </tbody>
                     </table>
@@ -274,32 +274,32 @@
                     <div class="col-md-3 text-center">
                         <div class="border rounded p-3 h-100">
                             <div class="fs-3 mb-2">📱</div>
-                            <h6>Step 1</h6>
-                            <p class="small text-muted mb-0">スマホだけでスタート<br>3方式の入庫を使い分け<br>レシート不要設定</p>
+                            <h6 data-i18n="guide_step1_title">Step 1</h6>
+                            <p class="small text-muted mb-0" data-i18n-html="guide_step1_desc_html">スマホだけでスタート<br>3方式の入庫を使い分け<br>レシート不要設定</p>
                             <span class="badge bg-success" data-i18n="badge_now_here">今ここ</span>
                         </div>
                     </div>
                     <div class="col-md-3 text-center">
                         <div class="border rounded p-3 h-100">
                             <div class="fs-3 mb-2">🖨️</div>
-                            <h6>Step 2</h6>
-                            <p class="small text-muted mb-0">ラベルプリンター導入<br>Brother QL-820NWB推奨<br>QRラベルを効率印刷</p>
+                            <h6 data-i18n="guide_step2_title">Step 2</h6>
+                            <p class="small text-muted mb-0" data-i18n-html="guide_step2_desc_html">ラベルプリンター導入<br>Brother QL-820NWB推奨<br>QRラベルを効率印刷</p>
                             <span class="badge bg-secondary" data-i18n="badge_after_sales_stable">売上安定後</span>
                         </div>
                     </div>
                     <div class="col-md-3 text-center">
                         <div class="border rounded p-3 h-100">
                             <div class="fs-3 mb-2">🧾</div>
-                            <h6>Step 3</h6>
-                            <p class="small text-muted mb-0">レシートプリンター導入<br>Star mC-Print3推奨<br>お客様に領収書発行</p>
+                            <h6 data-i18n="guide_step3_title">Step 3</h6>
+                            <p class="small text-muted mb-0" data-i18n-html="guide_step3_desc_html">レシートプリンター導入<br>Star mC-Print3推奨<br>お客様に領収書発行</p>
                             <span class="badge bg-secondary" data-i18n="badge_after_face_to_face">対面販売開始後</span>
                         </div>
                     </div>
                     <div class="col-md-3 text-center">
                         <div class="border rounded p-3 h-100">
                             <div class="fs-3 mb-2">🏪</div>
-                            <h6>Step 4</h6>
-                            <p class="small text-muted mb-0">本格運用<br>スキャナー+プリンター完備<br>メルカリ/ヤフー連携</p>
+                            <h6 data-i18n="guide_step4_title">Step 4</h6>
+                            <p class="small text-muted mb-0" data-i18n-html="guide_step4_desc_html">本格運用<br>スキャナー+プリンター完備<br>メルカリ/ヤフー連携</p>
                             <span class="badge bg-secondary" data-i18n="badge_expansion_phase">拡大期</span>
                         </div>
                     </div>
@@ -312,11 +312,11 @@
             <div class="card-body">
                 <h6><i class="bi bi-info-circle me-2 text-info"></i><span data-i18n="guide_receipt_policy">レシート運用ポリシー</span></h6>
                 <ul class="small mb-0">
-                    <li><strong>デフォルト:</strong> 販売時「レシート印刷する」ON → 販売確定と同時に自動印刷</li>
-                    <li><strong>省略:</strong> スイッチOFF → 印刷せずに販売完了（履歴に残る）</li>
-                    <li><strong>補打:</strong> 「販売履歴」の各行にある 🖨️ ボタンで、いつでも再印刷可能</li>
-                    <li><strong>回数制限なし:</strong> 何度でも再印刷できます</li>
-                    <li><strong>データ永続:</strong> システム終了後もレシート情報は保存されます</li>
+                    <li data-i18n-html="guide_policy_default"><strong>デフォルト:</strong> 販売時「レシート印刷する」ON → 販売確定と同時に自動印刷</li>
+                    <li data-i18n-html="guide_policy_skip"><strong>省略:</strong> スイッチOFF → 印刷せずに販売完了（履歴に残る）</li>
+                    <li data-i18n-html="guide_policy_reprint"><strong>補打:</strong> 「販売履歴」の各行にある 🖨️ ボタンで、いつでも再印刷可能</li>
+                    <li data-i18n-html="guide_policy_unlimited"><strong>回数制限なし:</strong> 何度でも再印刷できます</li>
+                    <li data-i18n-html="guide_policy_persist"><strong>データ永続:</strong> システム終了後もレシート情報は保存されます</li>
                 </ul>
             </div>
         </div>
