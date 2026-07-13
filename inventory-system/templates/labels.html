@@ -3,28 +3,28 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-upc-scan me-2"></i>ラベル印刷 <small class="text-muted fs-6" id="verInfo">(v20260629-4)</small></h4>
+    <h4><i class="bi bi-upc-scan me-2"></i><span data-i18n="labels_title">ラベル印刷</span> <small class="text-muted fs-6" id="verInfo">(v20260629-4)</small></h4>
     <div>
-        <button class="btn btn-outline-primary" id="selectAllBtn" onclick="selectAll()"><i class="bi bi-check-all"></i> 全選択</button>
+        <button class="btn btn-outline-primary" id="selectAllBtn" onclick="selectAll()" data-i18n="select_all"><i class="bi bi-check-all"></i> 全選択</button>
         <div class="btn-group">
-            <button class="btn btn-primary" onclick="printSelected('normal')"><i class="bi bi-printer"></i> 普通打印 (A4)</button>
-            <button class="btn btn-success" onclick="printSelected('thermal')"><i class="bi bi-receipt"></i> 热敏打印 (48mm)</button>
+            <button class="btn btn-primary" onclick="printSelected('normal')" data-i18n="print_normal_a4"><i class="bi bi-printer"></i> 普通打印 (A4)</button>
+            <button class="btn btn-success" onclick="printSelected('thermal')" data-i18n="print_thermal_48"><i class="bi bi-receipt"></i> 热敏打印 (48mm)</button>
         </div>
     </div>
 </div>
 
 <div class="alert alert-info small mb-3">
     <i class="bi bi-info-circle"></i> 
-    <strong>📱 印臣B21等热敏打印机：</strong>选择商品 → 点击「热敏打印」→ 在打印对话框中选择纸张尺寸为 48mm x 35mm。也可以点击「预览」→ 右键保存二维码图片 → 手机打开印臣APP打印。
+    <span data-i18n-html="labels_thermal_printer_hint"><strong>📱 印臣B21等热敏打印机：</strong>选择商品 → 点击「热敏打印」→ 在打印对话框中选择纸张尺寸为 48mm x 35mm。也可以点击「预览」→ 右键保存二维码图片 → 手机打开印臣APP打印。</span>
 </div>
 
 <div class="row g-3 mb-3">
     <div class="col-md-4">
-        <input class="form-control" id="labelSearch" placeholder="商品名・コード検索..." oninput="filterLabels()">
+        <input class="form-control" id="labelSearch" data-i18n-ph="label_search_ph" placeholder="商品名・コード検索..." oninput="filterLabels()">
     </div>
     <div class="col-md-4">
         <select class="form-select" id="labelCatFilter" onchange="filterLabels()">
-            <option value="">全カテゴリ</option>
+            <option value="" data-i18n="all_categories">全カテゴリ</option>
             {% for cat in ssr_categories %}
             <option value="{{ cat }}">{{ cat }}</option>
             {% endfor %}
@@ -32,8 +32,8 @@
     </div>
     <div class="col-md-4">
         <select class="form-select" id="labelModeFilter" onchange="filterLabels()">
-            <option value="all" selected>全商品（默认）</option>
-            <option value="in_stock">在庫ありのみ</option>
+            <option value="all" selected data-i18n="all_products_default">全商品（默认）</option>
+            <option value="in_stock" data-i18n="in_stock_only">在庫ありのみ</option>
         </select>
     </div>
 </div>
@@ -45,7 +45,7 @@
                 <thead>
                     <tr>
                         <th style="width:40px"><input type="checkbox" id="selectAllCB" onchange="toggleAll(this)"></th>
-                        <th>内部コード</th><th>商品名</th><th>販売価格</th><th>状態</th><th>プレビュー</th>
+                        <th data-i18n="col_internal_code">内部コード</th><th data-i18n="col_product_name">商品名</th><th data-i18n="col_selling_price">販売価格</th><th data-i18n="col_status">状態</th><th data-i18n="col_preview">プレビュー</th>
                     </tr>
                 </thead>
                 <tbody id="invTbody">
@@ -70,14 +70,14 @@
                     {% else %}
                         <tr><td colspan="6" class="text-center py-5 text-muted">
                             <i class="bi bi-inbox" style="font-size:3rem;display:block;margin-bottom:1rem"></i>
-                            <p class="mb-2"><strong>まだ商品が登録されていません</strong></p>
-                            <p class="small mb-3">手順：<br>
+                            <p class="mb-2"><strong data-i18n="labels_no_products">まだ商品が登録されていません</strong></p>
+                            <p class="small mb-3" data-i18n-html="labels_empty_steps">手順：<br>
                             ① <a href="/import">仕入リスト管理</a> でExcelファイルをアップロード<br>
                             ② <a href="/inbound">入庫管理</a> で商品を選択 → 販売価格を入力 → 入庫実行<br>
                             ③ ラベルが表示されます</p>
                             <p>
-                            <a href="/debug-data" class="btn btn-sm btn-outline-secondary me-2">データ状態を確認</a>
-                            <a href="/api/inventory/list" target="_blank" class="btn btn-sm btn-outline-info me-2">APIデータ確認</a>
+                            <a href="/debug-data" class="btn btn-sm btn-outline-secondary me-2" data-i18n="btn_debug_data">データ状態を確認</a>
+                            <a href="/api/inventory/list" target="_blank" class="btn btn-sm btn-outline-info me-2" data-i18n="btn_api_data">APIデータ確認</a>
                             </p>
                         </td></tr>
                     {% endif %}
@@ -87,7 +87,7 @@
     </div>
 </div>
 
-<div class="mt-2 text-muted small text-end" id="labelCountInfo">
+<div class="mt-2 text-muted small text-end" id="labelCountInfo" data-i18n="labels_total_count">
     {% if ssr_data %}全 {{ ssr_data|length }} 件の商品{% endif %}
 </div>
 
@@ -110,10 +110,10 @@ function testLabelsApi() {
         body: JSON.stringify({product_ids: testIds})
     }).then(r=>r.json()).then(function(d){
         console.log('Labels API test:', d);
-        alert('Labels API結果:\n' + JSON.stringify(d, null, 2).substring(0, 500));
+        alert(t('labels_api_result_prefix') + ':\n' + JSON.stringify(d, null, 2).substring(0, 500));
     }).catch(function(e){
         console.error('Labels API test error:', e);
-        alert('APIエラー: ' + e.message);
+        alert(t('api_error_prefix') + ': ' + e.message);
     });
 }
 </script>
@@ -198,7 +198,7 @@ function filterLabels() {
     var countEl = document.getElementById('labelCountInfo');
     if (countEl) {
         var total = rows.length;
-        countEl.textContent = visibleCount + ' / ' + total + ' 件';
+        countEl.textContent = visibleCount + ' / ' + total + ' ' + t('items_unit');
     }
 }
 
@@ -207,10 +207,10 @@ async function previewLabel(id) {
     // ★必须先开窗（在await之前），否则浏览器弹窗拦截器会阻止
     var win = window.open('', '_blank', 'width=400,height=450');
     if (!win) {
-        alert('ポップアップがブロックされました。ブラウザのポップアップブロックを解除してください。');
+        alert(t('popup_blocked_warning'));
         return;
     }
-    win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p>読み込み中...</p></body></html>');
+    win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p>' + t('loading_text') + '</p></body></html>');
     
     try {
         var result = await API.post('/api/labels/generate', {product_ids: [id]});
@@ -220,7 +220,7 @@ async function previewLabel(id) {
         }
         if (result.labels && result.labels.length > 0) {
             var l = result.labels[0];
-            win.document.write('<html><head><title>ラベルプレビュー</title>' +
+            win.document.write('<html><head><title>' + t('label_preview_title') + '</title>' +
                 '<style>@page{size:62mm 40mm;margin:3mm}body{font-family:"MS Gothic",sans-serif;margin:20px;display:flex;justify-content:center}' +
                 '.label{text-align:center;border:2px dashed #ccc;padding:20px;border-radius:12px;width:250px}' +
                 '.label img{width:150px;height:150px}.label .code{font-size:16px;font-weight:bold;margin:8px 0}' +
@@ -230,7 +230,7 @@ async function previewLabel(id) {
                 '<div class="name">' + l.product_name + '</div>' +
                 '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>');
         } else {
-            var errHtml = '<p style="color:red;font-size:14px">ラベル生成に失敗しました</p>';
+            var errHtml = '<p style="color:red;font-size:14px">' + t('label_generation_failed') + '</p>';
             if (result.errors && result.errors.length > 0) {
                 errHtml += '<p style="font-size:12px;color:#666">' + result.errors.map(function(e){return e.error}).join('<br>') + '</p>';
             }
@@ -238,7 +238,7 @@ async function previewLabel(id) {
         }
     } catch(e) {
         console.error('Label preview error:', e);
-        win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">エラー: ' + e.message + '</p></body></html>');
+        win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">' + t('generic_error_prefix') + ': ' + e.message + '</p></body></html>');
     }
 }
 
@@ -246,7 +246,7 @@ async function previewLabel(id) {
 async function printSelected(mode) {
     mode = mode || 'normal';
     if (selectedIds.size === 0) {
-        showToast('印刷するラベルを選択してください', 'warning');
+        showToast(t('select_labels_to_print'), 'warning');
         return;
     }
     
@@ -254,10 +254,10 @@ async function printSelected(mode) {
     var isThermal = mode === 'thermal';
     var win = window.open('', '_blank', 'width=' + (isThermal ? 400 : 800) + ',height=600');
     if (!win) {
-        alert('ポップアップがブロックされました。ブラウザのポップアップブロックを解除してください。');
+        alert(t('popup_blocked_warning'));
         return;
     }
-    win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p>ラベル生成中...</p></body></html>');
+    win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p>' + t('labels_generating') + '</p></body></html>');
     
     try {
         var result = await API.post('/api/labels/generate', {product_ids: Array.from(selectedIds)});
@@ -266,7 +266,7 @@ async function printSelected(mode) {
             console.warn('Print label errors:', result.errors);
         }
         if (!result.labels || result.labels.length === 0) {
-            var errMsg2 = 'ラベル生成に失敗しました';
+            var errMsg2 = t('label_generation_failed');
             if (result.errors && result.errors.length > 0) {
                 errMsg2 += '<br>' + result.errors.map(function(e){return e.error}).join('<br>');
             }
@@ -277,13 +277,13 @@ async function printSelected(mode) {
         if (isThermal) {
             var labelsHtml = result.labels.map(function(l) {
                 return '<div class="thermal-label">' +
-                    (l.qr_code ? '<img src="data:image/png;base64,' + l.qr_code + '">' : '<div style="width:28mm;height:28mm;border:1px dashed #ccc;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px">QRなし</div>') +
+                    (l.qr_code ? '<img src="data:image/png;base64,' + l.qr_code + '">' : '<div style="width:28mm;height:28mm;border:1px dashed #ccc;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px">' + t('no_qr_code') + '</div>') +
                     '<div class="code">' + l.internal_code + '</div>' +
                     '<div class="name">' + l.product_name + '</div>' +
                     '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>';
             }).join('');
             
-            win.document.write('<html><head><title>热敏标签印刷 (' + result.labels.length + '枚)</title>' +
+            win.document.write('<html><head><title>' + t('thermal_label_print_title').replace('{count}', result.labels.length) + '</title>' +
                 '<style>@page{size:48mm 35mm;margin:1mm}body{font-family:"MS Gothic","Microsoft YaHei",sans-serif;margin:0;padding:0}' +
                 '.thermal-label{text-align:center;padding:1mm;page-break-after:always;width:46mm}' +
                 '.thermal-label img{width:28mm;height:28mm;display:block;margin:0 auto}' +
@@ -295,13 +295,13 @@ async function printSelected(mode) {
         } else {
             var labelsHtml = result.labels.map(function(l) {
                 return '<div class="label">' +
-                    (l.qr_code ? '<img src="data:image/png;base64,' + l.qr_code + '">' : '<div style="width:60px;height:60px;border:1px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:9px">QRなし</div>') +
+                    (l.qr_code ? '<img src="data:image/png;base64,' + l.qr_code + '">' : '<div style="width:60px;height:60px;border:1px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:9px">' + t('no_qr_code') + '</div>') +
                     '<div class="code">' + l.internal_code + '</div>' +
                     '<div class="name">' + l.product_name + '</div>' +
                     '<div class="price">¥' + Number(l.selling_price||0).toLocaleString() + '</div></div>';
             }).join('');
             
-            win.document.write('<html><head><title>ラベル印刷 (' + result.labels.length + '枚)</title>' +
+            win.document.write('<html><head><title>' + t('a4_label_print_title').replace('{count}', result.labels.length) + '</title>' +
                 '<style>@page{size:A4;margin:10mm}body{font-family:"MS Gothic",sans-serif;margin:0;padding:0}' +
                 '.labels{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-start;padding:10px}' +
                 '.label{width:170px;height:110px;border:1px solid #ccc;padding:5px;text-align:center;page-break-inside:avoid;' +
@@ -313,11 +313,11 @@ async function printSelected(mode) {
                 '<script>window.onload=function(){window.print();}<\/script></body></html>');
         }
         
-        var modeLabel = isThermal ? '热敏 (48mm)' : 'A4';
-        showToast(result.labels.length + '枚のラベルを' + modeLabel + 'で印刷します', 'info');
+        var modeLabel = isThermal ? t('thermal_mode_label') : t('a4_mode_label');
+        showToast(t('labels_print_toast').replace('{count}', result.labels.length).replace('{mode}', modeLabel), 'info');
     } catch(e) {
         console.error('Print labels error:', e);
-        win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">エラー: ' + e.message + '</p></body></html>');
+        win.document.write('<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><p style="color:red">' + t('generic_error_prefix') + ': ' + e.message + '</p></body></html>');
     }
 }
 </script>

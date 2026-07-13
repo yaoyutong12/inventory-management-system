@@ -4,8 +4,8 @@
 {% block content %}
 <div class="row g-3 mb-4">
     <div class="col-12">
-        <h4><i class="bi bi-graph-up me-2"></i>販売レポート</h4>
-        <p class="text-muted small mb-0">販売チャネル別の売上・利益を確認できます</p>
+        <h4><i class="bi bi-graph-up me-2"></i><span data-i18n="report_title">販売レポート</span></h4>
+        <p class="text-muted small mb-0" data-i18n="report_hint">販売チャネル別の売上・利益を確認できます</p>
     </div>
 </div>
 
@@ -14,7 +14,7 @@
     <div class="card-body py-2">
         <div class="row g-2 align-items-end">
             <div class="col-auto">
-                <label class="form-label small mb-0">期間</label>
+                <label class="form-label small mb-0" data-i18n="period_label">期間</label>
                 <div class="input-group input-group-sm">
                     <input type="date" class="form-control" id="startDate" style="width:130px">
                     <span class="input-group-text">〜</span>
@@ -22,30 +22,30 @@
                 </div>
             </div>
             <div class="col-auto">
-                <label class="form-label small mb-0">チャネル</label>
+                <label class="form-label small mb-0" data-i18n="channel_label">チャネル</label>
                 <select class="form-select form-select-sm" id="platformFilter" style="width:140px">
-                    <option value="">全チャネル</option>
-                    <option value="physical">🏪 实体店</option>
-                    <option value="mercari">🛒 メルカリ</option>
-                    <option value="yahoo">🟨 ヤフオク</option>
-                    <option value="rakuten">🛍️ 楽天</option>
-                    <option value="other">📦 その他</option>
+                    <option value="" data-i18n="all_channels_report">全チャネル</option>
+                    <option value="physical" data-i18n="physical_store">🏪 实体店</option>
+                    <option value="mercari" data-i18n="mercari_platform">🛒 メルカリ</option>
+                    <option value="yahoo" data-i18n="yahoo_platform">🟨 ヤフオク</option>
+                    <option value="rakuten" data-i18n="rakuten_platform">🛍️ 楽天</option>
+                    <option value="other" data-i18n="other_platform">📦 その他</option>
                 </select>
             </div>
             <div class="col-auto">
                 <button class="btn btn-primary btn-sm" onclick="loadReport()">
-                    <i class="bi bi-search"></i> 表示
+                    <i class="bi bi-search"></i> <span data-i18n="display_btn">表示</span>
                 </button>
                 <button class="btn btn-outline-secondary btn-sm ms-1" onclick="exportReportCSV()">
-                    <i class="bi bi-download"></i> CSV
+                    <i class="bi bi-download"></i> <span data-i18n="csv_btn">CSV</span>
                 </button>
             </div>
             <div class="col-auto ms-auto">
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-primary" onclick="setPeriod('month')">今月</button>
-                    <button class="btn btn-outline-primary" onclick="setPeriod('last30')">30日</button>
-                    <button class="btn btn-outline-primary" onclick="setPeriod('all')">全期間</button>
-                    <button class="btn btn-outline-danger btn-sm ms-2" onclick="loadReport(true)">🔍 全期間(無条件)</button>
+                    <button class="btn btn-outline-primary" onclick="setPeriod('month')" data-i18n="this_month">今月</button>
+                    <button class="btn btn-outline-primary" onclick="setPeriod('last30')" data-i18n="last_30_days">30日</button>
+                    <button class="btn btn-outline-primary" onclick="setPeriod('all')" data-i18n="all_period">全期間</button>
+                    <button class="btn btn-outline-danger btn-sm ms-2" onclick="loadReport(true)">🔍 <span data-i18n="all_no_filter">全期間(無条件)</span></button>
                 </div>
             </div>
         </div>
@@ -57,7 +57,7 @@
     <div class="col-md-3">
         <div class="card bg-primary text-white">
             <div class="card-body py-2 px-3">
-                <div class="small opacity-75">総販売件数</div>
+                <div class="small opacity-75" data-i18n="total_sales_count">総販売件数</div>
                 <div class="fs-4 fw-bold" id="sumCount">0</div>
             </div>
         </div>
@@ -65,7 +65,7 @@
     <div class="col-md-3">
         <div class="card bg-success text-white">
             <div class="card-body py-2 px-3">
-                <div class="small opacity-75">総売上</div>
+                <div class="small opacity-75" data-i18n="total_sales_revenue">総売上</div>
                 <div class="fs-4 fw-bold" id="sumRevenue">¥0</div>
             </div>
         </div>
@@ -73,7 +73,7 @@
     <div class="col-md-3">
         <div class="card bg-info text-white">
             <div class="card-body py-2 px-3">
-                <div class="small opacity-75">総利益</div>
+                <div class="small opacity-75" data-i18n="total_sales_profit">総利益</div>
                 <div class="fs-4 fw-bold" id="sumProfit">¥0</div>
             </div>
         </div>
@@ -81,7 +81,7 @@
     <div class="col-md-3">
         <div class="card bg-warning text-dark">
             <div class="card-body py-2 px-3">
-                <div class="small opacity-75">利益率</div>
+                <div class="small opacity-75" data-i18n="profit_rate">利益率</div>
                 <div class="fs-4 fw-bold" id="sumMargin">0%</div>
             </div>
         </div>
@@ -93,13 +93,13 @@
     <div class="col-lg-5">
         <div class="card">
             <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-pie-chart me-2"></i>チャネル別売上比率</h6>
+                <h6 class="card-title"><i class="bi bi-pie-chart me-2"></i><span data-i18n="channel_sales_ratio">チャネル別売上比率</span></h6>
                 <canvas id="platformChart" height="280"></canvas>
             </div>
         </div>
         <div class="card mt-3">
             <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-bar-chart me-2"></i>チャネル別利益</h6>
+                <h6 class="card-title"><i class="bi bi-bar-chart me-2"></i><span data-i18n="channel_profit">チャネル別利益</span></h6>
                 <canvas id="profitChart" height="200"></canvas>
             </div>
         </div>
@@ -107,25 +107,25 @@
     <div class="col-lg-7">
         <div class="card">
             <div class="card-body">
-                <h6 class="card-title">チャネル別明細</h6>
+                <h6 class="card-title" data-i18n="channel_detail">チャネル別明細</h6>
                 <div class="table-responsive">
                     <table class="table table-sm">
                         <thead>
                             <tr>
-                                <th>チャネル</th>
-                                <th class="text-end">件数</th>
-                                <th class="text-end">売上</th>
-                                <th class="text-end">仕入</th>
-                                <th class="text-end">運費</th>
-                                <th class="text-end">佣金</th>
-                                <th class="text-end">雑費</th>
-                                <th class="text-end">利益</th>
-                                <th class="text-end">利益率</th>
-                                <th class="text-end">平均単価</th>
+                                <th data-i18n="channel_col">チャネル</th>
+                                <th class="text-end" data-i18n="count_col">件数</th>
+                                <th class="text-end" data-i18n="revenue_col">売上</th>
+                                <th class="text-end" data-i18n="purchase_col">仕入</th>
+                                <th class="text-end" data-i18n="shipping_col">運費</th>
+                                <th class="text-end" data-i18n="commission_col">佣金</th>
+                                <th class="text-end" data-i18n="misc_col">雑費</th>
+                                <th class="text-end" data-i18n="profit_col">利益</th>
+                                <th class="text-end" data-i18n="profit_rate_col">利益率</th>
+                                <th class="text-end" data-i18n="avg_price_col">平均単価</th>
                             </tr>
                         </thead>
                         <tbody id="platformTableBody">
-                            <tr><td colspan="10" class="text-center text-muted py-3">読み込み中...</td></tr>
+                            <tr><td colspan="10" class="text-center text-muted py-3" data-i18n="loading">読み込み中...</td></tr>
                         </tbody>
                         <tfoot id="platformTableFoot"></tfoot>
                     </table>
@@ -134,23 +134,23 @@
         </div>
         <div class="card mt-3">
             <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-calendar3 me-2"></i>日別販売推移</h6>
+                <h6 class="card-title"><i class="bi bi-calendar3 me-2"></i><span data-i18n="daily_sales_trend">日別販売推移</span></h6>
                 <div style="max-height:350px;overflow-y:auto">
                     <table class="table table-sm">
                         <thead>
                             <tr>
-                                <th>日付</th>
-                                <th>チャネル</th>
-                                <th class="text-end">件数</th>
-                                <th class="text-end">売上</th>
-                                <th class="text-end">運費</th>
-                                <th class="text-end">佣金</th>
-                                <th class="text-end">雑費</th>
-                                <th class="text-end">利益</th>
+                                <th data-i18n="date_col">日付</th>
+                                <th data-i18n="channel_col">チャネル</th>
+                                <th class="text-end" data-i18n="count_col">件数</th>
+                                <th class="text-end" data-i18n="revenue_col">売上</th>
+                                <th class="text-end" data-i18n="shipping_col">運費</th>
+                                <th class="text-end" data-i18n="commission_col">佣金</th>
+                                <th class="text-end" data-i18n="misc_col">雑費</th>
+                                <th class="text-end" data-i18n="profit_col">利益</th>
                             </tr>
                         </thead>
                         <tbody id="dailyTableBody">
-                            <tr><td colspan="8" class="text-center text-muted py-3">読み込み中...</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-3" data-i18n="loading">読み込み中...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -162,27 +162,27 @@
 <!-- Individual Sales Detail -->
 <div class="card mt-3">
     <div class="card-body">
-        <h6 class="card-title"><i class="bi bi-list-ul me-2"></i>販売明細 <small class="text-muted">（1件ずつ表示）</small></h6>
+        <h6 class="card-title"><i class="bi bi-list-ul me-2"></i><span data-i18n="sales_detail">販売明細</span> <small class="text-muted">（1件ずつ表示）</small></h6>
         <div style="max-height:500px;overflow-y:auto">
             <table class="table table-sm table-hover">
                 <thead class="table-light sticky-top">
                     <tr>
                         <th>日時</th>
-                        <th>商品名</th>
+                        <th data-i18n="product_name_col">商品名</th>
                         <th>コード</th>
-                        <th>チャネル</th>
-                        <th class="text-end">数量</th>
-                        <th class="text-end">単価</th>
-                        <th class="text-end">売上</th>
-                        <th class="text-end">仕入</th>
-                        <th class="text-end" style="min-width:55px">運費</th>
-                        <th class="text-end" style="min-width:55px">佣金</th>
-                        <th class="text-end" style="min-width:55px">雑費</th>
-                        <th class="text-end">利益</th>
+                        <th data-i18n="channel_col">チャネル</th>
+                        <th class="text-end" data-i18n="quantity">数量</th>
+                        <th class="text-end" data-i18n="unit_price_col">単価</th>
+                        <th class="text-end" data-i18n="revenue_col">売上</th>
+                        <th class="text-end" data-i18n="purchase_col">仕入</th>
+                        <th class="text-end" style="min-width:55px" data-i18n="shipping_col">運費</th>
+                        <th class="text-end" style="min-width:55px" data-i18n="commission_col">佣金</th>
+                        <th class="text-end" style="min-width:55px" data-i18n="misc_col">雑費</th>
+                        <th class="text-end" data-i18n="profit_col">利益</th>
                     </tr>
                 </thead>
                 <tbody id="detailTableBody">
-                    <tr><td colspan="12" class="text-center text-muted py-3">読み込み中...</td></tr>
+                    <tr><td colspan="12" class="text-center text-muted py-3" data-i18n="loading">読み込み中...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -196,12 +196,12 @@ let platformChart = null;
 let profitChart = null;
 
 const platformLabels = {
-    'physical': '🏪 实体店（物理店舗）',
-    'mercari': '🛒 メルカリ',
-    'yahoo': '🟨 ヤフオク',
-    'rakuten': '🛍️ 楽天',
-    'other': '📦 その他',
-    '': '未分類'
+    'physical': t('physical_store'),
+    'mercari': t('mercari_platform'),
+    'yahoo': t('yahoo_platform'),
+    'rakuten': t('rakuten_platform'),
+    'other': t('other_platform'),
+    '': t('platform_not_classified')
 };
 
 function fmtLocalDate(d) {
@@ -258,13 +258,13 @@ async function loadReport(noFilter = false) {
         }
         renderReport(data);
     } catch (err) {
-        showToast('レポート読み込みエラー: ' + err.message, 'error');
+        showToast(t('report_load_error') + ': ' + err.message, 'error');
     }
 }
 
 // ─── Inline fee editing — one column at a time ──────────────────
 function editFeeCell(sid, field) {
-    const labels = {shipping:'運費', platform:'佣金', other:'雑費'};
+    const labels = {shipping: t('shipping_col'), platform: t('commission_col'), other: t('misc_col')};
     const display = document.getElementById('fee-' + field + '-' + sid);
     const editSpan = document.getElementById('fee-edit-' + field + '-' + sid);
     
@@ -322,10 +322,10 @@ async function saveFeeCell(sid, field) {
             // Reload full report to refresh all summaries
             loadReport();
         } else {
-            showToast(data.error || '更新失敗', 'error');
+            showToast(data.error || t('update_fail'), 'error');
         }
     } catch (err) {
-        showToast('保存エラー: ' + err.message, 'error');
+        showToast(t('save_error') + ': ' + err.message, 'error');
     }
 }
 
@@ -350,10 +350,10 @@ function renderReport(data) {
     
     // Platform Table
     document.getElementById('platformTableBody').innerHTML = platformStats.length === 0
-        ? '<tr><td colspan="10" class="text-center text-muted py-3">データがありません</td></tr>'
+        ? '<tr><td colspan="10" class="text-center text-muted py-3">' + t('no_data') + '</td></tr>'
         : platformStats.map(p => {
             const margin = p.total_revenue > 0 ? Math.round(p.total_profit / p.total_revenue * 100) : 0;
-            const label = platformLabels[p.platform] || p.platform || '未分類';
+            const label = platformLabels[p.platform] || p.platform || t('platform_not_classified');
             const sf = p.total_shipping_fee || 0;
             const pf = p.total_platform_fee || 0;
             const of = p.total_other_fee || 0;
@@ -383,7 +383,7 @@ function renderReport(data) {
     const fmtFootFee = (v) => v > 0 ? '-' + formatJPY(v) : '¥0';
     document.getElementById('platformTableFoot').innerHTML = platformStats.length > 1 ? `
         <tr class="table-primary fw-bold">
-            <td>合計</td>
+            <td>${t('total_col')}</td>
             <td class="text-end">${totalCount}件</td>
             <td class="text-end">${formatJPY(totalRevenue)}</td>
             <td class="text-end">${formatJPY(totalCost)}</td>
@@ -397,9 +397,9 @@ function renderReport(data) {
     
     // Daily Table
     document.getElementById('dailyTableBody').innerHTML = dailyStats.length === 0
-        ? '<tr><td colspan="8" class="text-center text-muted py-3">データがありません</td></tr>'
+        ? '<tr><td colspan="8" class="text-center text-muted py-3">' + t('no_data') + '</td></tr>'
         : dailyStats.slice(0, 60).map(d => {
-            const label = platformLabels[d.platform] || d.platform || '未分類';
+            const label = platformLabels[d.platform] || d.platform || t('platform_not_classified');
             const sf = d.total_shipping_fee || 0;
             const pf = d.total_platform_fee || 0;
             const of = d.total_other_fee || 0;
@@ -419,15 +419,15 @@ function renderReport(data) {
     // Individual Sales Detail Table — three separate fee columns, directly visible
     function feeCell(sid, field, val, label) {
         return `<span id="fee-${field}-${sid}" class="${val > 0 ? 'text-danger' : 'text-muted'}"
-                      style="cursor:pointer" onclick="editFeeCell('${sid}','${field}')" title="${label} - クリックして編集">
+                      style="cursor:pointer" onclick="editFeeCell('${sid}','${field}')" title="${label} - ${t('fee_click_edit')}">
                     ${val > 0 ? '-'+formatJPY(val) : '¥0'}
                 </span>
                 <span id="fee-edit-${field}-${sid}" class="d-none"></span>`;
     }
     document.getElementById('detailTableBody').innerHTML = salesDetail.length === 0
-        ? '<tr><td colspan="12" class="text-center text-muted py-3">データがありません</td></tr>'
+        ? '<tr><td colspan="12" class="text-center text-muted py-3">' + t('no_data') + '</td></tr>'
         : salesDetail.map(s => {
-            const platform = platformLabels[s.platform] || s.platform || '未分類';
+            const platform = platformLabels[s.platform] || s.platform || t('platform_not_classified');
             const profitClass = (s.profit_amount || 0) >= 0 ? 'text-success' : 'text-danger';
             const sid = s.id;
             const sf = s.shipping_fee || 0;
@@ -442,9 +442,9 @@ function renderReport(data) {
                 <td class="text-end">${formatJPY(s.unit_price)}</td>
                 <td class="text-end fw-bold">${formatJPY(s.total_amount)}</td>
                 <td class="text-end text-muted">${formatJPY(s.cost_amount || 0)}</td>
-                <td class="text-end">${feeCell(sid, 'shipping', sf, '運費')}</td>
-                <td class="text-end">${feeCell(sid, 'platform', pf, '佣金')}</td>
-                <td class="text-end">${feeCell(sid, 'other', of, '雑費')}</td>
+                <td class="text-end">${feeCell(sid, 'shipping', sf, t('shipping_col'))}</td>
+                <td class="text-end">${feeCell(sid, 'platform', pf, t('commission_col'))}</td>
+                <td class="text-end">${feeCell(sid, 'other', of, t('misc_col'))}</td>
                 <td class="text-end ${profitClass} fw-bold" id="profit-cell-${sid}">${formatJPY(s.profit_amount || 0)}</td>
             </tr>`;
         }).join('');
@@ -458,7 +458,7 @@ function renderPlatformChart(stats) {
     if (platformChart) platformChart.destroy();
     
     const labels = stats.map(p => {
-        const l = platformLabels[p.platform] || p.platform || '未分類';
+        const l = platformLabels[p.platform] || p.platform || t('platform_not_classified');
         return l.replace(/^./, '');  // Remove emoji for chart
     });
     const data = stats.map(p => p.total_revenue);
@@ -484,7 +484,7 @@ function renderProfitChart(stats) {
     if (profitChart) profitChart.destroy();
     
     const labels = stats.map(p => {
-        const l = platformLabels[p.platform] || p.platform || '未分類';
+        const l = platformLabels[p.platform] || p.platform || t('platform_not_classified');
         return l.replace(/^./, '');
     });
     
@@ -493,8 +493,8 @@ function renderProfitChart(stats) {
         data: {
             labels: labels,
             datasets: [
-                { label: '売上', data: stats.map(p => p.total_revenue), backgroundColor: '#1a73e8', borderRadius: 4 },
-                { label: '利益', data: stats.map(p => p.total_profit), backgroundColor: '#0d904f', borderRadius: 4 }
+                { label: t('sales_revenue'), data: stats.map(p => p.total_revenue), backgroundColor: '#1a73e8', borderRadius: 4 },
+                { label: t('profit'), data: stats.map(p => p.total_profit), backgroundColor: '#0d904f', borderRadius: 4 }
             ]
         },
         options: {
@@ -506,7 +506,7 @@ function renderProfitChart(stats) {
 }
 
 function exportReportCSV() {
-    const rows = [['チャネル','件数','売上','仕入','運費','佣金','雑費','利益','利益率','平均単価']];
+    const rows = [[t('channel_col'),t('count_col'),t('revenue_col'),t('purchase_col'),t('shipping_col'),t('commission_col'),t('misc_col'),t('profit_col'),t('profit_rate_col'),t('avg_price_col')]];
     const tbody = document.getElementById('platformTableBody');
     tbody.querySelectorAll('tr').forEach(tr => {
         const cells = tr.querySelectorAll('td');

@@ -7,8 +7,8 @@
         <div class="card">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="card-title mb-0"><i class="bi bi-trash me-2"></i>报废商品列表</h5>
-                    <button class="btn btn-outline-primary btn-sm" onclick="exportCSV()">
+                    <h5 class="card-title mb-0"><i class="bi bi-trash me-2"></i><span data-i18n="scrap_title">报废商品列表</span></h5>
+                    <button class="btn btn-outline-primary btn-sm" onclick="exportCSV()" data-i18n="export_csv_btn">
                         <i class="bi bi-download"></i> 导出CSV
                     </button>
                 </div>
@@ -16,21 +16,21 @@
                 <!-- Filters -->
                 <div class="row g-2 mb-3">
                     <div class="col-sm-4">
-                        <label class="form-label small">开始日期</label>
+                        <label class="form-label small" data-i18n="start_date">开始日期</label>
                         <input type="date" class="form-control form-control-sm" id="startDate" onchange="loadReport()">
                     </div>
                     <div class="col-sm-4">
-                        <label class="form-label small">结束日期</label>
+                        <label class="form-label small" data-i18n="end_date">结束日期</label>
                         <input type="date" class="form-control form-control-sm" id="endDate" onchange="loadReport()">
                     </div>
                     <div class="col-sm-4">
-                        <label class="form-label small">报废原因</label>
+                        <label class="form-label small" data-i18n="scrap_reason">报废原因</label>
                         <select class="form-select form-select-sm" id="reasonFilter" onchange="loadReport()">
-                            <option value="">全部</option>
-                            <option value="damaged">损坏</option>
-                            <option value="counterfeit">仿品</option>
-                            <option value="expired">过期</option>
-                            <option value="other">其他</option>
+                            <option value="" data-i18n="option_all">全部</option>
+                            <option value="damaged" data-i18n="reason_damaged">损坏</option>
+                            <option value="counterfeit" data-i18n="reason_counterfeit">仿品</option>
+                            <option value="expired" data-i18n="reason_expired">过期</option>
+                            <option value="other" data-i18n="reason_other">其他</option>
                         </select>
                     </div>
                 </div>
@@ -43,17 +43,17 @@
                     <table class="table table-sm table-hover">
                         <thead class="sticky-top bg-white">
                             <tr>
-                                <th>内部码</th>
-                                <th>追踪号</th>
-                                <th>商品名</th>
-                                <th>报废原因</th>
-                                <th>入库日期</th>
-                                <th>报废日期</th>
-                                <th>进价</th>
+                                <th data-i18n="col_internal_code">内部码</th>
+                                <th data-i18n="col_tracking_no">追踪号</th>
+                                <th data-i18n="col_product_name">商品名</th>
+                                <th data-i18n="col_scrap_reason">报废原因</th>
+                                <th data-i18n="col_inbound_date">入库日期</th>
+                                <th data-i18n="col_scrap_date">报废日期</th>
+                                <th data-i18n="col_unit_cost">进价</th>
                             </tr>
                         </thead>
                         <tbody id="scrapTableBody">
-                            <tr><td colspan="7" class="text-center text-muted py-4">加载中...</td></tr>
+                            <tr><td colspan="7" class="text-center text-muted py-4" data-i18n="loading_text">加载中...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -65,13 +65,13 @@
     <div class="col-lg-4">
         <div class="card">
             <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-pie-chart me-2"></i>报废统计</h6>
+                <h6 class="card-title"><i class="bi bi-pie-chart me-2"></i><span data-i18n="scrap_stats_title">报废统计</span></h6>
                 <canvas id="scrapChart" style="width:100%;height:250px"></canvas>
             </div>
         </div>
         <div class="card mt-3">
             <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-info-circle me-2"></i>说明</h6>
+                <h6 class="card-title"><i class="bi bi-info-circle me-2"></i><span data-i18n="scrap_info_title">说明</span></h6>
                 <p class="small text-muted mb-2">报废商品是指在入库或库存管理过程中发现：</p>
                 <ul class="small text-muted">
                     <li>🔧 <strong>损坏</strong>：商品在运输或存储过程中损坏</li>
@@ -115,15 +115,15 @@ function loadReport() {
 function renderTable(items) {
     const tbody = document.getElementById('scrapTableBody');
     if (items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">暂无报废商品</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">' + t('scrap_no_items') + '</td></tr>';
         return;
     }
     
     const reasonLabels = {
-        'damaged': '🔧 损坏',
-        'counterfeit': '🚫 仿品',
-        'expired': '⏰ 过期',
-        'other': '📦 其他'
+        'damaged': '🔧 ' + t('reason_damaged'),
+        'counterfeit': '🚫 ' + t('reason_counterfeit'),
+        'expired': '⏰ ' + t('reason_expired'),
+        'other': '📦 ' + t('reason_other')
     };
     
     tbody.innerHTML = items.map(item => `
@@ -146,10 +146,10 @@ function renderSummary(summary) {
     const total = Object.values(summary).reduce((a, b) => a + b, 0);
     
     const reasonLabels = {
-        'damaged': '🔧 损坏',
-        'counterfeit': '🚫 仿品',
-        'expired': '⏰ 过期',
-        'other': '📦 其他'
+        'damaged': '🔧 ' + t('reason_damaged'),
+        'counterfeit': '🚫 ' + t('reason_counterfeit'),
+        'expired': '⏰ ' + t('reason_expired'),
+        'other': '📦 ' + t('reason_other')
     };
     
     let html = `
@@ -157,7 +157,7 @@ function renderSummary(summary) {
             <div class="card bg-light">
                 <div class="card-body text-center py-2">
                     <div class="fs-5 fw-bold text-danger">${total}</div>
-                    <small class="text-muted">总报废数</small>
+                    <small class="text-muted">' + t('scrap_total_count') + '</small>
                 </div>
             </div>
         </div>
@@ -185,10 +185,10 @@ function renderChart(summary) {
     if (scrapChart) scrapChart.destroy();
     
     const reasonLabels = {
-        'damaged': '损坏',
-        'counterfeit': '仿品',
-        'expired': '过期',
-        'other': '其他'
+        'damaged': t('reason_damaged'),
+        'counterfeit': t('reason_counterfeit'),
+        'expired': t('reason_expired'),
+        'other': t('reason_other')
     };
     
     const labels = Object.keys(summary).map(r => reasonLabels[r] || r);
@@ -217,11 +217,11 @@ function renderChart(summary) {
 function exportCSV() {
     const rows = document.querySelectorAll('#scrapTableBody tr');
     if (rows.length === 0 || rows[0].cells.length < 7) {
-        showToast('没有数据可导出', 'warning');
+        showToast(t('scrap_no_data_to_export'), 'warning');
         return;
     }
     
-    let csv = '\uFEFF内部码,追踪号,商品名,报废原因,入库日期,报废日期,进价\n';
+    let csv = '\uFEFF' + t('csv_header_internal_code') + ',' + t('csv_header_tracking_no') + ',' + t('csv_header_product_name') + ',' + t('csv_header_reason') + ',' + t('csv_header_inbound_date') + ',' + t('csv_header_scrap_date') + ',' + t('csv_header_unit_cost') + '\n';
     for (const row of rows) {
         const cells = row.cells;
         if (cells.length >= 7) {
@@ -235,10 +235,10 @@ function exportCSV() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `报废商品_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = t('scrap_csv_filename') + '_' + new Date().toISOString().split('T')[0] + '.csv';
     a.click();
     URL.revokeObjectURL(url);
-    showToast('CSV已导出', 'success');
+    showToast(t('scrap_csv_exported'), 'success');
 }
 
 // Init

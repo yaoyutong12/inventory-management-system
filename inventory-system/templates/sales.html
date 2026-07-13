@@ -7,13 +7,13 @@
     <div class="col-lg-6">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-cart-check me-2"></i>销售收银</h5>
+                <h5 class="card-title"><i class="bi bi-cart-check me-2"></i><span data-i18n="sales_pos">销售收银</span></h5>
                 
                 <!-- Scanner -->
                 <div class="mb-3">
                     <div class="input-group input-group-lg">
                         <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
-                        <input class="form-control" id="salesBarcode" placeholder="扫描或输入内部二维码..." 
+                        <input class="form-control" id="salesBarcode" data-i18n-ph="scan_or_input_code"
                                onkeydown="if(event.key==='Enter')scanProduct()" autofocus>
                         <button class="btn btn-primary" onclick="scanProduct()">
                             <i class="bi bi-search"></i>
@@ -21,21 +21,21 @@
                     </div>
                     <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
                         <button class="btn btn-sm btn-outline-secondary" id="salesScanBtn" onclick="startSalesScanner()">
-                            <i class="bi bi-camera-video"></i> 连续扫码
+                            <i class="bi bi-camera-video"></i> <span data-i18n="continuous_scan_btn">连续扫码</span>
                         </button>
                         <input type="file" id="salesPhotoInput" accept="image/*" capture="environment"
                                style="display:none" onchange="photoScanBarcode(this)">
                         <button class="btn btn-sm btn-outline-success" onclick="document.getElementById('salesPhotoInput').click()">
-                            <i class="bi bi-camera"></i> 拍照扫码
+                            <i class="bi bi-camera"></i> <span data-i18n="photo_scan_btn">拍照扫码</span>
                         </button>
                         <button class="btn btn-sm btn-outline-danger d-none" id="salesStopBtn" onclick="stopSalesScanner()">
-                            <i class="bi bi-stop-circle"></i> 停止
+                            <i class="bi bi-stop-circle"></i> <span data-i18n="stop_btn">停止</span>
                         </button>
                         <button class="btn btn-sm btn-warning" onclick="openExternalSaleModal()">
-                            <i class="bi bi-box-arrow-up-right"></i> 外部销售登记
+                            <i class="bi bi-box-arrow-up-right"></i> <span data-i18n="external_sale_btn">外部销售登记</span>
                         </button>
                         <button class="btn btn-sm btn-info ms-1" id="cartToggleBtn" onclick="toggleCartMode()">
-                            <i class="bi bi-cart3"></i> 购物篮 <span class="badge bg-light text-dark ms-1" id="cartCount">0</span>
+                            <i class="bi bi-cart3"></i> <span data-i18n="cart_mode_btn">购物篮</span> <span class="badge bg-light text-dark ms-1" id="cartCount">0</span>
                         </button>
                     </div>
                     <div id="salesScannerView" class="mt-2" style="width:100%;max-width:300px"></div>
@@ -48,7 +48,7 @@
                             <div class="row">
                                 <div class="col-8">
                                     <h6 id="prodName" class="mb-1"></h6>
-                                    <small class="text-muted"><code id="prodCode"></code> | 库存: <strong id="prodStock"></strong>个</small>
+                                    <small class="text-muted"><code id="prodCode"></code> | <span data-i18n="stock_label">库存</span>: <strong id="prodStock"></strong><span data-i18n="stock_unit">个</span></small>
                                 </div>
                                 <div class="col-4 text-end">
                                     <h4 class="text-primary mb-0" id="prodPrice"></h4>
@@ -56,44 +56,44 @@
                             </div>
                             <div class="row mt-2 align-items-end">
                                 <div class="col-3">
-                                    <label class="form-label small">数量</label>
+                                    <label class="form-label small"><span data-i18n="quantity">数量</span></label>
                                     <input type="number" class="form-control" id="saleQty" value="1" min="1">
                                 </div>
                                 <div class="col-3">
-                                    <label class="form-label small">支付方式</label>
+                                    <label class="form-label small"><span data-i18n="payment_method">支付方式</span></label>
                                     <select class="form-select" id="paymentMethod">
-                                        <option value="cash">现金</option>
-                                        <option value="paypay">PayPay</option>
-                                        <option value="card">银行卡</option>
-                                        <option value="mercari">煤炉</option>
-                                        <option value="other">其他</option>
+                                        <option value="cash"><span data-i18n="payment_cash">现金</span></option>
+                                        <option value="paypay"><span data-i18n="payment_paypay">PayPay</span></option>
+                                        <option value="card"><span data-i18n="payment_card">银行卡</span></option>
+                                        <option value="mercari"><span data-i18n="payment_mercari">煤炉</span></option>
+                                        <option value="other"><span data-i18n="payment_other">其他</span></option>
                                     </select>
                                 </div>
                                 <div class="col-3">
-                                    <label class="form-label small">销售平台 <span class="text-danger">*</span></label>
+                                    <label class="form-label small"><span data-i18n="sales_platform">销售平台</span> <span class="text-danger">*</span></label>
                                     <select class="form-select" id="salesPlatform">
-                                        <option value="physical">🏪 实体店</option>
-                                        <option value="mercari">🛒 煤炉</option>
-                                        <option value="yahoo">🟨 雅虎拍卖</option>
-                                        <option value="rakuten">🛍️ 乐天</option>
-                                        <option value="other">📦 其他</option>
+                                        <option value="physical"><span data-i18n="platform_physical">🏪 实体店</span></option>
+                                        <option value="mercari"><span data-i18n="platform_mercari">🛒 煤炉</span></option>
+                                        <option value="yahoo"><span data-i18n="platform_yahoo">🟨 雅虎拍卖</span></option>
+                                        <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天</span></option>
+                                        <option value="other"><span data-i18n="platform_other">📦 其他</span></option>
                                     </select>
                                 </div>
                                 <div class="col-3">
-                                    <label class="form-label small">小票</label>
+                                    <label class="form-label small"><span data-i18n="receipt_label">小票</span></label>
                                     <div class="form-check form-switch mt-1">
                                         <input class="form-check-input" type="checkbox" id="printReceipt" checked>
-                                        <label class="form-check-label small" for="printReceipt">打印</label>
+                                        <label class="form-check-label small" for="printReceipt"><span data-i18n="print_btn">打印</span></label>
                                     </div>
                                 </div>
                                 <div class="col-3">
                                     <button class="btn btn-success w-100" onclick="doSale()">
-                                        <i class="bi bi-check-lg"></i> 确认销售
+                                        <i class="bi bi-check-lg"></i> <span data-i18n="confirm_sale">确认销售</span>
                                     </button>
                                 </div>
                             </div>
                             <div class="mt-2 text-end">
-                                <span class="text-muted small">合计: </span>
+                                <span class="text-muted small"><span data-i18n="total">合计</span>: </span>
                                 <strong class="fs-5 text-success" id="saleTotal">¥0</strong>
                             </div>
                         </div>
@@ -103,21 +103,21 @@
                 <div id="cartArea" class="d-none mt-3">
                     <div class="card border-info">
                         <div class="card-header bg-info text-white d-flex justify-content-between align-items-center py-2">
-                            <span><i class="bi bi-cart3 me-1"></i>购物篮（<span id="cartItemCount">0</span>件）</span>
-                            <button class="btn btn-sm btn-light" onclick="clearCart()" title="清空购物篮"><i class="bi bi-trash"></i></button>
+                            <span><i class="bi bi-cart3 me-1"></i><span data-i18n="cart_title">购物篮</span>（<span id="cartItemCount">0</span><span data-i18n="cart_items_count">件</span>）</span>
+                            <button class="btn btn-sm btn-light" onclick="clearCart()" data-i18n-title="cart_clear"><i class="bi bi-trash"></i></button>
                         </div>
                         <div class="card-body p-2" style="max-height:320px;overflow-y:auto" id="cartList">
-                            <div class="text-muted small text-center py-3" id="cartEmpty">扫码添加商品到购物篮</div>
+                            <div class="text-muted small text-center py-3" id="cartEmpty" data-i18n="cart_add_hint">扫码添加商品到购物篮</div>
                         </div>
                         <div class="card-footer bg-white">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <strong>合计: <span class="fs-5 text-danger" id="cartTotal">¥0</span></strong>
+                                <strong><span data-i18n="total">合计</span>: <span class="fs-5 text-danger" id="cartTotal">¥0</span></strong>
                                 <div class="d-flex gap-2">
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleCartMode()" title="退出购物篮模式">
-                                        <i class="bi bi-x-lg"></i> 退出
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleCartMode()" data-i18n-title="cart_exit">
+                                        <i class="bi bi-x-lg"></i> <span data-i18n="exit_btn">退出</span>
                                     </button>
                                     <button class="btn btn-success btn-sm" id="cartCheckoutBtn" onclick="openCartCheckout()" disabled>
-                                        <i class="bi bi-check-lg"></i> 统一结算（<span id="cartCheckoutCount">0</span>件）
+                                        <i class="bi bi-check-lg"></i> <span data-i18n="batch_checkout">统一结算</span>（<span id="cartCheckoutCount">0</span><span data-i18n="cart_items_count">件</span>）
                                     </button>
                                 </div>
                             </div>
@@ -130,53 +130,53 @@
         <!-- 本次结算（当前批次） -->
         <div class="card border-success d-none mt-3" id="lastCheckoutCard">
             <div class="card-header bg-success text-white d-flex justify-content-between align-items-center py-2">
-                <span><i class="bi bi-receipt me-1"></i>本次结算 — <span id="lastCheckoutTime"></span></span>
-                <span class="badge bg-light text-success" id="checkoutStatusBadge">待收款</span>
+                <span><i class="bi bi-receipt me-1"></i><span data-i18n="current_checkout">本次结算</span> — <span id="lastCheckoutTime"></span></span>
+                <span class="badge bg-light text-success" id="checkoutStatusBadge"><span data-i18n="pending_payment">待收款</span></span>
             </div>
             <div class="card-body p-2" style="max-height:300px;overflow-y:auto" id="lastCheckoutList"></div>
             <div class="card-footer bg-white py-2">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div>
-                        <span class="text-muted small">共 <strong id="lastCheckoutItems">0</strong> 种 / <strong id="lastCheckoutQty">0</strong> 件</span>
+                        <span class="text-muted small"><span data-i18n="checkout_items_prefix">共</span> <strong id="lastCheckoutItems">0</strong> <span data-i18n="checkout_types">种</span> / <strong id="lastCheckoutQty">0</strong> <span data-i18n="cart_items_count">件</span></span>
                     </div>
                     <div class="text-end">
-                        <div><span class="small text-muted">小計(税抜): </span><strong id="lastCheckoutSubtotal" class="text-success">¥0</strong></div>
-                        <div><span class="small text-muted">合計(税込): </span><strong id="lastCheckoutTaxIncluded" class="text-danger fs-5">¥0</strong></div>
-                        <div class="small"><span class="text-muted">净利润: </span><strong id="lastCheckoutProfit" class="text-primary">¥0</strong></div>
+                        <div><span class="small text-muted"><span data-i18n="subtotal_tax_ex">小計(税抜)</span>: </span><strong id="lastCheckoutSubtotal" class="text-success">¥0</strong></div>
+                        <div><span class="small text-muted"><span data-i18n="total_tax_in">合計(税込)</span>: </span><strong id="lastCheckoutTaxIncluded" class="text-danger fs-5">¥0</strong></div>
+                        <div class="small"><span class="text-muted"><span data-i18n="net_profit">净利润</span>: </span><strong id="lastCheckoutProfit" class="text-primary">¥0</strong></div>
                     </div>
                 </div>
                 <!-- 收款按钮区 -->
                 <div id="checkoutPaymentArea">
                     <div class="d-flex gap-1 flex-wrap mb-2" id="checkoutPaymentBtns">
                         <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('cash')">
-                            💰 現金
+                            💰 <span data-i18n="checkout_cash">現金</span>
                         </button>
                         <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('paypay')">
-                            📱 PayPay
+                            📱 <span data-i18n="checkout_paypay">PayPay</span>
                         </button>
                         <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('card')">
-                            💳 卡
+                            💳 <span data-i18n="checkout_card">卡</span>
                         </button>
                         <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('mercari')">
-                            🛒 煤炉
+                            🛒 <span data-i18n="checkout_mercari">煤炉</span>
                         </button>
                         <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('other')">
-                            📝 其他
+                            📝 <span data-i18n="checkout_other">其他</span>
                         </button>
                     </div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-success flex-grow-1" id="checkoutPayBtn" onclick="confirmCheckoutPayment()" disabled>
-                            <i class="bi bi-check-lg"></i> 確認收款
+                            <i class="bi bi-check-lg"></i> <span data-i18n="confirm_payment">確認收款</span>
                         </button>
-                        <button class="btn btn-outline-primary" onclick="printBatchReceipt()" title="打印小票">
+                        <button class="btn btn-outline-primary" onclick="printBatchReceipt()" data-i18n-title="checkout_print_receipt">
                             <i class="bi bi-printer"></i>
                         </button>
-                        <button class="btn btn-outline-danger" onclick="clearLastCheckout()" title="清空">
+                        <button class="btn btn-outline-danger" onclick="clearLastCheckout()" data-i18n-title="checkout_clear">
                             <i class="bi bi-x-lg"></i>
                         </button>
                     </div>
                     <div class="text-center mt-1 d-none" id="checkoutPaidLabel">
-                        <span class="badge bg-success fs-6"><i class="bi bi-check-circle"></i> 已收款: <span id="checkoutPaidMethod"></span> · <span id="checkoutPaidTime"></span></span>
+                        <span class="badge bg-success fs-6"><i class="bi bi-check-circle"></i> <span data-i18n="checkout_paid">已收款</span>: <span id="checkoutPaidMethod"></span> · <span id="checkoutPaidTime"></span></span>
                     </div>
                 </div>
             </div>
@@ -185,24 +185,24 @@
         <!-- Today Summary -->
         <div class="card mt-3">
             <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-receipt me-2"></i>今日销售汇总</h6>
+                <h6 class="card-title"><i class="bi bi-receipt me-2"></i><span data-i18n="today_summary">今日销售汇总</span></h6>
                 <div class="row text-center">
                     <div class="col-4">
                         <div class="fs-4 fw-bold text-primary" id="todayCount">0</div>
-                        <small class="text-muted">销售件数</small>
+                        <small class="text-muted" data-i18n="sales_count">销售件数</small>
                     </div>
                     <div class="col-4">
                         <div class="fs-4 fw-bold text-success" id="todayRevenue">¥0</div>
-                        <small class="text-muted">销售额</small>
+                        <small class="text-muted" data-i18n="sales_revenue">销售额</small>
                     </div>
                     <div class="col-4">
                         <div class="fs-4 fw-bold text-info" id="todayProfit">¥0</div>
-                        <small class="text-muted">利润</small>
+                        <small class="text-muted" data-i18n="sales_profit">利润</small>
                     </div>
                 </div>
                 <!-- Platform breakdown -->
                 <div class="mt-3" id="platformBreakdown">
-                    <small class="text-muted">平台明细：</small>
+                    <small class="text-muted"><span data-i18n="platform_breakdown">平台明细：</span></small>
                     <div id="platformStats" class="d-flex gap-2 flex-wrap mt-1"></div>
                 </div>
             </div>
@@ -215,8 +215,8 @@
             <div class="card-header bg-white d-flex justify-content-between align-items-center py-2" style="cursor:pointer" 
                  data-bs-toggle="collapse" data-bs-target="#salesHistoryBody" aria-expanded="false">
                 <h5 class="card-title mb-0">
-                    <i class="bi bi-clock-history me-2"></i>销售记录
-                    <span class="badge bg-secondary ms-2" id="salesHistoryCount">0件</span>
+                    <i class="bi bi-clock-history me-2"></i><span data-i18n="sales_history">销售记录</span>
+                    <span class="badge bg-secondary ms-2" id="salesHistoryCount">0<span data-i18n="cart_items_count">件</span></span>
                 </h5>
                 <i class="bi bi-chevron-down" id="salesHistoryChevron"></i>
             </div>
@@ -224,22 +224,22 @@
                 <div class="card-body pt-0">
                     <!-- Platform Filter -->
                     <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
-                        <label class="form-label small mb-0">筛选:</label>
+                        <label class="form-label small mb-0"><span data-i18n="filter_label">筛选</span>:</label>
                         <select class="form-select form-select-sm" id="platformFilter" onchange="loadSalesHistory()" style="width:auto;">
-                            <option value="">全部平台</option>
-                            <option value="physical">🏪 实体店</option>
-                            <option value="mercari">🛒 煤炉</option>
-                            <option value="yahoo">🟨 雅虎</option>
-                            <option value="rakuten">🛍️ 乐天</option>
-                            <option value="other">📦 其他</option>
+                            <option value=""><span data-i18n="filter_all_platforms">全部平台</span></option>
+                            <option value="physical"><span data-i18n="platform_physical">🏪 实体店</span></option>
+                            <option value="mercari"><span data-i18n="platform_mercari">🛒 煤炉</span></option>
+                            <option value="yahoo"><span data-i18n="platform_yahoo_short">🟨 雅虎</span></option>
+                            <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天</span></option>
+                            <option value="other"><span data-i18n="platform_other">📦 其他</span></option>
                         </select>
                         <input type="date" class="form-control form-control-sm" id="salesDateFilter" onchange="loadSalesHistory()" style="width:auto;">
                         <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('platformFilter').value='';document.getElementById('salesDateFilter').value='';loadSalesHistory();">
-                            <i class="bi bi-x-circle"></i> 清除筛选
+                            <i class="bi bi-x-circle"></i> <span data-i18n="clear_filter">清除筛选</span>
                         </button>
                     </div>
                     <div style="max-height:500px;overflow-y:auto" id="salesHistory">
-                        <p class="text-muted text-center py-4">点击展开查看销售记录</p>
+                        <p class="text-muted text-center py-4" data-i18n="sales_history_expand_hint">点击展开查看销售记录</p>
                     </div>
                 </div>
             </div>
@@ -252,15 +252,15 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">外部销售登记</h5>
+                <h5 class="modal-title" data-i18n="external_sale_title">外部销售登记</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small">用于登记已在煤炉/雅虎等平台售出的商品</p>
+                <p class="text-muted small" data-i18n="external_sale_hint">用于登记已在煤炉/雅虎等平台售出的商品</p>
                 <div class="mb-3">
-                    <label class="form-label small">商品条码 *</label>
+                    <label class="form-label small"><span data-i18n="product_barcode">商品条码</span> *</label>
                     <div class="input-group">
-                        <input class="form-control" id="externalBarcode" placeholder="扫描或输入内部码">
+                        <input class="form-control" id="externalBarcode" data-i18n-ph="scan_or_input_internal_code">
                         <button class="btn btn-outline-primary" onclick="lookupExternalProduct()">
                             <i class="bi bi-search"></i>
                         </button>
@@ -269,57 +269,57 @@
                 <div id="externalProductInfo" class="d-none">
                     <div class="alert alert-info">
                         <strong id="extProdName"></strong><br>
-                        <small>库存: <span id="extProdStock"></span> | 价格: <span id="extProdPrice"></span></small>
+                        <small><span data-i18n="stock_label">库存</span>: <span id="extProdStock"></span> | <span data-i18n="price_label">价格</span>: <span id="extProdPrice"></span></small>
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label small">销售平台 *</label>
+                        <label class="form-label small"><span data-i18n="sales_platform">销售平台</span> *</label>
                         <select class="form-select" id="externalPlatform">
-                            <option value="mercari">🛒 煤炉</option>
-                            <option value="yahoo">🟨 雅虎拍卖</option>
-                            <option value="rakuten">🛍️ 乐天</option>
-                            <option value="other">📦 其他</option>
+                            <option value="mercari"><span data-i18n="platform_mercari">🛒 煤炉</span></option>
+                            <option value="yahoo"><span data-i18n="platform_yahoo">🟨 雅虎拍卖</span></option>
+                            <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天</span></option>
+                            <option value="other"><span data-i18n="platform_other">📦 其他</span></option>
                         </select>
                     </div>
                     <div class="col-6">
-                        <label class="form-label small">实际售价 (¥) *</label>
+                        <label class="form-label small"><span data-i18n="actual_price">实际售价 (¥)</span> *</label>
                         <input type="number" class="form-control" id="externalPrice" placeholder="0">
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label small">数量</label>
+                        <label class="form-label small"><span data-i18n="quantity">数量</span></label>
                         <input type="number" class="form-control" id="externalQty" value="1" min="1">
                     </div>
                     <div class="col-6">
-                        <label class="form-label small">平台订单号</label>
-                        <input type="text" class="form-control" id="externalOrderNo" placeholder="选填">
+                        <label class="form-label small"><span data-i18n="platform_order_no">平台订单号</span></label>
+                        <input type="text" class="form-control" id="externalOrderNo" data-i18n-ph="optional_placeholder">
                     </div>
                 </div>
                 <!-- 费用扣除（平台贩售时自动展开） -->
                 <div id="feeSection" class="border rounded p-2 mb-3 bg-light">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <small class="fw-bold text-muted"><i class="bi bi-cash-stack"></i> 费用扣除（运费·手续费·杂费）</small>
+                        <small class="fw-bold text-muted"><i class="bi bi-cash-stack"></i> <span data-i18n="fee_deduction">费用扣除（运费·手续费·杂费）</span></small>
                         <small class="text-muted" id="feeSubtotal">¥0</small>
                     </div>
                     <div class="row g-2">
                         <div class="col-4">
-                            <label class="form-label small mb-0">运费</label>
+                            <label class="form-label small mb-0"><span data-i18n="shipping_fee">运费</span></label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">¥</span>
                                 <input type="number" class="form-control" id="externalShippingFee" value="0" min="0" oninput="updateFeeSubtotal()">
                             </div>
                         </div>
                         <div class="col-4">
-                            <label class="form-label small mb-0">平台手续费</label>
+                            <label class="form-label small mb-0"><span data-i18n="platform_fee">平台手续费</span></label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">¥</span>
                                 <input type="number" class="form-control" id="externalPlatformFee" value="0" min="0" oninput="updateFeeSubtotal()">
                             </div>
                         </div>
                         <div class="col-4">
-                            <label class="form-label small mb-0">其他费用</label>
+                            <label class="form-label small mb-0"><span data-i18n="other_fee">其他费用</span></label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">¥</span>
                                 <input type="number" class="form-control" id="externalOtherFee" value="0" min="0" oninput="updateFeeSubtotal()">
@@ -329,9 +329,9 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="cancel">取消</span></button>
                 <button class="btn btn-primary" onclick="registerExternalSale()">
-                    <i class="bi bi-check-lg"></i> 登记销售
+                    <i class="bi bi-check-lg"></i> <span data-i18n="register_sale">登记销售</span>
                 </button>
             </div>
         </div>
@@ -343,57 +343,57 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title"><i class="bi bi-cart-check me-2"></i>购物篮统一结算</h5>
+                <h5 class="modal-title"><i class="bi bi-cart-check me-2"></i><span data-i18n="cart_checkout_title">购物篮统一结算</span></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small mb-2">以下 <span id="cartCheckoutCount2">0</span> 件商品将统一结算：</p>
+                <p class="text-muted small mb-2"><span data-i18n="cart_checkout_items_prefix">以下</span> <span id="cartCheckoutCount2">0</span> <span data-i18n="cart_checkout_items_suffix">件商品将统一结算：</span></p>
                 <div class="border rounded p-2 mb-3" style="max-height:200px;overflow-y:auto" id="cartCheckoutList"></div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
-                        <label class="form-label small">支付方式</label>
+                        <label class="form-label small"><span data-i18n="payment_method">支付方式</span></label>
                         <select class="form-select" id="cartPaymentMethod">
-                            <option value="cash">现金</option>
-                            <option value="paypay">PayPay</option>
-                            <option value="card">银行卡</option>
-                            <option value="mercari">煤炉</option>
-                            <option value="other">其他</option>
+                            <option value="cash"><span data-i18n="payment_cash">现金</span></option>
+                            <option value="paypay"><span data-i18n="payment_paypay">PayPay</span></option>
+                            <option value="card"><span data-i18n="payment_card">银行卡</span></option>
+                            <option value="mercari"><span data-i18n="payment_mercari">煤炉</span></option>
+                            <option value="other"><span data-i18n="payment_other">其他</span></option>
                         </select>
                     </div>
                     <div class="col-6">
-                        <label class="form-label small">销售平台</label>
+                        <label class="form-label small"><span data-i18n="sales_platform">销售平台</span></label>
                         <select class="form-select" id="cartPlatform">
-                            <option value="physical">🏪 实体店</option>
-                            <option value="mercari">🛒 煤炉</option>
-                            <option value="yahoo">🟨 雅虎拍卖</option>
-                            <option value="rakuten">🛍️ 乐天</option>
-                            <option value="other">📦 其他</option>
+                            <option value="physical"><span data-i18n="platform_physical">🏪 实体店</span></option>
+                            <option value="mercari"><span data-i18n="platform_mercari">🛒 煤炉</span></option>
+                            <option value="yahoo"><span data-i18n="platform_yahoo">🟨 雅虎拍卖</span></option>
+                            <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天</span></option>
+                            <option value="other"><span data-i18n="platform_other">📦 其他</span></option>
                         </select>
                     </div>
                 </div>
                 <!-- 费用扣除 -->
                 <div class="border rounded p-2 mb-3 bg-light">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <small class="fw-bold text-muted"><i class="bi bi-cash-stack"></i> 费用扣除（仅计入第一件商品）</small>
+                        <small class="fw-bold text-muted"><i class="bi bi-cash-stack"></i> <span data-i18n="fee_deduction_first_item">费用扣除（仅计入第一件商品）</span></small>
                         <small class="text-muted" id="cartFeeTotal">¥0</small>
                     </div>
                     <div class="row g-2">
                         <div class="col-4">
-                            <label class="form-label small mb-0">运费</label>
+                            <label class="form-label small mb-0"><span data-i18n="shipping_fee">运费</span></label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">¥</span>
                                 <input type="number" class="form-control" id="cartShippingFee" value="0" min="0" oninput="updateCartFeeTotal()">
                             </div>
                         </div>
                         <div class="col-4">
-                            <label class="form-label small mb-0">平台手续费</label>
+                            <label class="form-label small mb-0"><span data-i18n="platform_fee">平台手续费</span></label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">¥</span>
                                 <input type="number" class="form-control" id="cartPlatformFee" value="0" min="0" oninput="updateCartFeeTotal()">
                             </div>
                         </div>
                         <div class="col-4">
-                            <label class="form-label small mb-0">其他费用</label>
+                            <label class="form-label small mb-0"><span data-i18n="other_fee">其他费用</span></label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">¥</span>
                                 <input type="number" class="form-control" id="cartOtherFee" value="0" min="0" oninput="updateCartFeeTotal()">
@@ -402,21 +402,21 @@
                     </div>
                 </div>
                 <div class="mb-2">
-                    <label class="form-label small">备注</label>
-                    <input type="text" class="form-control form-control-sm" id="cartNote" placeholder="选填">
+                    <label class="form-label small"><span data-i18n="note_label">备注</span></label>
+                    <input type="text" class="form-control form-control-sm" id="cartNote" data-i18n-ph="optional_placeholder">
                 </div>
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="cartPrintReceipt" checked>
-                    <label class="form-check-label small" for="cartPrintReceipt">打印小票</label>
+                    <label class="form-check-label small" for="cartPrintReceipt"><span data-i18n="print_receipt_btn">打印小票</span></label>
                 </div>
             </div>
             <div class="modal-footer">
                 <div class="me-auto">
-                    <strong>总额: <span class="fs-5 text-danger" id="cartCheckoutTotal">¥0</span></strong>
+                    <strong><span data-i18n="total_amount">总额</span>: <span class="fs-5 text-danger" id="cartCheckoutTotal">¥0</span></strong>
                 </div>
-                <button class="btn btn-secondary" data-bs-dismiss="modal">返回购物篮</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="return_cart">返回购物篮</span></button>
                 <button class="btn btn-success" onclick="doCartCheckout()">
-                    <i class="bi bi-check-lg"></i> 确认结算（<span id="cartCheckoutCount3">0</span>件）
+                    <i class="bi bi-check-lg"></i> <span data-i18n="confirm_checkout">确认结算</span>（<span id="cartCheckoutCount3">0</span><span data-i18n="cart_items_count">件</span>）
                 </button>
             </div>
         </div>
@@ -454,15 +454,15 @@ function toggleCartMode() {
         btn.classList.add('btn-warning');
         area.classList.remove('d-none');
         singleArea.classList.add('d-none');
-        document.getElementById('salesBarcode').placeholder = '购物篮模式：扫描添加商品...';
-        showToast('购物篮模式开启 — 扫码自动加入购物篮', 'info');
+        document.getElementById('salesBarcode').placeholder = t('msg_cart_mode_placeholder');
+        showToast(t('msg_cart_mode_on'), 'info');
     } else {
         btn.classList.remove('btn-warning');
         btn.classList.add('btn-info');
         area.classList.add('d-none');
         singleArea.classList.remove('d-none');
-        document.getElementById('salesBarcode').placeholder = '扫描或输入内部二维码...';
-        showToast('已退出购物篮模式', 'info');
+        document.getElementById('salesBarcode').placeholder = t('msg_scan_placeholder');
+        showToast(t('msg_cart_mode_off'), 'info');
     }
     document.getElementById('salesBarcode').focus();
 }
@@ -473,7 +473,7 @@ function addToCart(product) {
     if (existIdx >= 0) {
         // 已存在：数量+1
         if (_cartItems[existIdx].qty >= _cartItems[existIdx].max_stock) {
-            showToast(`已达最大库存（${_cartItems[existIdx].max_stock}件）`, 'warning');
+            showToast(t('msg_max_stock_reached').replace('{max}', _cartItems[existIdx].max_stock), 'warning');
             return;
         }
         _cartItems[existIdx].qty += 1;
@@ -481,7 +481,7 @@ function addToCart(product) {
         _cartItems.push({
             id: product.id,
             internal_code: product.internal_code,
-            product_name: product.product_name || product.product_name_ja || '商品',
+            product_name: product.product_name || product.product_name_ja || t('msg_product_generic'),
             selling_price: product.selling_price || 0,
             qty: 1,
             max_stock: product.current_stock || 99
@@ -491,7 +491,7 @@ function addToCart(product) {
     // 清空输入，聚焦等待下一次扫码
     document.getElementById('salesBarcode').value = '';
     document.getElementById('salesBarcode').focus();
-    showToast(`已加入购物篮：${(product.product_name||'').substring(0,20)}`, 'success');
+    showToast(t('msg_added_to_cart') + `：${(product.product_name||'').substring(0,20)}`, 'success');
 }
 
 function renderCart() {
@@ -504,7 +504,7 @@ function renderCart() {
     const checkoutCount = document.getElementById('cartCheckoutCount');
 
     if (_cartItems.length === 0) {
-        list.innerHTML = '<div class="text-muted small text-center py-3" id="cartEmpty">扫码添加商品到购物篮</div>';
+        list.innerHTML = '<div class="text-muted small text-center py-3" id="cartEmpty">' + t('cart_add_hint') + '</div>';
         countBadge.textContent = '0';
         itemCount.textContent = '0';
         totalEl.textContent = '¥0';
@@ -553,7 +553,7 @@ function changeCartQty(idx, delta) {
         return;
     }
     if (newQty > item.max_stock) {
-        showToast(`库存不足（最多${item.max_stock}件）`, 'warning');
+        showToast(t('msg_insufficient_stock').replace('{max}', item.max_stock), 'warning');
         return;
     }
     item.qty = newQty;
@@ -567,10 +567,10 @@ function removeFromCart(idx) {
 
 function clearCart() {
     if (_cartItems.length === 0) return;
-    if (!confirm('确定清空购物篮？')) return;
+    if (!confirm(t('msg_confirm_clear_cart'))) return;
     _cartItems = [];
     renderCart();
-    showToast('购物篮已清空', 'info');
+    showToast(t('msg_cart_cleared'), 'info');
 }
 
 // ─── Cart Checkout (统一结算) ─────────────────────────────
@@ -643,7 +643,7 @@ async function doCartCheckout() {
             sale_ids: result.sale_ids
         };
         renderLastCheckout();
-        showToast(`购物篮结算完成！共 ${result.total_qty} 件，总额 ¥${Number(result.total_amount).toLocaleString()}，净利润 ¥${Number(result.total_profit).toLocaleString()}`, 'success');
+        showToast(t('msg_cart_checkout_done').replace('{qty}', result.total_qty).replace('{amount}', Number(result.total_amount).toLocaleString()).replace('{profit}', Number(result.total_profit).toLocaleString()), 'success');
         _cartItems = [];
         renderCart();
         bootstrap.Modal.getInstance(document.getElementById('cartCheckoutModal')).hide();
@@ -651,17 +651,17 @@ async function doCartCheckout() {
         loadTodaySummary();
         document.getElementById('salesBarcode').focus();
     } else {
-        showToast(result.error || '结算失败', 'error');
+        showToast(result.error || t('msg_checkout_failed'), 'error');
     }
 }
 
 // ─── 本次结算展示 ─────────────────────────────
 function cartPaymentMethodText(method) {
-    const map = {'cash':'现金','paypay':'PayPay','card':'银行卡','mercari':'煤炉','other':'其他'};
+    const map = {'cash': t('payment_cash'), 'paypay': t('payment_paypay'), 'card': t('payment_card'), 'mercari': t('payment_mercari'), 'other': t('payment_other')};
     return map[method] || method;
 }
 function cartPlatformText(platform) {
-    const map = {'physical':'实体店','mercari':'煤炉','yahoo':'雅虎拍卖','rakuten':'乐天','other':'其他'};
+    const map = {'physical': t('platform_physical_short'), 'mercari': t('platform_mercari_short'), 'yahoo': t('platform_yahoo_short'), 'rakuten': t('platform_rakuten_short'), 'other': t('platform_other_short')};
     return map[platform] || platform;
 }
 
@@ -686,7 +686,7 @@ function renderLastCheckout() {
             </div>
             <div class="text-end ms-2" style="min-width:80px">
                 <span class="small fw-bold">¥${(item.selling_price).toLocaleString()}</span>
-                ${item.qty > 1 ? `<div class="text-muted" style="font-size:0.65rem">小计 ¥${subtotal.toLocaleString()}</div>` : ''}
+                ${item.qty > 1 ? `<div class="text-muted" style="font-size:0.65rem">${t('subtotal_label')} ¥${subtotal.toLocaleString()}</div>` : ''}
             </div>
         </div>`;
     });
@@ -710,7 +710,7 @@ function clearLastCheckout() {
     // 重置收款按钮
     document.getElementById('checkoutPayBtn').disabled = true;
     document.getElementById('checkoutPaidLabel').classList.add('d-none');
-    document.getElementById('checkoutStatusBadge').textContent = '待收款';
+    document.getElementById('checkoutStatusBadge').textContent = t('pending_payment');
     document.getElementById('checkoutStatusBadge').className = 'badge bg-light text-success';
     document.querySelectorAll('#checkoutPaymentBtns .btn').forEach(b => {
         b.className = 'btn btn-sm btn-outline-secondary flex-grow-1';
@@ -722,7 +722,7 @@ let _checkoutPaymentMethod = null;
 
 function selectCheckoutPayment(method) {
     _checkoutPaymentMethod = method;
-    const methodMap = {'cash':'現金','paypay':'PayPay','card':'カード','mercari':'メルカリ','other':'その他'};
+    const methodMap = {'cash': t('checkout_cash'), 'paypay': t('checkout_paypay'), 'card': t('checkout_card'), 'mercari': t('checkout_mercari'), 'other': t('checkout_other')};
     // 高亮选中
     document.querySelectorAll('#checkoutPaymentBtns .btn').forEach(b => {
         b.className = 'btn btn-sm btn-outline-secondary flex-grow-1';
@@ -730,13 +730,13 @@ function selectCheckoutPayment(method) {
     event.currentTarget.className = 'btn btn-sm btn-success flex-grow-1';
     document.getElementById('checkoutPayBtn').disabled = false;
     document.getElementById('checkoutPayBtn').innerHTML = 
-        `<i class="bi bi-check-lg"></i> 確認收款 (${methodMap[method]})`;
+        `<i class="bi bi-check-lg"></i> ${t('confirm_payment')} (${methodMap[method]})`;
 }
 
 async function confirmCheckoutPayment() {
     if (!_lastCheckoutData || !_checkoutPaymentMethod) return;
     
-    const methodMap = {'cash':'現金','paypay':'PayPay','card':'カード','mercari':'メルカリ','other':'その他'};
+    const methodMap = {'cash': t('checkout_cash'), 'paypay': t('checkout_paypay'), 'card': t('checkout_card'), 'mercari': t('checkout_mercari'), 'other': t('checkout_other')};
     const method = _checkoutPaymentMethod;
     
     // 更新本次结算数据的支付方式
@@ -756,15 +756,15 @@ async function confirmCheckoutPayment() {
     
     // 更新UI
     document.getElementById('checkoutPayBtn').disabled = true;
-    document.getElementById('checkoutPayBtn').innerHTML = '<i class="bi bi-check-lg"></i> 已收款';
+    document.getElementById('checkoutPayBtn').innerHTML = '<i class="bi bi-check-lg"></i> ' + t('checkout_paid');
     document.getElementById('checkoutPaymentBtns').querySelectorAll('.btn').forEach(b => b.disabled = true);
     document.getElementById('checkoutPaidLabel').classList.remove('d-none');
     document.getElementById('checkoutPaidMethod').textContent = methodMap[method];
     document.getElementById('checkoutPaidTime').textContent = _lastCheckoutData.paid_time;
-    document.getElementById('checkoutStatusBadge').textContent = '✓ 已收款';
+    document.getElementById('checkoutStatusBadge').textContent = '✓ ' + t('checkout_paid');
     document.getElementById('checkoutStatusBadge').className = 'badge bg-warning text-dark';
     
-    showToast(`收款確認: ${methodMap[method]} ¥${Math.round(Number(_lastCheckoutData.total_amount) * 1.1).toLocaleString()}`, 'success');
+    showToast(t('msg_payment_confirmed') + ': ' + methodMap[method] + ' ¥' + Math.round(Number(_lastCheckoutData.total_amount) * 1.1).toLocaleString(), 'success');
     
     // 自动打印小票
     printBatchReceipt();
@@ -812,26 +812,27 @@ ${d.items.map((item, i) => `
 `).join('')}
 <div class="line"></div>
 <div class="row bold">
-    <span>小計 (${d.total_qty}点)</span>
+    <span>${t('receipt_subtotal')} (${d.total_qty}${t('receipt_points')})</span>
     <span>¥${Number(d.total_amount).toLocaleString()}</span>
 </div>
 <div class="row">
-    <span>消費税 (10%)</span>
+    <span>${t('receipt_tax')}</span>
     <span>¥${Math.round(Number(d.total_amount) * 0.1).toLocaleString()}</span>
 </div>
 ${feeTotal > 0 ? `
 <div class="row small">
-    <span>費用 (運賃·手数料等)</span>
+    <span>${t('receipt_fees')}</span>
     <span>-¥${feeTotal.toLocaleString()}</span>
 </div>` : ''}
 <div class="row bold">
-    <span>合計 (税込)</span>
+    <span>${t('receipt_total_tax_included')}</span>
     <span>¥${(Math.round(Number(d.total_amount) * 1.1) - feeTotal).toLocaleString()}</span>
 </div>
 <div class="line"></div>
 <div class="center small">
-    <div>お支払い: ${d.payment_method || '---'}</div>
-    <div>ありがとうございました</div>
+    <div>${t('receipt_payment')}: ${d.payment_method || '---'}</div>
+    <div>${t('receipt_thanks')}</div>
+</div>
 </div>
 <script>window.onload=function(){window.print();}<` + `/script>
 </body></html>`;
@@ -855,7 +856,7 @@ async function startSalesScanner() {
     
     const view = document.getElementById('salesScannerView');
     view.innerHTML = '<video id="scanVideo" autoplay playsinline style="width:100%;max-width:360px;border-radius:8px;background:#000"></video>'
-                   + '<div id="scanStatus" class="text-center small mt-1 text-muted">对准条码...</div>';
+                   + '<div id="scanStatus" class="text-center small mt-1 text-muted">' + t('msg_aim_barcode') + '</div>';
     
     try {
         _scanStream = await navigator.mediaDevices.getUserMedia({
@@ -922,11 +923,11 @@ async function startSalesScanner() {
             
         }, 350);
         
-        document.getElementById('scanStatus').textContent = '对准条码...';
+        document.getElementById('scanStatus').textContent = t('msg_aim_barcode');
         
     } catch (err) {
         stopSalesScanner();
-        showToast('摄像头不可用: ' + err.message, 'danger');
+        showToast(t('msg_camera_unavailable') + ': ' + err.message, 'danger');
     }
 }
 
@@ -977,17 +978,17 @@ function onBarcodeFound(barcode, method) {
     
     if (_cartMode) {
         // 购物篮模式：不停摄像头，传入 barcode 参数避免 DOM 竞态
-        if (scanStatus) scanStatus.textContent = '加入中...';
+        if (scanStatus) scanStatus.textContent = t('msg_adding_to_cart');
         scanProduct(barcode).finally(() => {
-            if (scanStatus) scanStatus.textContent = '对准条码...';
+            if (scanStatus) scanStatus.textContent = t('msg_aim_barcode');
         });
     } else {
         // 非购物篮模式：连续扫码自动销售，不停摄像头
         _saleBusy = true;
-        if (scanStatus) scanStatus.textContent = '处理中...';
+        if (scanStatus) scanStatus.textContent = t('msg_processing');
         scanProduct(barcode).finally(() => {
             _saleBusy = false;
-            if (scanStatus) scanStatus.textContent = '对准条码...';
+            if (scanStatus) scanStatus.textContent = t('msg_aim_barcode');
         });
     }
 }
@@ -1017,7 +1018,7 @@ async function scanProduct(barcodeOverride) {
     const data = await API.get(`/api/lookup/${encodeURIComponent(barcode)}`);
     
     if (data.error || data.type !== 'product') {
-        showToast('未找到商品: ' + barcode, 'warning');
+        showToast(t('msg_product_not_found') + ': ' + barcode, 'warning');
         if (_cartMode || _scanRunning) {
             // 购物篮/连续扫码模式：清空输入，摄像头继续
             document.getElementById('salesBarcode').value = '';
@@ -1120,14 +1121,14 @@ async function quickSale() {
         _playBeep();
         addToLastCheckout(result, currentProduct.product_name, currentProduct.internal_code, currentProduct.selling_price, 1);
         const name = (result.product_name||'').substring(0, 15);
-        showToast(`${name} 已售出 ¥${Number(result.total_amount).toLocaleString()}`, 'success');
+        showToast(`${name} ${t('msg_sold_out_prefix')} ¥${Number(result.total_amount).toLocaleString()}`, 'success');
         document.getElementById('salesBarcode').value = '';
         currentProduct = null;
         loadSalesHistory();
         loadTodaySummary();
         document.getElementById('salesBarcode').focus();
     } else {
-        showToast(result.error || '销售失败', 'error');
+        showToast(result.error || t('msg_sale_failed'), 'error');
     }
 }
 
@@ -1154,7 +1155,7 @@ async function doSale() {
     });
     
     if (result.success) {
-        showToast(`销售完成: ${result.product_name} ${formatJPY(result.total_amount)} (利润: ${formatJPY(result.profit)})`, 'success');
+        showToast(t('msg_sale_done') + ': ' + result.product_name + ' ' + formatJPY(result.total_amount) + ' (' + t('sales_profit') + ': ' + formatJPY(result.profit) + ')', 'success');
         
         // 累积到本次结算
         addToLastCheckout(result, currentProduct.product_name, currentProduct.internal_code, currentProduct.selling_price, qty);
@@ -1162,7 +1163,7 @@ async function doSale() {
         if (wantReceipt) {
             await printReceipt(result.sale_id);
         } else {
-            showToast('小票未打印 → 可从记录中补打', 'info');
+            showToast(t('msg_receipt_not_printed'), 'info');
         }
         
         document.getElementById('salesBarcode').value = '';
@@ -1173,7 +1174,7 @@ async function doSale() {
         loadTodaySummary();
         document.getElementById('salesBarcode').focus();
     } else {
-        showToast(result.error || '错误', 'error');
+        showToast(result.error || t('msg_error'), 'error');
     }
 }
 
@@ -1188,18 +1189,18 @@ async function printReceipt(saleId) {
             win.document.close();
         }
     } catch (err) {
-        showToast('小票打印错误: ' + err.message, 'error');
+        showToast(t('msg_receipt_error') + ': ' + err.message, 'error');
     }
 }
 
 async function reprintReceipt(saleId) {
-    showToast('正在补打小票...', 'info');
+    showToast(t('msg_reprinting_receipt'), 'info');
     await printReceipt(saleId);
     loadSalesHistory();
 }
 
 async function undoSale(saleId, productName, qty) {
-    if (!confirm(`确定撤销此笔销售？\n${productName} × ${qty}件\n\n撤销后库存会自动恢复。`)) return;
+    if (!confirm(t('msg_confirm_undo_sale').replace('{name}', productName).replace('{qty}', qty))) return;
     
     try {
         const res = await fetch(`/api/sales/${saleId}/delete`, { method: 'POST' });
@@ -1210,10 +1211,10 @@ async function undoSale(saleId, productName, qty) {
             loadSalesHistory();
             loadTodaySummary();
         } else {
-            showToast(data.error || '撤销失败', 'error');
+            showToast(data.error || t('msg_undo_failed'), 'error');
         }
     } catch (err) {
-        showToast('撤销错误: ' + err.message, 'error');
+        showToast(t('msg_undo_error') + ': ' + err.message, 'error');
     }
 }
 
@@ -1246,7 +1247,7 @@ async function lookupExternalProduct() {
     const data = await API.get(`/api/lookup/${encodeURIComponent(barcode)}`);
     
     if (data.error || data.type !== 'product') {
-        showToast('未找到商品', 'warning');
+        showToast(t('msg_product_not_found'), 'warning');
         return;
     }
     
@@ -1260,7 +1261,7 @@ async function lookupExternalProduct() {
 
 async function registerExternalSale() {
     if (!externalProduct) {
-        showToast('请先输入商品条码', 'warning');
+        showToast(t('msg_input_barcode_first'), 'warning');
         return;
     }
     
@@ -1272,7 +1273,7 @@ async function registerExternalSale() {
     const otherFee = parseInt(document.getElementById('externalOtherFee').value) || 0;
     
     if (price <= 0) {
-        showToast('请输入实际售价', 'warning');
+        showToast(t('msg_input_price'), 'warning');
         return;
     }
     
@@ -1285,17 +1286,17 @@ async function registerExternalSale() {
         shipping_fee: shippingFee,
         platform_fee: platformFee,
         other_fee: otherFee,
-        note: '外部销售登记' + (document.getElementById('externalOrderNo').value ? ' 订单:' + document.getElementById('externalOrderNo').value : '')
+        note: t('external_sale_note') + (document.getElementById('externalOrderNo').value ? ' 订单:' + document.getElementById('externalOrderNo').value : '')
     });
     
     if (result.success) {
         const netProfit = result.net_profit || result.profit || 0;
-        showToast(`外部销售已登记: ${result.product_name} (${platform}) 净利润 ¥${netProfit.toLocaleString()}`, 'success');
+        showToast(t('msg_external_sale_registered') + ': ' + result.product_name + ' (' + platform + ') ' + t('net_profit') + ' ¥' + netProfit.toLocaleString(), 'success');
         bootstrap.Modal.getInstance(document.getElementById('externalSaleModal')).hide();
         loadSalesHistory();
         loadTodaySummary();
     } else {
-        showToast(result.error || '登记失败', 'error');
+        showToast(result.error || t('msg_registration_failed'), 'error');
     }
 }
 
@@ -1316,15 +1317,15 @@ async function loadSalesHistory() {
             'cash': '💰', 'paypay': '📱', 'card': '💳', 'mercari': '🛒', 'other': '📝'
         };
         const platformIcons = {
-            'physical': '🏪实体',
-            'mercari': '🛒煤炉',
-            'yahoo': '🟨雅虎',
-            'rakuten': '🛍️乐天',
-            'other': '📦其他'
+            'physical': t('platform_physical_short'),
+            'mercari': t('platform_mercari_short'),
+            'yahoo': t('platform_yahoo_short'),
+            'rakuten': t('platform_rakuten_short'),
+            'other': t('platform_other_short')
         };
         
         document.getElementById('salesHistory').innerHTML = sales.length === 0
-            ? '<p class="text-muted text-center py-4">暂无销售记录</p>'
+            ? '<p class="text-muted text-center py-4">' + t('msg_no_sales_records') + '</p>'
             : sales.map(s => `
                 <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
                     <div style="flex:1;min-width:0">
@@ -1334,18 +1335,18 @@ async function loadSalesHistory() {
                         </div>
                         <small class="text-muted">
                             ${s.sale_date ? s.sale_date.substring(5,16) : ''} 
-                            ${paymentIcons[s.payment_method] || ''} ${s.qty}件
-                            <span class="badge bg-info btn-sm ms-1" style="font-size:9px">${platformIcons[s.platform] || s.platform || '未分类'}</span>
+                            ${paymentIcons[s.payment_method] || ''} ${s.qty}${t('cart_items_count')}
+                            <span class="badge bg-info btn-sm ms-1" style="font-size:9px">${platformIcons[s.platform] || s.platform || t('msg_uncategorized')}</span>
                         </small>
                     </div>
                     <div class="text-end ms-2" style="flex-shrink:0">
                         <div class="fw-bold">${formatJPY(s.total_amount)}</div>
                         <small class="${s.profit_amount >= 0 ? 'text-success' : 'text-danger'}">
-                            利润 ${formatJPY(s.profit_amount || 0)}
+                            ${t('sales_profit')} ${formatJPY(s.profit_amount || 0)}
                         </small>
                         ${(s.shipping_fee || s.platform_fee || s.other_fee) ? `
                         <small class="text-danger d-block" style="font-size:10px">
-                            費用 -${formatJPY((s.shipping_fee||0)+(s.platform_fee||0)+(s.other_fee||0))}
+                            ${t('fee_label_short')} -${formatJPY((s.shipping_fee||0)+(s.platform_fee||0)+(s.other_fee||0))}
                         </small>` : ''}
                         <div class="mt-1">
                             ${s.receipt_id ? `
@@ -1376,7 +1377,7 @@ async function loadSalesHistory() {
         const countEl = document.getElementById('salesHistoryCount');
         if (countEl) {
             const visibleRows = document.querySelectorAll('#salesHistory > div');
-            countEl.textContent = visibleRows.length + '件';
+            countEl.textContent = visibleRows.length + t('cart_items_count');
         }
     }
 }
@@ -1393,15 +1394,15 @@ async function loadTodaySummary() {
         // Platform breakdown
         if (data.platform_stats) {
             const platformIcons = {
-                'physical': '🏪实体',
-                'mercari': '🛒煤炉',
-                'yahoo': '🟨雅虎',
-                'rakuten': '🛍️乐天',
-                'other': '📦其他'
+                'physical': t('platform_physical_short'),
+                'mercari': t('platform_mercari_short'),
+                'yahoo': t('platform_yahoo_short'),
+                'rakuten': t('platform_rakuten_short'),
+                'other': t('platform_other_short')
             };
             document.getElementById('platformStats').innerHTML = Object.entries(data.platform_stats).map(([p, s]) => `
                 <span class="badge bg-light text-dark border" style="font-size:11px">
-                    ${platformIcons[p] || p}: ${s.count}件 ${formatJPY(s.revenue)}
+                    ${platformIcons[p] || p}: ${s.count}${t('cart_items_count')} ${formatJPY(s.revenue)}
                 </span>
             `).join('');
         }
@@ -1415,7 +1416,7 @@ async function photoScanBarcode(input) {
     const file = input.files[0];
     if (!file) return;
     
-    showToast('解码中...', 'info');
+    showToast(t('msg_decoding'), 'info');
     
     try {
         const formData = new FormData();
@@ -1425,15 +1426,15 @@ async function photoScanBarcode(input) {
         const data = await res.json();
         
         if (data.success && data.barcode) {
-            showToast('识别: ' + data.barcode, 'success');
+            showToast(t('msg_recognized') + ': ' + data.barcode, 'success');
             document.getElementById('salesBarcode').value = data.barcode;
             // Auto-trigger product lookup
             await scanProduct();
         } else {
-            showToast('未识别到条码，请重拍或手动输入', 'warning');
+            showToast(t('msg_barcode_not_recognized'), 'warning');
         }
     } catch(e) {
-        showToast('解码失败: ' + e.message, 'danger');
+        showToast(t('msg_decode_failed') + ': ' + e.message, 'danger');
     }
     
     input.value = '';

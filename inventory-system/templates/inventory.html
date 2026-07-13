@@ -3,29 +3,29 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-clipboard-data me-2"></i>在庫一覧・進捗管理 <small class="text-muted fs-6" id="verInfo">(v20260629-5)</small></h4>
+    <h4><i class="bi bi-clipboard-data me-2"></i><span data-i18n="inventory_title">在庫一覧・進捗管理</span> <small class="text-muted fs-6" id="verInfo">(v20260629-5)</small></h4>
     <div class="d-flex gap-2">
         <select class="form-select form-select-sm" id="categoryFilter" onchange="filterInventory()">
-            <option value="">全カテゴリ</option>
+            <option value="" data-i18n="all_categories">全カテゴリ</option>
             {% for cat in ssr_categories %}
             <option value="{{ cat }}">{{ cat }}</option>
             {% endfor %}
         </select>
         <select class="form-select form-select-sm" id="statusFilter" onchange="filterInventory()">
-            <option value="">全ステータス</option>
-            <option value="in_stock">在庫あり</option>
-            <option value="sold_out">売切れ</option>
+            <option value="" data-i18n="all_status">全ステータス</option>
+            <option value="in_stock" data-i18n="in_stock_only">在庫あり</option>
+            <option value="sold_out" data-i18n="sold_out_only">売切れ</option>
         </select>
         <select class="form-select form-select-sm" id="channelFilter" onchange="filterInventory()" title="販売経路で絞り込み">
-            <option value="">全経路</option>
-            <option value="线下">🏪 线下</option>
+            <option value="" data-i18n="all_channels">全経路</option>
+            <option value="线下" data-i18n="offline">🏪 线下</option>
             <option value="Mercari">🟣 Mercari</option>
-            <option value="Yahoo!オク">🔵 Yahoo!オク</option>
-            <option value="淘宝/闲鱼">🟠 淘宝/闲鱼</option>
-            <option value="自家サイト">⚫ 自家サイト</option>
+            <option value="Yahoo!オク" data-i18n="channel_yahoo">🔵 Yahoo!オク</option>
+            <option value="淘宝/闲鱼" data-i18n="channel_taobao">🟠 淘宝/闲鱼</option>
+            <option value="自家サイト" data-i18n="channel_own">⚫ 自家サイト</option>
         </select>
-        <input class="form-control form-control-sm" placeholder="追跡番号・内部コード・商品名で検索..." id="inventorySearch" oninput="filterInventory()" style="width:280px">
-        <button class="btn btn-sm btn-outline-primary" onclick="exportCSV()"><i class="bi bi-download"></i> CSV</button>
+        <input class="form-control form-control-sm" data-i18n-ph="search_inventory_ph" placeholder="追跡番号・内部コード・商品名で検索..." id="inventorySearch" oninput="filterInventory()" style="width:280px">
+        <button class="btn btn-sm btn-outline-primary" onclick="exportCSV()"><i class="bi bi-download"></i> <span data-i18n="export_csv">CSV</span></button>
     </div>
 </div>
 
@@ -35,11 +35,11 @@
             <table class="table table-hover mb-0" id="inventoryTable">
                 <thead>
                     <tr>
-                        <th>写真</th><th>追跡番号</th><th>内部コード</th><th>商品名</th><th>カテゴリ</th>
-                        <th>販売経路</th>
-                        <th>仕入単価</th><th>販売価格</th>
-                        <th>入庫数</th><th>販売数</th><th>在庫数</th>
-                        <th>売上</th><th>利益</th><th>費用</th><th>状態</th><th>操作</th>
+                        <th data-i18n="photo_col">写真</th><th data-i18n="tracking_col">追跡番号</th><th data-i18n="internal_code_col">内部コード</th><th data-i18n="product_name_col">商品名</th><th data-i18n="category_col">カテゴリ</th>
+                        <th data-i18n="sales_channel_col">販売経路</th>
+                        <th data-i18n="purchase_price_col">仕入単価</th><th data-i18n="selling_price_col">販売価格</th>
+                        <th data-i18n="inbound_qty_col">入庫数</th><th data-i18n="sold_qty_col">販売数</th><th data-i18n="stock_qty_col">在庫数</th>
+                        <th data-i18n="revenue_col">売上</th><th data-i18n="profit_col">利益</th><th data-i18n="fee_col">費用</th><th data-i18n="status_col">状態</th><th data-i18n="action_col">操作</th>
                     </tr>
                 </thead>
                 <tbody id="invTbody">
@@ -49,13 +49,13 @@
                             {% set margin = ((profit / p.selling_price) * 100)|round(0) if p.selling_price else 0 %}
                             {% if p.current_stock <= 0 %}
                                 {% set stock_class = "danger" %}
-                                {% set status_badge = '<span class="badge bg-secondary">売切れ</span>' %}
+                                {% set status_badge = '<span class="badge bg-secondary" data-i18n-html="sold_out">売切れ</span>' %}
                             {% elif p.current_stock <= 3 %}
                                 {% set stock_class = "warning" %}
-                                {% set status_badge = '<span class="badge bg-warning">残りわずか</span>' %}
+                                {% set status_badge = '<span class="badge bg-warning" data-i18n-html="almost_out">残りわずか</span>' %}
                             {% else %}
                                 {% set stock_class = "success" %}
-                                {% set status_badge = '<span class="badge bg-success">在庫あり</span>' %}
+                                {% set status_badge = '<span class="badge bg-success" data-i18n-html="available">在庫あり</span>' %}
                             {% endif %}
                         <tr data-category="{{ p.category or '' }}" data-status="{{ p.status or '' }}" data-name="{{ p.product_name or '' }}" data-code="{{ p.internal_code or '' }}" data-tracking="{{ p.tracking_no or '' }}" data-channel="{{ p.sales_channel or '线下' }}">
                             <td class="text-center">

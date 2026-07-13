@@ -7,28 +7,28 @@
 
         <!-- Hero -->
         <div class="text-center mb-4">
-            <h2><i class="bi bi-book me-2"></i>導入ガイド & 機材おすすめ</h2>
-            <p class="text-muted">スマホ一台から始めて、徐々に機材を揃えるロードマップ</p>
+            <h2><i class="bi bi-book me-2"></i><span data-i18n="guide_title">導入ガイド & 機材おすすめ</span></h2>
+            <p class="text-muted" data-i18n="guide_subtitle">スマホ一台から始めて、徐々に機材を揃えるロードマップ</p>
         </div>
 
         <!-- Phone as Scanner -->
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-phone me-2"></i>スマホでバーコードスキャン代替案</h5>
+                <h5 class="mb-0"><i class="bi bi-phone me-2"></i><span data-i18n="guide_phone_scanner">スマホでバーコードスキャン代替案</span></h5>
             </div>
             <div class="card-body">
                 <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i>
-                    <strong>専用スキャナー不要！</strong> 今すぐスマホのカメラで始められます。
+                    <span data-i18n-html="guide_no_scanner_needed"><i class="bi bi-info-circle me-2"></i>
+                    <strong>専用スキャナー不要！</strong> 今すぐスマホのカメラで始められます。</span>
                 </div>
 
-                <h6 class="mt-3">📱 対応方法 3つ</h6>
+                <h6 class="mt-3"><span data-i18n="guide_scan_methods">📱 対応方法 3つ</span></h6>
 
                 <div class="row g-3 mt-2">
                     <div class="col-md-4">
                         <div class="card border-success h-100">
                             <div class="card-body">
-                                <h6 class="text-success"><i class="bi bi-camera-video me-1"></i>方式① リアルタイムスキャン</h6>
+                                <h6 class="text-success"><i class="bi bi-camera-video me-1"></i><span data-i18n="guide_method1_title">方式① リアルタイムスキャン</span></h6>
                                 <p class="small mb-2">「入庫」→「スキャン」タブ → カメラ起動</p>
                                 <ul class="small text-muted mb-0">
                                     <li>QRコード / バーコード対応</li>
@@ -37,7 +37,7 @@
                                     <li>連続スキャン可能</li>
                                 </ul>
                                 <p class="small mt-2 mb-0">
-                                    <span class="badge bg-success">おすすめ</span>
+                                    <span class="badge bg-success" data-i18n="badge_recommended">おすすめ</span>
                                     スマホで <code>http://[PCのIP]:5000</code> にアクセス
                                 </p>
                             </div>
@@ -46,7 +46,7 @@
                     <div class="col-md-4">
                         <div class="card border-primary h-100">
                             <div class="card-body">
-                                <h6 class="text-primary"><i class="bi bi-camera me-1"></i>方式② 写真撮影→自動認識</h6>
+                                <h6 class="text-primary"><i class="bi bi-camera me-1"></i><span data-i18n="guide_method2_title">方式② 写真撮影→自動認識</span></h6>
                                 <p class="small mb-2">「入庫」→「写真認識」タブ</p>
                                 <ul class="small text-muted mb-0">
                                     <li>商品/バーコードを撮影</li>
@@ -55,7 +55,7 @@
                                     <li>オフライン画像もOK</li>
                                 </ul>
                                 <p class="small mt-2 mb-0">
-                                    <span class="badge bg-primary">便利</span>
+                                    <span class="badge bg-primary" data-i18n="badge_convenient">便利</span>
                                     バーコードが読みづらい時に
                                 </p>
                             </div>
@@ -64,7 +64,7 @@
                     <div class="col-md-4">
                         <div class="card border-secondary h-100">
                             <div class="card-body">
-                                <h6 class="text-secondary"><i class="bi bi-keyboard me-1"></i>方式③ 手動入力</h6>
+                                <h6 class="text-secondary"><i class="bi bi-keyboard me-1"></i><span data-i18n="guide_method3_title">方式③ 手動入力</span></h6>
                                 <p class="small mb-2">「入庫」→「手動入力」タブ</p>
                                 <ul class="small text-muted mb-0">
                                     <li>バーコード番号を直接入力</li>
@@ -73,7 +73,7 @@
                                     <li>緊急時のバックアップ</li>
                                 </ul>
                                 <p class="small mt-2 mb-0">
-                                    <span class="badge bg-secondary">予備</span>
+                                    <span class="badge bg-secondary" data-i18n="badge_backup">予備</span>
                                     スキャンできない時の最終手段
                                 </p>
                             </div>
@@ -81,7 +81,7 @@
                     </div>
                 </div>
 
-                <h6 class="mt-4">🔧 スマホからPC版システムにアクセスする方法</h6>
+                <h6 class="mt-4"><span data-i18n="guide_access_method">🔧 スマホからPC版システムにアクセスする方法</span></h6>
                 <div class="bg-dark text-light p-3 rounded small">
                     <ol class="mb-0">
                         <li>PCで <code>ipconfig</code>（Windows）を実行 → IPv4アドレスを確認（例: <code>192.168.1.100</code>）</li>
@@ -96,13 +96,13 @@
         <!-- Hardware Recommendations -->
         <div class="card mb-4">
             <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0"><i class="bi bi-printer me-2"></i>おすすめ機材（ビジネス拡大後に導入）</h5>
+                <h5 class="mb-0"><i class="bi bi-printer me-2"></i><span data-i18n="guide_hardware_rec">おすすめ機材（ビジネス拡大後に導入）</span></h5>
             </div>
             <div class="card-body">
 
                 <!-- Barcode Label Printer -->
                 <h6 class="border-bottom pb-2">
-                    <span class="badge bg-danger me-2">ラベル</span> バーコード・QRラベルプリンター
+                    <span class="badge bg-danger me-2" data-i18n="badge_label">ラベル</span> <span data-i18n="guide_barcode_printer">バーコード・QRラベルプリンター</span>
                 </h6>
                 <p class="small text-muted">商品に貼る内部管理ラベル（62mm×40mm）の印刷用</p>
 
@@ -110,10 +110,10 @@
                     <table class="table table-sm table-bordered small">
                         <thead class="table-light">
                             <tr>
-                                <th>機種</th>
-                                <th>価格帯</th>
-                                <th>特徴</th>
-                                <th>おすすめ度</th>
+                                <th data-i18n="th_model">機種</th>
+                                <th data-i18n="th_price_range">価格帯</th>
+                                <th data-i18n="th_features">特徴</th>
+                                <th data-i18n="th_recommendation">おすすめ度</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -162,7 +162,7 @@
 
                 <!-- Receipt Printer -->
                 <h6 class="border-bottom pb-2 mt-4">
-                    <span class="badge bg-info me-2">レシート</span> レシートプリンター（小票機）
+                    <span class="badge bg-info me-2" data-i18n="badge_receipt">レシート</span> <span data-i18n="guide_receipt_printer">レシートプリンター（小票機）</span>
                 </h6>
                 <p class="small text-muted">お客様に渡す領収書の印刷用。当面は「印刷しない」設定も可能。</p>
 
@@ -170,10 +170,10 @@
                     <table class="table table-sm table-bordered small">
                         <thead class="table-light">
                             <tr>
-                                <th>機種</th>
-                                <th>価格帯</th>
-                                <th>特徴</th>
-                                <th>おすすめ度</th>
+                                <th data-i18n="th_model">機種</th>
+                                <th data-i18n="th_price_range">価格帯</th>
+                                <th data-i18n="th_features">特徴</th>
+                                <th data-i18n="th_recommendation">おすすめ度</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -229,7 +229,7 @@
 
                 <!-- Barcode Scanner -->
                 <h6 class="border-bottom pb-2 mt-4">
-                    <span class="badge bg-success me-2">スキャナー</span> バーコードスキャナー（任意）
+                    <span class="badge bg-success me-2" data-i18n="badge_scanner">スキャナー</span> <span data-i18n="guide_barcode_scanner">バーコードスキャナー（任意）</span>
                 </h6>
                 <p class="small text-muted">スマホで十分ですが、大量処理するなら専用機が便利。</p>
 
@@ -237,9 +237,9 @@
                     <table class="table table-sm table-bordered small">
                         <thead class="table-light">
                             <tr>
-                                <th>機種</th>
-                                <th>価格帯</th>
-                                <th>特徴</th>
+                                <th data-i18n="th_model">機種</th>
+                                <th data-i18n="th_price_range">価格帯</th>
+                                <th data-i18n="th_features">特徴</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -267,7 +267,7 @@
         <!-- Workflow Summary -->
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>おすすめ導入ステップ</h5>
+                <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span data-i18n="guide_workflow_steps">おすすめ導入ステップ</span></h5>
             </div>
             <div class="card-body">
                 <div class="row g-3">
@@ -276,7 +276,7 @@
                             <div class="fs-3 mb-2">📱</div>
                             <h6>Step 1</h6>
                             <p class="small text-muted mb-0">スマホだけでスタート<br>3方式の入庫を使い分け<br>レシート不要設定</p>
-                            <span class="badge bg-success">今ここ</span>
+                            <span class="badge bg-success" data-i18n="badge_now_here">今ここ</span>
                         </div>
                     </div>
                     <div class="col-md-3 text-center">
@@ -284,7 +284,7 @@
                             <div class="fs-3 mb-2">🖨️</div>
                             <h6>Step 2</h6>
                             <p class="small text-muted mb-0">ラベルプリンター導入<br>Brother QL-820NWB推奨<br>QRラベルを効率印刷</p>
-                            <span class="badge bg-secondary">売上安定後</span>
+                            <span class="badge bg-secondary" data-i18n="badge_after_sales_stable">売上安定後</span>
                         </div>
                     </div>
                     <div class="col-md-3 text-center">
@@ -292,7 +292,7 @@
                             <div class="fs-3 mb-2">🧾</div>
                             <h6>Step 3</h6>
                             <p class="small text-muted mb-0">レシートプリンター導入<br>Star mC-Print3推奨<br>お客様に領収書発行</p>
-                            <span class="badge bg-secondary">対面販売開始後</span>
+                            <span class="badge bg-secondary" data-i18n="badge_after_face_to_face">対面販売開始後</span>
                         </div>
                     </div>
                     <div class="col-md-3 text-center">
@@ -300,7 +300,7 @@
                             <div class="fs-3 mb-2">🏪</div>
                             <h6>Step 4</h6>
                             <p class="small text-muted mb-0">本格運用<br>スキャナー+プリンター完備<br>メルカリ/ヤフー連携</p>
-                            <span class="badge bg-secondary">拡大期</span>
+                            <span class="badge bg-secondary" data-i18n="badge_expansion_phase">拡大期</span>
                         </div>
                     </div>
                 </div>
@@ -310,7 +310,7 @@
         <!-- Receipt Policy -->
         <div class="card border-info">
             <div class="card-body">
-                <h6><i class="bi bi-info-circle me-2 text-info"></i>レシート運用ポリシー</h6>
+                <h6><i class="bi bi-info-circle me-2 text-info"></i><span data-i18n="guide_receipt_policy">レシート運用ポリシー</span></h6>
                 <ul class="small mb-0">
                     <li><strong>デフォルト:</strong> 販売時「レシート印刷する」ON → 販売確定と同時に自動印刷</li>
                     <li><strong>省略:</strong> スイッチOFF → 印刷せずに販売完了（履歴に残る）</li>
