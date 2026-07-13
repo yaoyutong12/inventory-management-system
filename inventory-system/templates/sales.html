@@ -1125,6 +1125,7 @@ async function quickSale() {
         currentProduct = null;
         loadSalesHistory();
         loadTodaySummary();
+        document.getElementById('salesBarcode').focus();
     } else {
         showToast(result.error || '销售失败', 'error');
     }

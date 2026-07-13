@@ -22,6 +22,7 @@
                     <label class="form-label fw-bold">条码号码 <span class="text-danger">*</span></label>
                     <input class="form-control form-control-lg" id="manualBarcodeInput" 
                            placeholder="直接输入条码下方的数字，例如: 5000-2301-7896"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();manualInbound()}"
                            autofocus>
                     <div class="form-text">条码上印的数字直接输入即可，不需要扫码</div>
                 </div>
@@ -1039,7 +1040,7 @@ function handleInboundResult(result, btn) {
         _inbounded = true;
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ✅ 入庫完了`;
+            btn.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ✅ 入庫完了 — 3秒后自动扫下件`;
             btn.className = 'btn btn-secondary btn-lg w-100 mt-2';
         }
         document.getElementById('qrResult').classList.remove('d-none');
@@ -1055,6 +1056,15 @@ function handleInboundResult(result, btn) {
         loadUnmatchedList();
         _currentPhotoBase64 = null;
         _formPhotoBase64 = null;
+        // 3秒后自动重置，方便连续扫码
+        setTimeout(() => {
+            const shouldRestartScanner = _scannerWasActive;
+            resetInbound();
+            _inboundScanBusy = false;
+            if (shouldRestartScanner && !_inScanRunning) {
+                startInboundScanner();
+            }
+        }, 3000);
     } else {
         // 失败：恢复按钮
         if (btn) {
@@ -1062,6 +1072,7 @@ function handleInboundResult(result, btn) {
             btn.innerHTML = `<i class="bi bi-box-arrow-in-down me-1"></i> 入库登记 & 标签生成`;
         }
         showToast(result.error || '错误', 'error');
+        _inboundScanBusy = false; // 失败也恢复扫描
     }
 }
 
@@ -1071,6 +1082,8 @@ function resetInbound() {
     _formPhotoBase64 = null;
     _inbounded = false;
     _inbounding = false;
+    _scannerWasActive = false;
+    _inboundScanBusy = false;
     document.getElementById('photoThumbnail').classList.add('d-none');
     document.getElementById('matchResult').classList.add('d-none');
     document.getElementById('qrResult').classList.add('d-none');
@@ -1244,6 +1257,7 @@ async function markAsScrap(reason) {
 let _inScanStream = null;
 let _inScanTimer = null;
 let _inScanRunning = false;
+let _scannerWasActive = false; // 入库前摄像头是否在运行，入库后自动恢复
 
 async function startInboundScanner() {
     if (_inScanRunning) return;
@@ -1311,12 +1325,21 @@ async function startInboundScanner() {
     }
 }
 
+let _inboundScanBusy = false; // 查找中防重复触发
+
 function onInboundScan(barcode) {
+    if (_inboundScanBusy) return; // 查找中，忽略新帧
     const cleanBarcode = sanitizeBarcode(barcode);
     if (!cleanBarcode) return;
+    _inboundScanBusy = true;
+    _scannerWasActive = true; // 记住摄像头在运行
     document.getElementById('manualBarcodeInput').value = cleanBarcode;
-    stopInboundScanner();
-    lookupBarcode(cleanBarcode);
+    // 不停摄像头，只暂停识别；入库完成后恢复
+    lookupBarcode(cleanBarcode).finally(() => {
+        // lookup完成后等用户操作（填价格→入库），不立刻恢复识别
+        // 但3秒后如果还没入库就恢复，防止卡住
+        setTimeout(() => { _inboundScanBusy = false; }, 3000);
+    });
 }
 
 function stopInboundScanner() {
