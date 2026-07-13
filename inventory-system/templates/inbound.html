@@ -366,15 +366,29 @@ function createElementFromHTML(htmlString) {
 
 // ─── Barcode Sanitizer ──────────────────────────
 // 手机扫码时CODE-128条码的首尾会多出"D"字符（start/stop code被误读）
-// 清洗：去除首尾非数字非连字符字符，只保留数字和连字符
+// 清洗：去除CODE-128 start/stop码误读产生的首尾多余字符
+// 常见问题：手机扫码会误读CODE-128的起始/终止码为字母(如D)
 function sanitizeBarcode(raw) {
     if (!raw) return '';
     let s = String(raw).trim();
-    // 去除首尾的D或其他非数字非连字符字符
-    s = s.replace(/^[^0-9]+/, '');
-    s = s.replace(/[^0-9-]+$/, '');
-    // 去除多余空格
-    s = s.replace(/\s+/g, '');
+    // 先去除所有空格和不可见字符
+    s = s.replace(/[\s\u00A0\u200B\uFEFF]+/g, '');
+    // 循环去除首尾非数字字符（防止多层嵌套如 DD123D → 123）
+    while (s.length > 0 && !/^[0-9]/.test(s)) { s = s.substring(1); }
+    while (s.length > 0 && !/[0-9]$/.test(s)) { s = s.substring(0, s.length - 1); }
+    // 同时也清除中间可能夹杂的误读字符（但保留连字符）
+    s = s.replace(/[^0-9\-]/g, function(m) {
+        // 如果是连字符就保留，其他全删
+        return m === '-' ? '-' : '';
+    });
+    // 如果清洗后为空，返回原始值让用户自己判断
+    if (!s && raw) {
+        console.warn('[sanitizeBarcode] 清洗后为空，回退原始值:', raw);
+        return String(raw).trim();
+    }
+    if (s !== String(raw).trim()) {
+        console.log('[sanitizeBarcode] 原始: "' + raw + '" → 清洗: "' + s + '"');
+    }
     return s;
 }
 

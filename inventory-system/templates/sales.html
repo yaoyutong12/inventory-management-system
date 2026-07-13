@@ -935,7 +935,23 @@ let _lastScannedBarcode = '';
 let _lastScanTime = 0;
 let _saleBusy = false;  // 正在处理销售，拒绝新扫码
 
+// 条码清洗：去除CODE-128 start/stop码误读字符（如前后多出的D）
+function sanitizeBarcode(raw) {
+    if (!raw) return '';
+    let s = String(raw).trim();
+    s = s.replace(/[\s\u00A0\u200B\uFEFF]+/g, '');
+    while (s.length > 0 && !/^[0-9]/.test(s)) { s = s.substring(1); }
+    while (s.length > 0 && !/[0-9]$/.test(s)) { s = s.substring(0, s.length - 1); }
+    s = s.replace(/[^0-9\-]/g, function(m) { return m === '-' ? '-' : ''; });
+    if (!s && raw) { console.warn('[sanitize] 清洗为空，回退:', raw); return String(raw).trim(); }
+    if (s !== String(raw).trim()) console.log('[sanitize] "' + raw + '" → "' + s + '"');
+    return s;
+}
+
 function onBarcodeFound(barcode, method) {
+    // 先清洗条码
+    barcode = sanitizeBarcode(barcode);
+    if (!barcode) return;
     // 处理中锁：上一笔销售还在 API 请求中，拒绝新扫码
     if (_saleBusy) return;
     
