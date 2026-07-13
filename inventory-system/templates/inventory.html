@@ -24,7 +24,7 @@
             <option value="淘宝/闲鱼">🟠 淘宝/闲鱼</option>
             <option value="自家サイト">⚫ 自家サイト</option>
         </select>
-        <input class="form-control form-control-sm" placeholder="検索..." id="inventorySearch" oninput="filterInventory()" style="width:200px">
+        <input class="form-control form-control-sm" placeholder="追跡番号・内部コード・商品名で検索..." id="inventorySearch" oninput="filterInventory()" style="width:280px">
         <button class="btn btn-sm btn-outline-primary" onclick="exportCSV()"><i class="bi bi-download"></i> CSV</button>
     </div>
 </div>
@@ -57,7 +57,7 @@
                                 {% set stock_class = "success" %}
                                 {% set status_badge = '<span class="badge bg-success">在庫あり</span>' %}
                             {% endif %}
-                        <tr data-category="{{ p.category or '' }}" data-status="{{ p.status or '' }}" data-name="{{ p.product_name or '' }}" data-code="{{ p.internal_code or '' }}" data-channel="{{ p.sales_channel or '线下' }}">
+                        <tr data-category="{{ p.category or '' }}" data-status="{{ p.status or '' }}" data-name="{{ p.product_name or '' }}" data-code="{{ p.internal_code or '' }}" data-tracking="{{ p.tracking_no or '' }}" data-channel="{{ p.sales_channel or '线下' }}">
                             <td class="text-center">
                                 {% if p.photo_url %}
                                     <img src="{{ p.photo_url }}" alt="商品写真" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">
@@ -264,13 +264,14 @@ function filterInventory() {
         const rChannel = row.dataset.channel || '线下';
         const rName = (row.dataset.name || '').toLowerCase();
         const rCode = (row.dataset.code || '').toLowerCase();
+        const rTracking = (row.dataset.tracking || '').toLowerCase();
         
         let show = true;
         if (cat && rCat !== cat) show = false;
         if (status === 'in_stock' && rStatus !== 'in_stock') show = false;
         if (status === 'sold_out' && rStatus !== 'sold_out') show = false;
         if (channel && rChannel !== channel) show = false;
-        if (search && !rName.includes(search) && !rCode.includes(search) && !(rCat||'').toLowerCase().includes(search)) show = false;
+        if (search && !rName.includes(search) && !rCode.includes(search) && !rTracking.includes(search) && !(rCat||'').toLowerCase().includes(search)) show = false;
         
         row.style.display = show ? '' : 'none';
         if (show) visibleCount++;
