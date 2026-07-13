@@ -344,6 +344,8 @@ let currentSupplierItem = null;
 let _unmatchedItems = [];
 let _currentPhotoBase64 = null;
 let _formPhotoBase64 = null;
+let _inbounded = false;        // 当前商品是否已入库（防止重复入库）
+let _inbounding = false;       // 入库处理中（防止双击）
 
 // ─── Helpers ──────────────────────────────────
 function t(key) {
@@ -362,13 +364,28 @@ function createElementFromHTML(htmlString) {
     return div.firstChild;
 }
 
+// ─── Barcode Sanitizer ──────────────────────────
+// 手机扫码时CODE-128条码的首尾会多出"D"字符（start/stop code被误读）
+// 清洗：去除首尾非数字非连字符字符，只保留数字和连字符
+function sanitizeBarcode(raw) {
+    if (!raw) return '';
+    let s = String(raw).trim();
+    // 去除首尾的D或其他非数字非连字符字符
+    s = s.replace(/^[^0-9]+/, '');
+    s = s.replace(/[^0-9-]+$/, '');
+    // 去除多余空格
+    s = s.replace(/\s+/g, '');
+    return s;
+}
+
 // ─── Primary: Manual Barcode Input ────────────
 async function manualInbound() {
-    const barcode = document.getElementById('manualBarcodeInput').value.trim();
+    const barcode = sanitizeBarcode(document.getElementById('manualBarcodeInput').value.trim());
     if (!barcode) {
         showToast('请先输入条码号码', 'warning');
         return;
     }
+    document.getElementById('manualBarcodeInput').value = barcode;
     lookupBarcode(barcode);
 }
 
@@ -413,9 +430,10 @@ async function aiReadBarcode(event) {
         if (data.error) {
             showToast(data.error, 'danger');
         } else if (data.barcode) {
-            showToast('读取成功: ' + data.barcode + ' (' + data.method + ')', 'success');
-            document.getElementById('manualBarcodeInput').value = data.barcode;
-            lookupBarcode(data.barcode);
+            const cleanBarcode = sanitizeBarcode(data.barcode);
+            showToast('读取成功: ' + cleanBarcode + ' (' + data.method + ')', 'success');
+            document.getElementById('manualBarcodeInput').value = cleanBarcode;
+            lookupBarcode(cleanBarcode);
         } else {
             showToast('未能识别条码，请手动输入', 'warning');
         }
@@ -777,6 +795,22 @@ document.getElementById('photoDropZone').addEventListener('drop', (e) => {
 async function lookupBarcode(barcode) {
     if (!barcode) return;
     
+    // 清除上一次的入库状态和照片
+    _inbounded = false;
+    _inbounding = false;
+    _currentPhotoBase64 = null;
+    _formPhotoBase64 = null;
+    document.getElementById('inboundPhotoInput').value = '';
+    document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
+    document.getElementById('photoPreview').classList.add('d-none');
+    document.getElementById('photoResult').innerHTML = '';
+    document.getElementById('photoThumbnail').classList.add('d-none');
+    // 重置入库按钮
+    const inboundBtn = document.getElementById('inboundBtn');
+    inboundBtn.disabled = false;
+    inboundBtn.innerHTML = `<i class="bi bi-box-arrow-in-down me-1"></i> 入库登记 & 标签生成`;
+    inboundBtn.className = 'btn btn-success btn-lg w-100 mt-2';
+    
     const data = await API.get(`/api/lookup/${encodeURIComponent(barcode)}`);
     
     document.getElementById('matchResult').classList.add('d-none');
@@ -805,11 +839,17 @@ async function lookupBarcode(barcode) {
         document.getElementById('matchMsg').textContent = '与进货清单匹配成功！';
         fillSupplierData(data);
     } else if (data.type === 'product') {
+        // 已入库商品：显示信息但标记为已入库
         currentSupplierItem = data;
+        _inbounded = true;
         document.getElementById('matchResult').classList.remove('d-none');
-        document.getElementById('matchAlert').className = 'alert alert-info';
-        document.getElementById('matchMsg').textContent = `已有商品: 库存 ${data.current_stock}件`;
+        document.getElementById('matchAlert').className = 'alert alert-warning';
+        document.getElementById('matchMsg').innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>この商品は既に入庫済みです</strong>（在庫: ${data.current_stock}件）`;
         fillProductData(data);
+        // 禁用入库按钮，改为"追加入库"确认模式
+        inboundBtn.disabled = false;
+        inboundBtn.innerHTML = `<i class="bi bi-plus-circle me-1"></i> 追加入庫（在庫追加）`;
+        inboundBtn.className = 'btn btn-warning btn-lg w-100 mt-2';
     }
 }
 
@@ -850,13 +890,18 @@ function fillSupplierData(data) {
             forceNewArea.classList.remove('d-none');
         } else if (inboundQty >= expectedQty) {
             // 已全部入库
+            _inbounded = true;
             document.getElementById('progressText').textContent = `${inboundQty}/${expectedQty} (100%)`;
             document.getElementById('progressBar').style.width = '100%';
             document.getElementById('progressBar').className = 'progress-bar bg-success';
             document.getElementById('progressHint').textContent = '入庫完了！';
-            document.getElementById('matchAlert').className = 'alert alert-info';
-            document.getElementById('matchMsg').textContent = `全件入庫完了（${expectedQty}件）`;
+            document.getElementById('matchAlert').className = 'alert alert-warning';
+            document.getElementById('matchMsg').innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>全件入庫完了済み</strong>（${expectedQty}件）— 追加入庫する場合は注意してください`;
             forceNewArea.classList.remove('d-none');
+            // 入库按钮改为追加模式
+            const btn = document.getElementById('inboundBtn');
+            btn.innerHTML = `<i class="bi bi-plus-circle me-1"></i> 追加入庫（在庫追加）`;
+            btn.className = 'btn btn-warning btn-lg w-100 mt-2';
         } else {
             // 未入库 (inboundQty=0, 首次匹配)
             document.getElementById('progressText').textContent = `0/${expectedQty} (0%)`;
@@ -910,6 +955,19 @@ function toggleHighValue() {
 async function doInbound() {
     if (!currentSupplierItem) return;
     
+    // 防止入库处理中重复点击
+    if (_inbounding) {
+        showToast('入库处理中，请稍候...', 'info');
+        return;
+    }
+    
+    // 已入库商品需要确认
+    if (_inbounded) {
+        if (!confirm('この商品は既に入庫済みです。\n追加入庫（在庫追加）しますか？')) {
+            return;
+        }
+    }
+    
     const unitCost = parseInt(document.getElementById('unitCost').value) || 0;
     if (!unitCost) {
         showToast('请输入进货单价', 'warning');
@@ -917,6 +975,7 @@ async function doInbound() {
     }
     
     const btn = document.getElementById('inboundBtn');
+    _inbounding = true;
     btn.disabled = true;
     btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>处理中...`;
     
@@ -937,12 +996,16 @@ async function doInbound() {
 }
 
 function handleInboundResult(result, btn) {
-    if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = `<i class="bi bi-box-arrow-in-down me-1"></i> 入库登记 & 标签生成`;
-    }
+    _inbounding = false;
     
     if (result.success) {
+        // 入库成功：标记为已入库，按钮保持禁用
+        _inbounded = true;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ✅ 入庫完了`;
+            btn.className = 'btn btn-secondary btn-lg w-100 mt-2';
+        }
         document.getElementById('qrResult').classList.remove('d-none');
         document.getElementById('qrImage').src = 'data:image/png;base64,' + result.qr_code;
         document.getElementById('internalCode').textContent = result.product.internal_code;
@@ -953,8 +1016,15 @@ function handleInboundResult(result, btn) {
         }
         showToast(`入库完成: ${result.product.internal_code}`, 'success');
         loadRecentInbound();
+        loadUnmatchedList();
         _currentPhotoBase64 = null;
+        _formPhotoBase64 = null;
     } else {
+        // 失败：恢复按钮
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="bi bi-box-arrow-in-down me-1"></i> 入库登记 & 标签生成`;
+        }
         showToast(result.error || '错误', 'error');
     }
 }
@@ -963,6 +1033,8 @@ function resetInbound() {
     currentSupplierItem = null;
     _currentPhotoBase64 = null;
     _formPhotoBase64 = null;
+    _inbounded = false;
+    _inbounding = false;
     document.getElementById('photoThumbnail').classList.add('d-none');
     document.getElementById('matchResult').classList.add('d-none');
     document.getElementById('qrResult').classList.add('d-none');
@@ -977,6 +1049,11 @@ function resetInbound() {
     document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
     document.getElementById('photoPreview').classList.add('d-none');
     document.getElementById('photoResult').innerHTML = '';
+    // 重置入库按钮
+    const btn = document.getElementById('inboundBtn');
+    btn.disabled = false;
+    btn.innerHTML = `<i class="bi bi-box-arrow-in-down me-1"></i> 入库登记 & 标签生成`;
+    btn.className = 'btn btn-success btn-lg w-100 mt-2';
     document.getElementById('manualBarcodeInput').focus();
 }
 
@@ -1197,9 +1274,11 @@ async function startInboundScanner() {
 }
 
 function onInboundScan(barcode) {
-    document.getElementById('manualBarcodeInput').value = barcode;
+    const cleanBarcode = sanitizeBarcode(barcode);
+    if (!cleanBarcode) return;
+    document.getElementById('manualBarcodeInput').value = cleanBarcode;
     stopInboundScanner();
-    lookupBarcode(barcode);
+    lookupBarcode(cleanBarcode);
 }
 
 function stopInboundScanner() {
