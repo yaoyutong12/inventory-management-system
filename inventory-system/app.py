@@ -699,13 +699,15 @@ def inventory_page():
                 p_dict['total_revenue'] = total_revenue
                 p_dict['total_fees'] = total_fees
                 p_dict['net_profit'] = total_revenue - (p_dict.get('unit_cost') or 0) * total_out - total_fees
-                # 添加照片URL（优先DB base64 → 磁盘文件兜底）
+                # 添加照片URL（SSR页面不嵌入base64大数据，改为懒加载API）
                 if p_dict.get('photo_data'):
-                    p_dict['photo_url'] = f"data:image/jpeg;base64,{p_dict['photo_data']}"
+                    p_dict['photo_url'] = f'/api/product/{p_dict["id"]}/photo'
                 elif p_dict.get('photo'):
                     p_dict['photo_url'] = f'/uploads/{p_dict["photo"]}'
                 else:
                     p_dict['photo_url'] = None
+                # 不把photo_data传给模板，避免HTML过大
+                p_dict['photo_data'] = None
                 inventory_data.append(p_dict)
             except Exception as e:
                 app.logger.error(f"Error processing product {p}: {e}")
@@ -997,6 +999,21 @@ def api_imports():
     db = get_db()
     imports = db.execute("SELECT * FROM supplier_imports ORDER BY import_date DESC").fetchall()
     return jsonify([dict(row) for row in imports])
+
+
+# ─── API: Product Photo (lazy load) ────────────────────────────
+@app.route('/api/product/<int:pid>/photo')
+def api_product_photo(pid):
+    """Return product photo as base64 data URI (lazy loaded by frontend)"""
+    db = get_db()
+    row = db.execute("""SELECT photo_data, photo FROM inbound_records
+        WHERE product_id=? AND photo_data IS NOT NULL AND photo_data != ''
+        ORDER BY id DESC LIMIT 1""", (pid,)).fetchone()
+    if row and row.get('photo_data'):
+        return jsonify({'url': f"data:image/jpeg;base64,{row['photo_data']}"})
+    if row and row.get('photo'):
+        return jsonify({'url': f"/uploads/{row['photo']}"})
+    return jsonify({'url': None})
 
 
 # ─── API: Barcode Lookup ────────────────────────────────────────
@@ -1331,13 +1348,14 @@ def api_inventory_list():
         d['total_revenue'] = db.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
         d['total_fees'] = db.execute("SELECT COALESCE(SUM(shipping_fee+platform_fee+other_fee),0) FROM sales_records WHERE product_id=?", (p['id'],)).fetchone()[0]
         d['net_profit'] = d['total_revenue'] - (d.get('unit_cost') or 0) * total_out - d['total_fees']
-        # 添加照片URL（优先DB base64 → 磁盘文件兜底）
+        # 添加照片URL（不返回base64大数据，改为懒加载API）
         if d.get('photo_data'):
-            d['photo_url'] = f"data:image/jpeg;base64,{d['photo_data']}"
+            d['photo_url'] = f'/api/product/{d["id"]}/photo'
         elif d.get('photo'):
             d['photo_url'] = f'/uploads/{d["photo"]}'
         else:
             d['photo_url'] = None
+        d['photo_data'] = None  # 不传大数据
     result.append(d)
     return jsonify(result)
 
@@ -1987,13 +2005,14 @@ def api_mercari_stock():
         d = dict(p)
         d['current_stock'] = current_stock
         d['has_listing'] = bool(db.execute("SELECT id FROM mercari_listings WHERE product_id=?", (p['id'],)).fetchone())
-        # 添加照片URL（DB优先）
+        # 添加照片URL（不返回base64大数据，改为懒加载API）
         if d.get('photo_data'):
-            d['photo_url'] = f"data:image/jpeg;base64,{d['photo_data']}"
+            d['photo_url'] = f'/api/product/{d["id"]}/photo'
         elif d.get('photo'):
             d['photo_url'] = f'/uploads/{d["photo"]}'
         else:
             d['photo_url'] = None
+        d['photo_data'] = None
         result.append(d)
     return jsonify(result)
 
