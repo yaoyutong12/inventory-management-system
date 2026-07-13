@@ -217,6 +217,14 @@
                             <option><span data-i18n="other">其他</span></option>
                         </select>
                     </div>
+                    <!-- 入库备注 -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-primary">
+                            <i class="bi bi-pencil me-1"></i>入库备注
+                            <small class="text-muted fw-normal">- 跟踪号与清单不匹配、商品状况等备注</small>
+                        </label>
+                        <textarea class="form-control" id="inboundNote" rows="2" placeholder="例: 跟踪号45678实际是陶瓷碗，清单写的花瓶；轻微划痕等"></textarea>
+                    </div>
 
                     <!-- 商品照片上传 -->
                     <div class="mb-3">
@@ -826,6 +834,7 @@ async function lookupBarcode(barcode) {
     _formPhotoBase64 = null;
     document.getElementById('inboundPhotoInput').value = '';
     document.getElementById('inboundPhotoFileInput').value = '';
+    document.getElementById('inboundNote').value = '';
     document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
     document.getElementById('photoPreview').classList.add('d-none');
     document.getElementById('photoResult').innerHTML = '';
@@ -1014,7 +1023,8 @@ async function doInbound() {
         location: document.getElementById('location').value,
         inbound_date: document.getElementById('inboundDate').value || null,
         photo_base64: _formPhotoBase64 || _currentPhotoBase64 || null,
-        force_new: document.getElementById('forceNewCheck') ? document.getElementById('forceNewCheck').checked : false
+        force_new: document.getElementById('forceNewCheck') ? document.getElementById('forceNewCheck').checked : false,
+        notes: document.getElementById('inboundNote').value || ''
     };
     
     const result = await API.post('/api/inbound/create', data);
@@ -1073,6 +1083,7 @@ function resetInbound() {
     document.getElementById('photoFileInput').value = '';
     document.getElementById('inboundPhotoInput').value = '';
     document.getElementById('inboundPhotoFileInput').value = '';
+    document.getElementById('inboundNote').value = '';
     document.getElementById('inboundPhotoPreviewArea').classList.add('d-none');
     document.getElementById('photoPreview').classList.add('d-none');
     document.getElementById('photoResult').innerHTML = '';

@@ -457,6 +457,7 @@ def _init_sqlite():
         "ALTER TABLE sales_records ADD COLUMN platform_fee REAL DEFAULT 0",
         "ALTER TABLE sales_records ADD COLUMN other_fee REAL DEFAULT 0",
         "ALTER TABLE supplier_items ADD COLUMN inbound_qty INTEGER DEFAULT 0",
+        "ALTER TABLE products ADD COLUMN notes TEXT",
     ]:
         try: db.execute(sql)
         except: pass
@@ -559,6 +560,7 @@ def _init_postgres():
         "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS platform_fee REAL DEFAULT 0",
         "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS other_fee REAL DEFAULT 0",
         "ALTER TABLE supplier_items ADD COLUMN IF NOT EXISTS inbound_qty INTEGER DEFAULT 0",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS notes TEXT",
     ]:
         try: cur.execute(col_sql)
         except: pass
@@ -1040,6 +1042,7 @@ def api_inbound_create():
     location = data.get('location', '')
     inbound_date = data.get('inbound_date', '')  # 新增：可修改入库日期
     photo_base64 = data.get('photo_base64', '')  # 新增：商品照片
+    notes = data.get('notes', '')  # 新增：入库备注
     
     db = get_db()
     item = db.execute("SELECT * FROM supplier_items WHERE id=?", (supplier_item_id,)).fetchone()
@@ -1059,16 +1062,19 @@ def api_inbound_create():
     if existing:
         product_id = existing['id']
         if unit_cost and not existing['unit_cost']:
-            db.execute("UPDATE products SET unit_cost=?, selling_price=?, is_high_value=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                      (unit_cost, selling_price or 0, 1 if is_high_value else 0, product_id))
+            db.execute("UPDATE products SET unit_cost=?, selling_price=?, is_high_value=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                      (unit_cost, selling_price or 0, 1 if is_high_value else 0, notes, product_id))
+        elif notes:
+            db.execute("UPDATE products SET notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                      (notes, product_id))
     else:
         internal_code = generate_internal_code()
         cur = db.execute("""
-            INSERT INTO products (internal_code, supplier_item_id, product_name, product_name_ja, category, weight, dimensions, unit_cost, selling_price, is_high_value, location)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO products (internal_code, supplier_item_id, product_name, product_name_ja, category, weight, dimensions, unit_cost, selling_price, is_high_value, location, notes)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         """, (internal_code, supplier_item_id, item['product_name'], item['product_name'],
               item['category'], item['weight'], item['dimensions'],
-              unit_cost or 0, selling_price or 0, 1 if is_high_value else 0, location))
+              unit_cost or 0, selling_price or 0, 1 if is_high_value else 0, location, notes))
         product_id = cur.lastrowid
     
     # Save photo if provided
@@ -1102,11 +1108,11 @@ def api_inbound_create():
     
     # Record inbound (DB保存photo_data — 永続化)
     if inbound_date:
-        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, inbound_date, photo, photo_data) VALUES (?,?,?,?,?,?,?)",
-                  (product_id, supplier_item_id, qty, unit_cost or 0, inbound_date, photo_filename, photo_encoded))
+        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, inbound_date, photo, photo_data, notes) VALUES (?,?,?,?,?,?,?,?)",
+                  (product_id, supplier_item_id, qty, unit_cost or 0, inbound_date, photo_filename, photo_encoded, notes))
     else:
-        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, photo, photo_data) VALUES (?,?,?,?,?,?)",
-                  (product_id, supplier_item_id, qty, unit_cost or 0, photo_filename, photo_encoded))
+        db.execute("INSERT INTO inbound_records (product_id, supplier_item_id, qty, unit_cost, photo, photo_data, notes) VALUES (?,?,?,?,?,?,?)",
+                  (product_id, supplier_item_id, qty, unit_cost or 0, photo_filename, photo_encoded, notes))
 
     # 更新 inbound_qty（部分入库支持）
     db.execute("UPDATE supplier_items SET inbound_qty = COALESCE(inbound_qty,0) + ? WHERE id=?",
