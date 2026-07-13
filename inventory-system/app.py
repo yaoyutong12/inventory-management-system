@@ -458,6 +458,7 @@ def _init_sqlite():
         "ALTER TABLE sales_records ADD COLUMN other_fee REAL DEFAULT 0",
         "ALTER TABLE supplier_items ADD COLUMN inbound_qty INTEGER DEFAULT 0",
         "ALTER TABLE products ADD COLUMN notes TEXT",
+        "ALTER TABLE inbound_records ADD COLUMN notes TEXT",
     ]:
         try: db.execute(sql)
         except: pass
@@ -561,6 +562,7 @@ def _init_postgres():
         "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS other_fee REAL DEFAULT 0",
         "ALTER TABLE supplier_items ADD COLUMN IF NOT EXISTS inbound_qty INTEGER DEFAULT 0",
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS notes TEXT",
+        "ALTER TABLE inbound_records ADD COLUMN IF NOT EXISTS notes TEXT",
     ]:
         try: cur.execute(col_sql)
         except: pass
