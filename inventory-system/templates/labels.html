@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}ラベル印刷 - 托盘杂货进销存{% endblock %}
+{% block title %}标签打印 - 托盘杂货进销存{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-upc-scan me-2"></i><span data-i18n="labels_title">ラベル印刷</span> <small class="text-muted fs-6" id="verInfo">(v20260629-4)</small></h4>
+    <h4><i class="bi bi-upc-scan me-2"></i><span data-i18n="labels_title">标签打印</span> <small class="text-muted fs-6" id="verInfo">(v20260629-4)</small></h4>
     <div>
-        <button class="btn btn-outline-primary" id="selectAllBtn" onclick="selectAll()" data-i18n="select_all"><i class="bi bi-check-all"></i> 全選択</button>
+        <button class="btn btn-outline-primary" id="selectAllBtn" onclick="selectAll()" data-i18n="select_all"><i class="bi bi-check-all"></i> 全选</button>
         <div class="btn-group">
             <button class="btn btn-primary" onclick="printSelected('normal')" data-i18n="print_normal_a4"><i class="bi bi-printer"></i> 普通打印 (A4)</button>
             <button class="btn btn-success" onclick="printSelected('thermal')" data-i18n="print_thermal_48"><i class="bi bi-receipt"></i> 热敏打印 (48mm)</button>
@@ -20,11 +20,11 @@
 
 <div class="row g-3 mb-3">
     <div class="col-md-4">
-        <input class="form-control" id="labelSearch" data-i18n-ph="label_search_ph" placeholder="商品名・コード検索..." oninput="filterLabels()">
+        <input class="form-control" id="labelSearch" data-i18n-ph="label_search_ph" placeholder="商品名/代码搜索..." oninput="filterLabels()">
     </div>
     <div class="col-md-4">
         <select class="form-select" id="labelCatFilter" onchange="filterLabels()">
-            <option value="" data-i18n="all_categories">全カテゴリ</option>
+            <option value="" data-i18n="all_categories">全部分类</option>
             {% for cat in ssr_categories %}
             <option value="{{ cat }}">{{ cat }}</option>
             {% endfor %}
@@ -33,7 +33,7 @@
     <div class="col-md-4">
         <select class="form-select" id="labelModeFilter" onchange="filterLabels()">
             <option value="all" selected data-i18n="all_products_default">全商品（默认）</option>
-            <option value="in_stock" data-i18n="in_stock_only">在庫ありのみ</option>
+            <option value="in_stock" data-i18n="in_stock_only">仅有库存</option>
         </select>
     </div>
 </div>
@@ -45,7 +45,7 @@
                 <thead>
                     <tr>
                         <th style="width:40px"><input type="checkbox" id="selectAllCB" onchange="toggleAll(this)"></th>
-                        <th data-i18n="col_internal_code">内部コード</th><th data-i18n="col_product_name">商品名</th><th data-i18n="col_selling_price">販売価格</th><th data-i18n="col_status">状態</th><th data-i18n="col_preview">プレビュー</th>
+                        <th data-i18n="col_internal_code">内部代码</th><th data-i18n="col_product_name">商品名</th><th data-i18n="col_selling_price">销售价格</th><th data-i18n="col_status">状态</th><th data-i18n="col_preview">预览</th>
                     </tr>
                 </thead>
                 <tbody id="invTbody">
@@ -60,24 +60,24 @@
                             {% endif %}
                         <tr data-category="{{ p.category or '' }}" data-name="{{ p.product_name or '' }}" data-code="{{ p.internal_code or '' }}" data-stock="{{ p.current_stock or 0 }}">
                             <td><input type="checkbox" class="label-cb" value="{{ p.id }}" onchange="toggleLabel({{ p.id }}, this)"></td>
-                            <td><code>{{ p.internal_code }}{% if p.is_high_value %} <span class="badge bg-warning">高額</span>{% endif %}</code></td>
+                            <td><code>{{ p.internal_code }}{% if p.is_high_value %} <span class="badge bg-warning">高价</span>{% endif %}</code></td>
                             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ p.product_name }}">{{ (p.product_name or '')[:40] }}</td>
                             <td class="fw-bold">¥{{ '%d' | format(p.selling_price or 0) | int }}</td>
-                            <td><span class="badge bg-{{ stock_class }}">{{ p.current_stock or 0 }}個</span></td>
+                            <td><span class="badge bg-{{ stock_class }}">{{ p.current_stock or 0 }}个</span></td>
                             <td><button class="btn btn-sm btn-outline-secondary" onclick="previewLabel({{ p.id }})"><i class="bi bi-eye"></i></button></td>
                         </tr>
                         {% endfor %}
                     {% else %}
                         <tr><td colspan="6" class="text-center py-5 text-muted">
                             <i class="bi bi-inbox" style="font-size:3rem;display:block;margin-bottom:1rem"></i>
-                            <p class="mb-2"><strong data-i18n="labels_no_products">まだ商品が登録されていません</strong></p>
-                            <p class="small mb-3" data-i18n-html="labels_empty_steps">手順：<br>
-                            ① <a href="/import">仕入リスト管理</a> でExcelファイルをアップロード<br>
-                            ② <a href="/inbound">入庫管理</a> で商品を選択 → 販売価格を入力 → 入庫実行<br>
-                            ③ ラベルが表示されます</p>
+                            <p class="mb-2"><strong data-i18n="labels_no_products">尚未注册商品</strong></p>
+                            <p class="small mb-3" data-i18n-html="labels_empty_steps">步骤：<br>
+                            ① <a href="/import">进货清单管理</a> 上传Excel文件<br>
+                            ② <a href="/inbound">入库管理</a> 选择商品 → 输入售价 → 执行入库<br>
+                            ③ 标签将显示在此页面</p>
                             <p>
-                            <a href="/debug-data" class="btn btn-sm btn-outline-secondary me-2" data-i18n="btn_debug_data">データ状態を確認</a>
-                            <a href="/api/inventory/list" target="_blank" class="btn btn-sm btn-outline-info me-2" data-i18n="btn_api_data">APIデータ確認</a>
+                            <a href="/debug-data" class="btn btn-sm btn-outline-secondary me-2" data-i18n="btn_debug_data">检查数据状态</a>
+                            <a href="/api/inventory/list" target="_blank" class="btn btn-sm btn-outline-info me-2" data-i18n="btn_api_data">API数据确认</a>
                             </p>
                         </td></tr>
                     {% endif %}
@@ -88,15 +88,15 @@
 </div>
 
 <div class="mt-2 text-muted small text-end" id="labelCountInfo" data-i18n="labels_total_count">
-    {% if ssr_data %}全 {{ ssr_data|length }} 件の商品{% endif %}
+    {% if ssr_data %}共 {{ ssr_data|length }} 件商品{% endif %}
 </div>
 
 <!-- データ状態デバッグ -->
 <div class="mt-2 p-2 bg-light rounded small" style="font-size:11px;color:#666">
-    SSR_DATA件数: {{ ssr_data|length if ssr_data else 0 }} | 
-    読み込み時刻: <span id="loadTime">{{ now_ts }}</span> |
-    <a href="/api/inventory/list" target="_blank" class="ms-2">APIデータ確認</a> |
-    <a href="/api/labels/generate" target="_blank" class="ms-2" onclick="event.preventDefault();testLabelsApi()">テストAPI</a>
+    SSR_DATA数量: {{ ssr_data|length if ssr_data else 0 }} |
+    加载时间: <span id="loadTime">{{ now_ts }}</span> |
+    <a href="/api/inventory/list" target="_blank" class="ms-2">API数据确认</a> |
+    <a href="/api/labels/generate" target="_blank" class="ms-2" onclick="event.preventDefault();testLabelsApi()">测试API</a>
 </div>
 
 <script>

@@ -21,13 +21,13 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4><i class="bi bi-shop me-2"></i><span data-i18n="mercari_title">メルカリ出品管理</span></h4>
-    <span class="badge bg-danger fs-6" data-i18n="mercari_app_hint"><i class="bi bi-phone me-1"></i>メルカリアプリで出品</span>
+    <h4><i class="bi bi-shop me-2"></i><span data-i18n="mercari_title">煤炉出品管理</span></h4>
+    <span class="badge bg-danger fs-6" data-i18n="mercari_app_hint"><i class="bi bi-phone me-1"></i>在煤炉App中出品</span>
 </div>
 
 <div class="alert alert-info small py-2 mb-3">
     <i class="bi bi-lightbulb me-1"></i>
-    <span data-i18n-html="mercari_usage_hint"><strong>使い方：</strong> 左側の商品をクリック → 右側で出品情報を編集 → 「全情報をコピー」→ メルカリアプリに貼り付けて出品</span>
+    <span data-i18n-html="mercari_usage_hint"><strong>使用方法：</strong>点击左侧商品 → 在右侧编辑出品信息 → 点击「复制全部信息」→ 粘贴到煤炉App中出品</span>
 </div>
 
 <div class="row g-3">
@@ -35,18 +35,18 @@
     <div class="col-lg-5">
         <div class="card">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h6 class="mb-0"><i class="bi bi-box-seam me-2"></i><span data-i18n="mercari_product_list">在庫商品一覧</span></h6>
+                <h6 class="mb-0"><i class="bi bi-box-seam me-2"></i><span data-i18n="mercari_product_list">库存商品一览</span></h6>
                 <span class="badge bg-primary" id="productCount">0件</span>
                 <small class="text-muted ms-2" id="apiDebugInfo"></small>
             </div>
             <div class="card-body p-2">
                 <div class="px-2 mb-2">
-                    <input class="form-control form-control-sm" id="productSearch" data-i18n-ph="mercari_search_ph" placeholder="商品名・コードで検索..." oninput="filterProducts()">
+                    <input class="form-control form-control-sm" id="productSearch" data-i18n-ph="mercari_search_ph" placeholder="商品名/代码搜索..." oninput="filterProducts()">
                 </div>
                 <div style="max-height: 500px; overflow-y: auto;" id="productList">
                     <div class="text-center py-5">
                         <div class="spinner-border spinner-border-sm text-primary mb-2"></div>
-                        <p class="text-muted small" data-i18n="loading">読込中...</p>
+                        <p class="text-muted small" data-i18n="loading">加载中...</p>
                     </div>
                 </div>
             </div>
@@ -57,7 +57,7 @@
     <div class="col-lg-7">
         <div class="card">
             <div class="card-header bg-white">
-                <h6 class="mb-0"><i class="bi bi-pencil-square me-2"></i><span data-i18n="mercari_listing_info">出品情報編集</span></h6>
+                <h6 class="mb-0"><i class="bi bi-pencil-square me-2"></i><span data-i18n="mercari_listing_info">出品信息编辑</span></h6>
             </div>
             <div class="card-body">
                 <div id="listingForm" class="d-none">
@@ -65,43 +65,43 @@
                     <div class="mb-3 p-2 bg-light rounded d-flex justify-content-between align-items-center">
                         <div>
                             <strong id="listingProductName" class="d-block"></strong>
-                            <small class="text-muted"><code id="listingProductCode"></code> | <span data-i18n="cost_label">仕入:</span> <span id="listingCost"></span> | <span data-i18n="stock_label">在庫:</span> <span id="listingStock"></span><span data-i18n="items_unit">個</span></small>
+                            <small class="text-muted"><code id="listingProductCode"></code> | <span data-i18n="cost_label">进货:</span> <span id="listingCost"></span> | <span data-i18n="stock_label">库存:</span> <span id="listingStock"></span><span data-i18n="items_unit">个</span></small>
                         </div>
                         <span class="badge bg-secondary" id="listingCategory"></span>
                     </div>
                     
                     <!-- Photo Preview -->
                     <div class="mb-3 text-center" id="photoPreviewContainer" style="display:none;">
-                        <small class="text-muted d-block mb-1" data-i18n="product_photo_bracket">【商品写真】</small>
-                        <img id="previewPhoto" src="" alt="商品写真" style="max-width:200px;max-height:200px;border-radius:8px;border:1px solid #ddd;">
+                        <small class="text-muted d-block mb-1" data-i18n="product_photo_bracket">【商品照片】</small>
+                        <img id="previewPhoto" src="" alt="商品照片" style="max-width:200px;max-height:200px;border-radius:8px;border:1px solid #ddd;">
                         <br>
                         <button class="btn btn-sm btn-outline-primary mt-1" onclick="downloadPhoto()" data-i18n="download_photo">
-                            <i class="bi bi-download"></i> 写真をダウンロード
+                            <i class="bi bi-download"></i> 下载照片
                         </button>
                     </div>
                     
                     <!-- Quick Settings -->
                     <div class="row g-2 mb-3">
                         <div class="col-6">
-                            <label class="form-label small mb-1" data-i18n="condition">商品の状態</label>
+                            <label class="form-label small mb-1" data-i18n="condition">商品状态</label>
                             <select class="form-select form-select-sm" id="mercariCondition" onchange="updatePreview()">
-                                <option value="新品・未使用" data-i18n="cond_new_unused">新品・未使用</option>
-                                <option value="未使用に近い" selected data-i18n="cond_like_new">未使用に近い</option>
-                                <option value="目立った傷や汚れなし" data-i18n="cond_no_damage">目立った傷や汚れなし</option>
-                                <option value="やや傷や汚れあり" data-i18n="cond_slight_damage">やや傷や汚れあり</option>
-                                <option value="傷や汚れあり" data-i18n="cond_damaged">傷や汚れあり</option>
-                                <option value="全体的に状態が悪い" data-i18n="cond_poor">全体的に状態が悪い</option>
+                                <option value="新品・未使用" data-i18n="cond_new_unused">全新未使用</option>
+                                <option value="未使用に近い" selected data-i18n="cond_like_new">接近全新</option>
+                                <option value="目立った傷や汚れなし" data-i18n="cond_no_damage">无明显伤痕或污渍</option>
+                                <option value="やや傷や汚れあり" data-i18n="cond_slight_damage">略有伤痕或污渍</option>
+                                <option value="傷や汚れあり" data-i18n="cond_damaged">有伤痕或污渍</option>
+                                <option value="全体的に状態が悪い" data-i18n="cond_poor">整体状态较差</option>
                             </select>
                         </div>
                         <div class="col-3">
-                            <label class="form-label small mb-1" data-i18n="selling_price_label">販売価格</label>
+                            <label class="form-label small mb-1" data-i18n="selling_price_label">销售价格</label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text">¥</span>
                                 <input type="number" class="form-control" id="mercariPrice" oninput="updatePreview()">
                             </div>
                         </div>
                         <div class="col-3">
-                            <label class="form-label small mb-1" data-i18n="profit_margin">利益率</label>
+                            <label class="form-label small mb-1" data-i18n="profit_margin">利润率</label>
                             <input class="form-control form-control-sm text-success" id="profitMargin" readonly>
                         </div>
                     </div>
@@ -109,26 +109,26 @@
                         <div class="col-4">
                             <label class="form-label small mb-1" data-i18n="commission_rate">佣金比例 (%)</label>
                             <input type="number" class="form-control form-control-sm" id="mercariCommissionRate" value="10" oninput="updatePreview()">
-                            <small class="text-muted" data-i18n="commission_rate_hint">标准10%、活動期間は要確認</small>
+                            <small class="text-muted" data-i18n="commission_rate_hint">标准10%、活动期间需确认</small>
                         </div>
                         <div class="col-4">
-                            <label class="form-label small mb-1" data-i18n="ad_fee">広告費 (¥)</label>
+                            <label class="form-label small mb-1" data-i18n="ad_fee">广告费 (¥)</label>
                             <input type="number" class="form-control form-control-sm" id="mercariAdFee" value="0" oninput="updatePreview()">
-                            <small class="text-muted" data-i18n="ad_fee_hint">プロモーション等</small>
+                            <small class="text-muted" data-i18n="ad_fee_hint">推广等</small>
                         </div>
                         <div class="col-4">
-                            <label class="form-label small mb-1" data-i18n="other_fee">その他費用 (¥)</label>
+                            <label class="form-label small mb-1" data-i18n="other_fee">其他费用 (¥)</label>
                             <input type="number" class="form-control form-control-sm" id="mercariOtherFee" value="0" oninput="updatePreview()">
-                            <small class="text-muted" data-i18n="other_fee_hint">梱包材など</small>
+                            <small class="text-muted" data-i18n="other_fee_hint">包装材料等</small>
                         </div>
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
-                            <label class="form-label small mb-1" data-i18n="brand">ブランド名</label>
+                            <label class="form-label small mb-1" data-i18n="brand">品牌名</label>
                             <input class="form-control form-control-sm" id="mercariBrand" data-i18n-ph="brand_ph" placeholder="例: Nike, BMW..." oninput="updatePreview()">
                         </div>
                         <div class="col-6">
-                            <label class="form-label small mb-1" data-i18n="shipping">発送方法</label>
+                            <label class="form-label small mb-1" data-i18n="shipping">发货方式</label>
                             <select class="form-select form-select-sm" id="mercariShipping" onchange="updatePreview()">
                                 <option value="らくらくメルカリ便（小）">らくらくメルカリ便（小）〜1kg</option>
                                 <option value="らくらくメルカリ便（大）">らくらくメルカリ便（大）〜4kg</option>
@@ -139,43 +139,43 @@
                                 <option value="手渡し（同梱希望）">手渡し（同梱希望）</option>
                                 <option value="着払い">着払い（購入者負担）</option>
                             </select>
-                            <small class="text-muted" data-i18n="shipping_cost_hint">送料は自動計算されます（らくらく便210円など）</small>
+                            <small class="text-muted" data-i18n="shipping_cost_hint">运费自动计算（らくらく便210日元等）</small>
                         </div>
                     </div>
                     
                     <hr>
-                    <h6 class="mb-2"><i class="bi bi-phone me-2"></i><span data-i18n="mercari_preview_title">メルカリ出品プレビュー</span></h6>
+                    <h6 class="mb-2"><i class="bi bi-phone me-2"></i><span data-i18n="mercari_preview_title">煤炉出品预览</span></h6>
                     
                     <div class="listing-preview">
                         <!-- Title -->
                         <div class="mb-2">
-                            <small class="text-muted d-block mb-1" data-i18n="product_title_bracket">【商品タイトル】</small>
+                            <small class="text-muted d-block mb-1" data-i18n="product_title_bracket">【商品标题】</small>
                             <div class="title-preview" id="previewTitle"></div>
                             <button class="btn btn-sm btn-outline-secondary mt-1 copy-btn" onclick="copyText('previewTitle', this)">
-                                <i class="bi bi-clipboard"></i> <span data-i18n="copy">コピー</span>
+                                <i class="bi bi-clipboard"></i> <span data-i18n="copy">复制</span>
                             </button>
                         </div>
                         
                         <!-- Price -->
                         <div class="mb-2 text-center py-2 bg-light rounded">
-                            <small class="text-muted d-block" data-i18n="selling_price_bracket">【販売価格】</small>
+                            <small class="text-muted d-block" data-i18n="selling_price_bracket">【销售价格】</small>
                             <div class="price-tag" id="previewPrice">¥0</div>
                             <small class="text-muted" id="previewShippingInfo"></small>
                         </div>
                         
                         <!-- Description -->
                         <div class="mb-2">
-                            <small class="text-muted d-block mb-1" data-i18n="product_desc_bracket">【商品説明】</small>
+                            <small class="text-muted d-block mb-1" data-i18n="product_desc_bracket">【商品说明】</small>
                             <div class="desc-preview" id="previewDesc"></div>
                             <button class="btn btn-sm btn-outline-secondary mt-1 copy-btn" onclick="copyText('previewDesc', this)">
-                                <i class="bi bi-clipboard"></i> <span data-i18n="copy">コピー</span>
+                                <i class="bi bi-clipboard"></i> <span data-i18n="copy">复制</span>
                             </button>
                         </div>
                     </div>
                     
                     <div class="mt-3 d-flex gap-2">
                         <button class="btn one-click-btn flex-grow-1" onclick="copyAllListing()" data-i18n="copy_all_listing">
-                            <i class="bi bi-clipboard-check me-1"></i> 全情報をコピーしてメルカリへ
+                            <i class="bi bi-clipboard-check me-1"></i> 复制全部信息到煤炉
                         </button>
                         <button class="btn btn-outline-success" onclick="saveListing()" data-i18n="save_btn">
                             <i class="bi bi-check-lg me-1"></i> 保存
@@ -185,21 +185,21 @@
                 
                 <div id="noProductSelected" class="text-center py-5">
                     <i class="bi bi-box-seam" style="font-size:4rem;color:#ddd"></i>
-                    <p class="text-muted mt-3" data-i18n="select_product_hint">左のリストから出品する商品を選択</p>
-                    <small class="text-muted" data-i18n="all_stock_shown">すべての在庫商品が表示されます</small>
+                    <p class="text-muted mt-3" data-i18n="select_product_hint">从左侧列表选择要出品的商品</p>
+                    <small class="text-muted" data-i18n="all_stock_shown">显示所有库存商品</small>
                 </div>
             </div>
         </div>
         
         <!-- Mercari Tips -->
         <div class="mercari-tips p-3 mt-3">
-            <strong data-i18n="mercari_tips_title"><i class="bi bi-lightbulb me-1"></i>メルカリ出品のコツ</strong>
+            <strong data-i18n="mercari_tips_title"><i class="bi bi-lightbulb me-1"></i>煤炉出品技巧</strong>
             <ul class="mb-0 mt-2">
-                <li data-i18n="tip_photo"><strong>写真：</strong> 白背景・自然光で4枚以上撮影（正面・背面・側面・傷箇所）</li>
-                <li data-i18n="tip_price"><strong>価格設定：</strong> 仕入価格の1.5〜2倍 + 送料手数料を考慮</li>
-                <li data-i18n="tip_title"><strong>タイトル：</strong> ブランド名＋商品名＋キーワード（40文字以内）</li>
-                <li data-i18n="tip_like"><strong>いいね対策：</strong> 3日ごとに値下げ or 再出品</li>
-                <li data-i18n="tip_shipping"><strong>発送：</strong> らくらくメルカリ便で匿名配送が安心</li>
+                <li data-i18n="tip_photo"><strong>照片：</strong> 白色背景・自然光下拍摄4张以上（正面・背面・侧面・损伤处）</li>
+                <li data-i18n="tip_price"><strong>价格设定：</strong> 进货价格的1.5〜2倍 + 考虑运费手续费</li>
+                <li data-i18n="tip_title"><strong>标题：</strong> 品牌名＋商品名＋关键词（40字以内）</li>
+                <li data-i18n="tip_like"><strong>点赞策略：</strong> 每3天降价或重新出品</li>
+                <li data-i18n="tip_shipping"><strong>发货：</strong> 使用らくらく煤炉便匿名配送更安心</li>
             </ul>
         </div>
     </div>
@@ -220,7 +220,7 @@ async function loadAllProducts() {
         // 调试信息
         var debugEl = document.getElementById('apiDebugInfo');
         if (debugEl) {
-            debugEl.textContent = 'API返却: ' + data.length + t('items_unit') + ' | 内部コード: ' + data.map(p => p.internal_code).join(', ');
+            debugEl.textContent = 'API返回: ' + data.length + t('items_unit') + ' | 内部代码: ' + data.map(p => p.internal_code).join(', ');
         }
         renderProductList(data);
     } catch(e) {

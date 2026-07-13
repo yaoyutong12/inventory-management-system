@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" id="htmlRoot">
+<html lang="zh-CN" id="htmlRoot">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -65,7 +65,7 @@
                     <li class="nav-item"><a class="nav-link {% if request.path=='/guide' %}active{% endif %}" href="/guide"><i class="bi bi-book"></i> <span data-i18n="guide">導入ガイド</span></a></li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-translate"></i> <span id="currentLang">日本語</span>
+                            <i class="bi bi-translate"></i> <span id="currentLang">中文</span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="#" onclick="switchLang('ja')">🇯🇵 日本語</a></li>
@@ -908,11 +908,11 @@
         }
     };
 
-    let currentLang = localStorage.getItem('lang') || 'ja';
+    let currentLang = localStorage.getItem('lang') || 'zh';
 
     // ─── Global translation helper for JS dynamic text ───
     function t(key) {
-        const dict = translations[currentLang] || translations.ja;
+        const dict = translations[currentLang] || translations.zh;
         return dict[key] || key;
     }
 
@@ -923,7 +923,7 @@
     }
 
     function applyLang() {
-        const dict = translations[currentLang] || translations.ja;
+        const dict = translations[currentLang] || translations.zh;
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
             if (dict[key]) el.textContent = dict[key];

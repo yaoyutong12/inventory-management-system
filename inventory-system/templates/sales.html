@@ -140,8 +140,8 @@
                         <span class="text-muted small"><span data-i18n="checkout_items_prefix">共</span> <strong id="lastCheckoutItems">0</strong> <span data-i18n="checkout_types">种</span> / <strong id="lastCheckoutQty">0</strong> <span data-i18n="cart_items_count">件</span></span>
                     </div>
                     <div class="text-end">
-                        <div><span class="small text-muted"><span data-i18n="subtotal_tax_ex">小計(税抜)</span>: </span><strong id="lastCheckoutSubtotal" class="text-success">¥0</strong></div>
-                        <div><span class="small text-muted"><span data-i18n="total_tax_in">合計(税込)</span>: </span><strong id="lastCheckoutTaxIncluded" class="text-danger fs-5">¥0</strong></div>
+                        <div><span class="small text-muted"><span data-i18n="subtotal_tax_ex">小计(税不含)</span>: </span><strong id="lastCheckoutSubtotal" class="text-success">¥0</strong></div>
+                        <div><span class="small text-muted"><span data-i18n="total_tax_in">合计(税含)</span>: </span><strong id="lastCheckoutTaxIncluded" class="text-danger fs-5">¥0</strong></div>
                         <div class="small"><span class="text-muted"><span data-i18n="net_profit">净利润</span>: </span><strong id="lastCheckoutProfit" class="text-primary">¥0</strong></div>
                     </div>
                 </div>
@@ -149,7 +149,7 @@
                 <div id="checkoutPaymentArea">
                     <div class="d-flex gap-1 flex-wrap mb-2" id="checkoutPaymentBtns">
                         <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('cash')">
-                            💰 <span data-i18n="checkout_cash">現金</span>
+                            💰 <span data-i18n="checkout_cash">现金</span>
                         </button>
                         <button class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectCheckoutPayment('paypay')">
                             📱 <span data-i18n="checkout_paypay">PayPay</span>
@@ -166,7 +166,7 @@
                     </div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-success flex-grow-1" id="checkoutPayBtn" onclick="confirmCheckoutPayment()" disabled>
-                            <i class="bi bi-check-lg"></i> <span data-i18n="confirm_payment">確認收款</span>
+                            <i class="bi bi-check-lg"></i> <span data-i18n="confirm_payment">确认收款</span>
                         </button>
                         <button class="btn btn-outline-primary" onclick="printBatchReceipt()" data-i18n-title="checkout_print_receipt">
                             <i class="bi bi-printer"></i>

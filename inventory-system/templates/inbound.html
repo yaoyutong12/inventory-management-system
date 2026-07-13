@@ -89,17 +89,17 @@
         <div class="card mt-3">
             <div class="card-body p-2">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0"><i class="bi bi-list-task me-1"></i><span data-i18n="unmatched_products">未入庫商品</span>
+                    <h6 class="mb-0"><i class="bi bi-list-task me-1"></i><span data-i18n="unmatched_products">未入库商品</span>
                         <span class="badge bg-secondary" id="unmatchedCount">-</span>
                     </h6>
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadUnmatchedList()" title="リフレッシュ">
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadUnmatchedList()" title="刷新">
                         <i class="bi bi-arrow-clockwise"></i>
                     </button>
                 </div>
                 <input type="text" id="unmatchedSearch" class="form-control form-control-sm mb-2"
                        data-i18n-ph="search_product_tracking" oninput="filterUnmatchedList()" autocomplete="off">
                 <div id="unmatchedListContainer" style="max-height:350px;overflow-y:auto">
-                    <div class="text-center text-muted py-3 small">読み込み中...</div>
+                    <div class="text-center text-muted py-3 small">加载中...</div>
                 </div>
             </div>
         </div>
@@ -121,7 +121,7 @@
                     <div id="progressArea" class="d-none mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <small class="fw-bold text-primary">
-                                <i class="bi bi-box-arrow-in-down"></i> <span data-i18n="inbound_progress">入庫進捗</span>
+                                <i class="bi bi-box-arrow-in-down"></i> <span data-i18n="inbound_progress">入库进度</span>
                             </small>
                             <small id="progressText" class="text-muted">0/0 (0%)</small>
                         </div>
@@ -136,7 +136,7 @@
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="forceNewCheck">
                             <label class="form-check-label small" for="forceNewCheck" data-i18n-html="force_new_item_hint">
-                                <i class="bi bi-plus-circle"></i> 同一跟踪号で<strong>別の商品</strong>を作成（不同型号/颜色）
+                                <i class="bi bi-plus-circle"></i> 同一跟踪号创建<strong>不同商品</strong>（不同型号/颜色）
                             </label>
                         </div>
                     </div>
@@ -332,7 +332,7 @@
                     </div>
                     <div class="mt-3 p-2 bg-light rounded small text-muted">
                         <i class="bi bi-info-circle"></i> 
-                        <strong data-i18n="label_print_hint_title">💡 提示：</strong><span data-i18n="label_print_hint">如果现在没有打印机，以后可以在</span> <a href="/labels" class="text-primary fw-bold">📋 ラベル印刷（标签打印）</a> <span data-i18n="label_print_hint2">页面随时补打。</span><br>
+                        <strong data-i18n="label_print_hint_title">💡 提示：</strong><span data-i18n="label_print_hint">如果现在没有打印机，以后可以在</span> <a href="/labels" class="text-primary fw-bold">📋 标签打印</a> <span data-i18n="label_print_hint2">页面随时补打。</span><br>
                         <span class="text-secondary" data-i18n="thermal_print_hint">📱 印臣B21热敏打印机：点击「下载二维码到手机」保存图片 → 手机打开印臣APP → 选择图片打印</span>
                     </div>
                 </div>

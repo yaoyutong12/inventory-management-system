@@ -1,42 +1,42 @@
 {% extends "base.html" %}
-{% block title %}ダッシュボード - 托盘杂货进销存{% endblock %}
+{% block title %}仪表板 - 托盘杂货进销存{% endblock %}
 
 {% block content %}
 <div class="row g-3 mb-4">
     <div class="col-md-2 col-6">
         <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value text-primary">{{ total_products }}</div>
-            <div class="label" data-i18n="registered_products">登録商品数</div>
+            <div class="label" data-i18n="registered_products">在册商品数</div>
         </div>
     </div>
     <div class="col-md-2 col-6">
         <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/inventory'">
             <div class="value text-success">{{ total_in_stock }}</div>
-            <div class="label" data-i18n="in_stock">在庫あり</div>
+            <div class="label" data-i18n="in_stock">有库存</div>
         </div>
     </div>
     <div class="col-md-2 col-6">
         <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value text-warning">{{ total_sold }}</div>
-            <div class="label" data-i18n="sold_count">販売件数</div>
+            <div class="label" data-i18n="sold_count">销售件数</div>
         </div>
     </div>
     <div class="col-md-2 col-6">
         <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value" style="color:#1a73e8">{{ "¥{:,.0f}".format(total_revenue) }}</div>
-            <div class="label" data-i18n="total_revenue">総売上</div>
+            <div class="label" data-i18n="total_revenue">总销售额</div>
         </div>
     </div>
     <div class="col-md-2 col-6">
         <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value" style="color:#e47111">{{ "¥{:,.0f}".format(total_cost) }}</div>
-            <div class="label" data-i18n="total_purchase">総仕入</div>
+            <div class="label" data-i18n="total_purchase">总进货</div>
         </div>
     </div>
     <div class="col-md-2 col-6">
         <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value" style="color:#28a745">{{ "¥{:,.0f}".format(net_profit) }}</div>
-            <div class="label" data-i18n="net_profit">純利益</div>
+            <div class="label" data-i18n="net_profit">净利润</div>
         </div>
     </div>
 </div>
@@ -45,19 +45,19 @@
     <div class="col-md-3 col-6">
         <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value text-danger">{{ "¥{:,.0f}".format(total_shipping_fee) }}</div>
-            <div class="label" data-i18n="total_shipping">🚚 総運費</div>
+            <div class="label" data-i18n="total_shipping">🚚 总运费</div>
         </div>
     </div>
     <div class="col-md-3 col-6">
         <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value text-danger">{{ "¥{:,.0f}".format(total_platform_fee) }}</div>
-            <div class="label" data-i18n="total_commission">📊 総佣金</div>
+            <div class="label" data-i18n="total_commission">📊 总佣金</div>
         </div>
     </div>
     <div class="col-md-3 col-6">
         <div class="card stat-card bg-white" style="cursor:pointer" onclick="document.location='/report'">
             <div class="value text-danger">{{ "¥{:,.0f}".format(total_other_fee) }}</div>
-            <div class="label" data-i18n="total_misc">📦 総雑費</div>
+            <div class="label" data-i18n="total_misc">📦 总杂费</div>
         </div>
     </div>
     <div class="col-md-3 col-6">
@@ -67,7 +67,7 @@
                 {{ "{:.0f}%".format(net_profit/total_revenue*100) }}
                 {% else %}0%{% endif %}
             </div>
-            <div class="label" data-i18n="net_profit_rate">純利益率</div>
+            <div class="label" data-i18n="net_profit_rate">净利润率</div>
         </div>
     </div>
 </div>
@@ -78,7 +78,7 @@
         <div class="card stat-card bg-white border-danger" style="cursor:pointer" onclick="document.location='/inventory'">
             <div class="d-flex align-items-center justify-content-between p-3">
                 <div>
-                    <h6 class="text-danger mb-1"><i class="bi bi-exclamation-triangle me-2"></i><span data-i18n="low_stock_alert">低在庫アラート (5個以下)</span></h6>
+                    <h6 class="text-danger mb-1"><i class="bi bi-exclamation-triangle me-2"></i><span data-i18n="low_stock_alert">低库存预警 (5件以下)</span></h6>
                     <span class="fs-4 fw-bold text-danger">{{ low_stock|length }} 件</span>
                 </div>
                 <i class="bi bi-arrow-right-circle fs-3 text-danger"></i>
@@ -92,7 +92,7 @@
     <div class="col-lg-8">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title mb-3"><i class="bi bi-graph-up me-2"></i><span data-i18n="monthly_sales">月別売上推移</span></h5>
+                <h5 class="card-title mb-3"><i class="bi bi-graph-up me-2"></i><span data-i18n="monthly_sales">月度销售推移</span></h5>
                 <canvas id="monthlyChart" height="250"></canvas>
             </div>
         </div>
@@ -100,7 +100,7 @@
     <div class="col-lg-4">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title mb-3"><i class="bi bi-clock-history me-2"></i><span data-i18n="recent_sales">最近の販売</span></h5>
+                <h5 class="card-title mb-3"><i class="bi bi-clock-history me-2"></i><span data-i18n="recent_sales">最近销售</span></h5>
                 <div style="max-height:300px;overflow-y:auto">
                     {% if recent_sales %}
                     {% for sale in recent_sales %}
@@ -116,7 +116,7 @@
                     </div>
                     {% endfor %}
                     {% else %}
-                    <p class="text-muted text-center py-3" data-i18n="no_sales_yet">まだ販売記録がありません</p>
+                    <p class="text-muted text-center py-3" data-i18n="no_sales_yet">暂无销售记录</p>
                     {% endif %}
                 </div>
             </div>
@@ -127,10 +127,10 @@
 {% if low_stock %}
 <div class="card mt-3">
     <div class="card-body">
-        <h5 class="card-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i><span data-i18n="low_stock_alert">低在庫アラート</span></h5>
+        <h5 class="card-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i><span data-i18n="low_stock_alert">低库存预警</span></h5>
         <div class="table-responsive">
             <table class="table table-sm">
-                <thead><tr><th data-i18n="product_code">商品コード</th><th data-i18n="product_name">商品名</th><th data-i18n="stock_qty">在庫数</th><th data-i18n="selling_price">販売価格</th></tr></thead>
+                <thead><tr><th data-i18n="product_code">商品代码</th><th data-i18n="product_name">商品名</th><th data-i18n="stock_qty">库存数</th><th data-i18n="selling_price">销售价格</th></tr></thead>
                 <tbody>
                     {% for item in low_stock %}
                     <tr>

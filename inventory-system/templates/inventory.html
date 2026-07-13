@@ -3,28 +3,28 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-clipboard-data me-2"></i><span data-i18n="inventory_title">在庫一覧・進捗管理</span> <small class="text-muted fs-6" id="verInfo">(v20260629-5)</small></h4>
+    <h4><i class="bi bi-clipboard-data me-2"></i><span data-i18n="inventory_title">库存一览・进度管理</span> <small class="text-muted fs-6" id="verInfo">(v20260629-5)</small></h4>
     <div class="d-flex gap-2">
         <select class="form-select form-select-sm" id="categoryFilter" onchange="filterInventory()">
-            <option value="" data-i18n="all_categories">全カテゴリ</option>
+            <option value="" data-i18n="all_categories">全部分类</option>
             {% for cat in ssr_categories %}
             <option value="{{ cat }}">{{ cat }}</option>
             {% endfor %}
         </select>
         <select class="form-select form-select-sm" id="statusFilter" onchange="filterInventory()">
-            <option value="" data-i18n="all_status">全ステータス</option>
-            <option value="in_stock" data-i18n="in_stock_only">在庫あり</option>
-            <option value="sold_out" data-i18n="sold_out_only">売切れ</option>
+            <option value="" data-i18n="all_status">全部状态</option>
+            <option value="in_stock" data-i18n="in_stock_only">有库存</option>
+            <option value="sold_out" data-i18n="sold_out_only">售罄</option>
         </select>
-        <select class="form-select form-select-sm" id="channelFilter" onchange="filterInventory()" title="販売経路で絞り込み">
-            <option value="" data-i18n="all_channels">全経路</option>
+        <select class="form-select form-select-sm" id="channelFilter" onchange="filterInventory()" title="按销售渠道筛选">
+            <option value="" data-i18n="all_channels">全部渠道</option>
             <option value="线下" data-i18n="offline">🏪 线下</option>
             <option value="Mercari">🟣 Mercari</option>
-            <option value="Yahoo!オク" data-i18n="channel_yahoo">🔵 Yahoo!オク</option>
+            <option value="Yahoo!拍卖" data-i18n="channel_yahoo">🔵 Yahoo!拍卖</option>
             <option value="淘宝/闲鱼" data-i18n="channel_taobao">🟠 淘宝/闲鱼</option>
-            <option value="自家サイト" data-i18n="channel_own">⚫ 自家サイト</option>
+            <option value="自有网站" data-i18n="channel_own">⚫ 自有网站</option>
         </select>
-        <input class="form-control form-control-sm" data-i18n-ph="search_inventory_ph" placeholder="追跡番号・内部コード・商品名で検索..." id="inventorySearch" oninput="filterInventory()" style="width:280px">
+        <input class="form-control form-control-sm" data-i18n-ph="search_inventory_ph" placeholder="搜索追踪号・内部代码・商品名..." id="inventorySearch" oninput="filterInventory()" style="width:280px">
         <button class="btn btn-sm btn-outline-primary" onclick="exportCSV()"><i class="bi bi-download"></i> <span data-i18n="export_csv">CSV</span></button>
     </div>
 </div>
@@ -35,11 +35,11 @@
             <table class="table table-hover mb-0" id="inventoryTable">
                 <thead>
                     <tr>
-                        <th data-i18n="photo_col">写真</th><th data-i18n="tracking_col">追跡番号</th><th data-i18n="internal_code_col">内部コード</th><th data-i18n="product_name_col">商品名</th><th data-i18n="category_col">カテゴリ</th>
-                        <th data-i18n="sales_channel_col">販売経路</th>
-                        <th data-i18n="purchase_price_col">仕入単価</th><th data-i18n="selling_price_col">販売価格</th>
-                        <th data-i18n="inbound_qty_col">入庫数</th><th data-i18n="sold_qty_col">販売数</th><th data-i18n="stock_qty_col">在庫数</th>
-                        <th data-i18n="revenue_col">売上</th><th data-i18n="profit_col">利益</th><th data-i18n="fee_col">費用</th><th data-i18n="status_col">状態</th><th data-i18n="action_col">操作</th>
+                        <th data-i18n="photo_col">照片</th><th data-i18n="tracking_col">追踪号</th><th data-i18n="internal_code_col">内部代码</th><th data-i18n="product_name_col">商品名</th><th data-i18n="category_col">分类</th>
+                        <th data-i18n="sales_channel_col">销售渠道</th>
+                        <th data-i18n="purchase_price_col">进货单价</th><th data-i18n="selling_price_col">销售价格</th>
+                        <th data-i18n="inbound_qty_col">入库数</th><th data-i18n="sold_qty_col">销售数</th><th data-i18n="stock_qty_col">库存数</th>
+                        <th data-i18n="revenue_col">销售额</th><th data-i18n="profit_col">利润</th><th data-i18n="fee_col">费用</th><th data-i18n="status_col">状态</th><th data-i18n="action_col">操作</th>
                     </tr>
                 </thead>
                 <tbody id="invTbody">
@@ -49,36 +49,36 @@
                             {% set margin = ((profit / p.selling_price) * 100)|round(0) if p.selling_price else 0 %}
                             {% if p.current_stock <= 0 %}
                                 {% set stock_class = "danger" %}
-                                {% set status_badge = '<span class="badge bg-secondary" data-i18n-html="sold_out">売切れ</span>' %}
+                                {% set status_badge = '<span class="badge bg-secondary" data-i18n-html="sold_out">售罄</span>' %}
                             {% elif p.current_stock <= 3 %}
                                 {% set stock_class = "warning" %}
-                                {% set status_badge = '<span class="badge bg-warning" data-i18n-html="almost_out">残りわずか</span>' %}
+                                {% set status_badge = '<span class="badge bg-warning" data-i18n-html="almost_out">少量库存</span>' %}
                             {% else %}
                                 {% set stock_class = "success" %}
-                                {% set status_badge = '<span class="badge bg-success" data-i18n-html="available">在庫あり</span>' %}
+                                {% set status_badge = '<span class="badge bg-success" data-i18n-html="available">有库存</span>' %}
                             {% endif %}
                         <tr data-category="{{ p.category or '' }}" data-status="{{ p.status or '' }}" data-name="{{ p.product_name or '' }}" data-code="{{ p.internal_code or '' }}" data-tracking="{{ p.tracking_no or '' }}" data-channel="{{ p.sales_channel or '线下' }}">
                             <td class="text-center">
                                 {% if p.photo_url %}
-                                    <img src="{{ p.photo_url }}" alt="商品写真" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">
+                                    <img src="{{ p.photo_url }}" alt="商品照片" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">
                                 {% else %}
-                                    <div style="width:50px;height:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:bold;letter-spacing:-1px">{{ (p.product_name or '品')[0] }}</div>
+                                    <div style="width:50px;height:50px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:bold;letter-spacing:-1px">{{ (p.product_name or '商')[0] }}</div>
                                 {% endif %}
                             </td>
                             <td><small class="text-muted">{{ p.tracking_no or '-' }}</small></td>
-                            <td><code>{{ p.internal_code }}{% if p.is_high_value %} <span class="badge bg-warning">高額</span>{% endif %}</code></td>
+                            <td><code>{{ p.internal_code }}{% if p.is_high_value %} <span class="badge bg-warning">高价</span>{% endif %}</code></td>
                             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ p.product_name }}">{{ (p.product_name or '')[:40] }}</td>
                             <td><small>{{ p.category or '-' }}</small></td>
                             <td style="cursor:pointer;position:relative" onclick="editChannel(this, {{ p.id }}, '{{ (p.sales_channel or '线下') }}')">
                                 <span class="channel-display" id="channelDisplay_{{ p.id }}">
                                     {% if (p.sales_channel or '线下') == 'Mercari' %}
                                         <span class="badge bg-primary">Mercari</span>
-                                    {% elif (p.sales_channel or '线下') == 'Yahoo!オク' %}
-                                        <span class="badge bg-info">Yahoo!オク</span>
+                                    {% elif (p.sales_channel or '线下') == 'Yahoo!拍卖' %}
+                                        <span class="badge bg-info">Yahoo!拍卖</span>
                                     {% elif (p.sales_channel or '线下') == '淘宝/闲鱼' %}
                                         <span class="badge bg-orange" style="background-color:#ff6600">淘宝/闲鱼</span>
-                                    {% elif (p.sales_channel or '线下') == '自家サイト' %}
-                                        <span class="badge bg-dark">自家サイト</span>
+                                    {% elif (p.sales_channel or '线下') == '自有网站' %}
+                                        <span class="badge bg-dark">自有网站</span>
                                     {% elif (p.sales_channel or '线下') == '其他' %}
                                         <span class="badge bg-secondary">{{ p.sales_channel or '线下' }}</span>
                                     {% else %}
@@ -107,7 +107,7 @@
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-primary" onclick="quickSale('{{ p.internal_code }}')" title="快速销售"><i class="bi bi-cart"></i></button>
-                                    {% if p.sales_channel in ['Mercari', 'Yahoo!オク', '淘宝/闲鱼', '自家サイト'] or not p.sales_channel %}
+                                    {% if p.sales_channel in ['Mercari', 'Yahoo!拍卖', '淘宝/闲鱼', '自有网站'] or not p.sales_channel %}
                                     <button class="btn btn-outline-success" onclick="listOnline({{ p.id }}, '{{ (p.sales_channel or '') }}')" title="上架到线上平台"><i class="bi bi-cloud-upload"></i></button>
                                     {% endif %}
                                     <button class="btn btn-outline-warning" onclick="editProduct({{ p.id }})" title="编辑"><i class="bi bi-pencil"></i></button>
@@ -172,7 +172,7 @@
                 <div class="mb-3 text-center">
                     <label class="form-label small" data-i18n="product_photo_label">商品照片</label>
                     <div class="mb-2">
-                        <img id="editPhotoPreview" src="" alt="写真" style="max-width:200px;max-height:200px;object-fit:cover;border-radius:8px;border:1px solid #ddd;" class="d-none">
+                        <img id="editPhotoPreview" src="" alt="照片" style="max-width:200px;max-height:200px;object-fit:cover;border-radius:8px;border:1px solid #ddd;" class="d-none">
                         <div id="editPhotoPlaceholder" class="d-flex align-items-center justify-content-center bg-light rounded" style="width:200px;height:150px;margin:0 auto;color:#aaa;">
                             <span><i class="bi bi-camera" style="font-size:2rem;"></i></span>
                         </div>
@@ -215,7 +215,7 @@
                 <!-- 品类 -->
                 <div class="mb-3">
                     <label class="form-label small" data-i18n="category_col">分类</label>
-                    <input class="form-control" id="editCategory" placeholder="例: 家電, 日用品...">
+                    <input class="form-control" id="editCategory" placeholder="例: 家电, 日用品...">
                 </div>
                 
                 <!-- 销售路径 -->
@@ -224,9 +224,9 @@
                     <select class="form-select form-select-sm" id="editSalesChannel">
                         <option value="线下">🏪 线下销售（对面/店铺）</option>
                         <option value="Mercari">🟣 Mercari（煤炉）</option>
-                        <option value="Yahoo!オク">🔵 Yahoo!拍卖</option>
+                        <option value="Yahoo!拍卖">🔵 Yahoo!拍卖</option>
                         <option value="淘宝/闲鱼">🟠 淘宝 / 闲鱼</option>
-                        <option value="自家サイト">⚫ 自有网站</option>
+                        <option value="自有网站">⚫ 自有网站</option>
                         <option value="其他">⚪ 其他</option>
                     </select>
                 </div>
@@ -662,9 +662,9 @@ function cancelPrice(btn) {
 const CHANNEL_OPTIONS = [
     {value:'线下', label:'<span class="badge bg-success">线下</span>', badgeClass:'bg-success'},
     {value:'Mercari', label:'<span class="badge bg-primary">Mercari</span>', badgeClass:'bg-primary'},
-    {value:'Yahoo!オク', label:'<span class="badge bg-info">Yahoo!オク</span>', badgeClass:'bg-info'},
+    {value:'Yahoo!拍卖', label:'<span class="badge bg-info">Yahoo!拍卖</span>', badgeClass:'bg-info'},
     {value:'淘宝/闲鱼', label:'<span class="badge" style="background-color:#ff6600">淘宝/闲鱼</span>', badgeClass:'', customColor:'#ff6600'},
-    {value:'自家サイト', label:'<span class="badge bg-dark">自家サイト</span>', badgeClass:'bg-dark'},
+    {value:'自有网站', label:'<span class="badge bg-dark">自有网站</span>', badgeClass:'bg-dark'},
     {value:'其他', label:'<span class="badge bg-secondary">其他</span>', badgeClass:'bg-secondary'}
 ];
 
