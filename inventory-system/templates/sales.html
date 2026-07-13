@@ -74,8 +74,9 @@
                                     <select class="form-select" id="salesPlatform">
                                         <option value="physical"><span data-i18n="platform_physical">🏪 实体店</span></option>
                                         <option value="mercari"><span data-i18n="platform_mercari">🛒 煤炉</span></option>
+                                        <option value="yahoo_flea"><span data-i18n="platform_yahoo_flea">🟩 雅虎跳蚤市场</span></option>
                                         <option value="yahoo"><span data-i18n="platform_yahoo">🟨 雅虎拍卖</span></option>
-                                        <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天</span></option>
+                                        <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天跳蚤市</span></option>
                                         <option value="other"><span data-i18n="platform_other">📦 其他</span></option>
                                     </select>
                                 </div>
@@ -229,8 +230,9 @@
                             <option value=""><span data-i18n="filter_all_platforms">全部平台</span></option>
                             <option value="physical"><span data-i18n="platform_physical">🏪 实体店</span></option>
                             <option value="mercari"><span data-i18n="platform_mercari">🛒 煤炉</span></option>
-                            <option value="yahoo"><span data-i18n="platform_yahoo_short">🟨 雅虎</span></option>
-                            <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天</span></option>
+                            <option value="yahoo_flea"><span data-i18n="platform_yahoo_flea_short">🟩 雅虎跳蚤</span></option>
+                            <option value="yahoo"><span data-i18n="platform_yahoo_short">🟨 雅虎拍卖</span></option>
+                            <option value="rakuten"><span data-i18n="platform_rakuten_short">🛍️ 乐天跳蚤</span></option>
                             <option value="other"><span data-i18n="platform_other">📦 其他</span></option>
                         </select>
                         <input type="date" class="form-control form-control-sm" id="salesDateFilter" onchange="loadSalesHistory()" style="width:auto;">
@@ -277,8 +279,9 @@
                         <label class="form-label small"><span data-i18n="sales_platform">销售平台</span> *</label>
                         <select class="form-select" id="externalPlatform">
                             <option value="mercari"><span data-i18n="platform_mercari">🛒 煤炉</span></option>
+                            <option value="yahoo_flea"><span data-i18n="platform_yahoo_flea">🟩 雅虎跳蚤市场</span></option>
                             <option value="yahoo"><span data-i18n="platform_yahoo">🟨 雅虎拍卖</span></option>
-                            <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天</span></option>
+                            <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天跳蚤市</span></option>
                             <option value="other"><span data-i18n="platform_other">📦 其他</span></option>
                         </select>
                     </div>
@@ -365,8 +368,9 @@
                         <select class="form-select" id="cartPlatform">
                             <option value="physical"><span data-i18n="platform_physical">🏪 实体店</span></option>
                             <option value="mercari"><span data-i18n="platform_mercari">🛒 煤炉</span></option>
+                            <option value="yahoo_flea"><span data-i18n="platform_yahoo_flea">🟩 雅虎跳蚤市场</span></option>
                             <option value="yahoo"><span data-i18n="platform_yahoo">🟨 雅虎拍卖</span></option>
-                            <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天</span></option>
+                            <option value="rakuten"><span data-i18n="platform_rakuten">🛍️ 乐天跳蚤市</span></option>
                             <option value="other"><span data-i18n="platform_other">📦 其他</span></option>
                         </select>
                     </div>
@@ -661,7 +665,7 @@ function cartPaymentMethodText(method) {
     return map[method] || method;
 }
 function cartPlatformText(platform) {
-    const map = {'physical': t('platform_physical_short'), 'mercari': t('platform_mercari_short'), 'yahoo': t('platform_yahoo_short'), 'rakuten': t('platform_rakuten_short'), 'other': t('platform_other_short')};
+    const map = {'physical': t('platform_physical_short'), 'mercari': t('platform_mercari_short'), 'yahoo_flea': t('platform_yahoo_flea_short'), 'yahoo': t('platform_yahoo_short'), 'rakuten': t('platform_rakuten_short'), 'other': t('platform_other_short')};
     return map[platform] || platform;
 }
 
@@ -1319,6 +1323,7 @@ async function loadSalesHistory() {
         const platformIcons = {
             'physical': t('platform_physical_short'),
             'mercari': t('platform_mercari_short'),
+            'yahoo_flea': t('platform_yahoo_flea_short'),
             'yahoo': t('platform_yahoo_short'),
             'rakuten': t('platform_rakuten_short'),
             'other': t('platform_other_short')
@@ -1396,6 +1401,7 @@ async function loadTodaySummary() {
             const platformIcons = {
                 'physical': t('platform_physical_short'),
                 'mercari': t('platform_mercari_short'),
+                'yahoo_flea': t('platform_yahoo_flea_short'),
                 'yahoo': t('platform_yahoo_short'),
                 'rakuten': t('platform_rakuten_short'),
                 'other': t('platform_other_short')

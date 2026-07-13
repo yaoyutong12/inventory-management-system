@@ -20,6 +20,7 @@
             <option value="" data-i18n="all_channels">全部渠道</option>
             <option value="线下" data-i18n="offline">🏪 线下</option>
             <option value="Mercari">🟣 Mercari</option>
+            <option value="雅虎跳蚤市场" data-i18n="channel_yahoo_flea">🟩 雅虎跳蚤市场</option>
             <option value="Yahoo!拍卖" data-i18n="channel_yahoo">🔵 Yahoo!拍卖</option>
             <option value="淘宝/闲鱼" data-i18n="channel_taobao">🟠 淘宝/闲鱼</option>
             <option value="自有网站" data-i18n="channel_own">⚫ 自有网站</option>
@@ -73,6 +74,8 @@
                                 <span class="channel-display" id="channelDisplay_{{ p.id }}">
                                     {% if (p.sales_channel or '线下') == 'Mercari' %}
                                         <span class="badge bg-primary">Mercari</span>
+                                    {% elif (p.sales_channel or '线下') == '雅虎跳蚤市场' %}
+                                        <span class="badge" style="background-color:#28a745">雅虎跳蚤市场</span>
                                     {% elif (p.sales_channel or '线下') == 'Yahoo!拍卖' %}
                                         <span class="badge bg-info">Yahoo!拍卖</span>
                                     {% elif (p.sales_channel or '线下') == '淘宝/闲鱼' %}
@@ -107,7 +110,7 @@
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-primary" onclick="quickSale('{{ p.internal_code }}')" title="快速销售"><i class="bi bi-cart"></i></button>
-                                    {% if p.sales_channel in ['Mercari', 'Yahoo!拍卖', '淘宝/闲鱼', '自有网站'] or not p.sales_channel %}
+                                    {% if p.sales_channel in ['Mercari', '雅虎跳蚤市场', 'Yahoo!拍卖', '淘宝/闲鱼', '自有网站'] or not p.sales_channel %}
                                     <button class="btn btn-outline-success" onclick="listOnline({{ p.id }}, '{{ (p.sales_channel or '') }}')" title="上架到线上平台"><i class="bi bi-cloud-upload"></i></button>
                                     {% endif %}
                                     <button class="btn btn-outline-warning" onclick="editProduct({{ p.id }})" title="编辑"><i class="bi bi-pencil"></i></button>
@@ -224,6 +227,7 @@
                     <select class="form-select form-select-sm" id="editSalesChannel">
                         <option value="线下">🏪 线下销售（对面/店铺）</option>
                         <option value="Mercari">🟣 Mercari（煤炉）</option>
+                        <option value="雅虎跳蚤市场">🟩 雅虎跳蚤市场</option>
                         <option value="Yahoo!拍卖">🔵 Yahoo!拍卖</option>
                         <option value="淘宝/闲鱼">🟠 淘宝 / 闲鱼</option>
                         <option value="自有网站">⚫ 自有网站</option>
@@ -662,6 +666,7 @@ function cancelPrice(btn) {
 const CHANNEL_OPTIONS = [
     {value:'线下', label:'<span class="badge bg-success">线下</span>', badgeClass:'bg-success'},
     {value:'Mercari', label:'<span class="badge bg-primary">Mercari</span>', badgeClass:'bg-primary'},
+    {value:'雅虎跳蚤市场', label:'<span class="badge" style="background-color:#28a745">雅虎跳蚤市场</span>', badgeClass:'', customColor:'#28a745'},
     {value:'Yahoo!拍卖', label:'<span class="badge bg-info">Yahoo!拍卖</span>', badgeClass:'bg-info'},
     {value:'淘宝/闲鱼', label:'<span class="badge" style="background-color:#ff6600">淘宝/闲鱼</span>', badgeClass:'', customColor:'#ff6600'},
     {value:'自有网站', label:'<span class="badge bg-dark">自有网站</span>', badgeClass:'bg-dark'},
