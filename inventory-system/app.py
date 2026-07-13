@@ -22,7 +22,7 @@ def jst_now():
 import re
 from pathlib import Path
 
-from flask import Flask, request, jsonify, render_template, send_file, g, send_from_directory, make_response
+from flask import Flask, request, jsonify, render_template, send_file, g, send_from_directory, make_response, redirect
 import pandas as pd
 import qrcode
 from PIL import Image
@@ -1001,19 +1001,26 @@ def api_imports():
     return jsonify([dict(row) for row in imports])
 
 
-# ─── API: Product Photo (lazy load) ────────────────────────────
+# ─── API: Product Photo (direct image response) ───────────────
 @app.route('/api/product/<int:pid>/photo')
 def api_product_photo(pid):
-    """Return product photo as base64 data URI (lazy loaded by frontend)"""
+    """Return product photo as raw image (for direct use as <img src>)"""
     db = get_db()
     row = db.execute("""SELECT photo_data, photo FROM inbound_records
-        WHERE product_id=? AND photo_data IS NOT NULL AND photo_data != ''
+        WHERE product_id=? AND ((photo_data IS NOT NULL AND photo_data != '') OR (photo IS NOT NULL AND photo != ''))
         ORDER BY id DESC LIMIT 1""", (pid,)).fetchone()
     if row and row.get('photo_data'):
-        return jsonify({'url': f"data:image/jpeg;base64,{row['photo_data']}"})
+        try:
+            img_bytes = base64.b64decode(row['photo_data'])
+            response = make_response(img_bytes)
+            response.headers['Content-Type'] = 'image/jpeg'
+            response.headers['Cache-Control'] = 'public, max-age=3600'
+            return response
+        except Exception as e:
+            app.logger.error(f"Photo decode error for product {pid}: {e}")
     if row and row.get('photo'):
-        return jsonify({'url': f"/uploads/{row['photo']}"})
-    return jsonify({'url': None})
+        return redirect(f'/uploads/{row["photo"]}')
+    return '', 404
 
 
 # ─── API: Barcode Lookup ────────────────────────────────────────
