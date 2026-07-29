@@ -26,7 +26,12 @@ from flask import Flask, request, jsonify, render_template, send_file, g, send_f
 import pandas as pd
 import qrcode
 from PIL import Image
-from pyzbar.pyzbar import decode as pyzbar_decode
+try:
+    from pyzbar.pyzbar import decode as pyzbar_decode
+    PYZBAR_AVAILABLE = True
+except Exception:
+    pyzbar_decode = None
+    PYZBAR_AVAILABLE = False
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -39,6 +44,15 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
     genai = None
+
+def _pyzbar_decode(img):
+    """Safe wrapper: returns [] if pyzbar/zbar is unavailable (e.g. no zbar DLL on Windows)."""
+    if not PYZBAR_AVAILABLE or pyzbar_decode is None:
+        return []
+    try:
+        return pyzbar_decode(img)
+    except Exception:
+        return []
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
@@ -452,6 +466,7 @@ def _init_sqlite():
         "ALTER TABLE products ADD COLUMN scrapped_at TIMESTAMP",
         "ALTER TABLE products ADD COLUMN sales_channel TEXT DEFAULT '线下'",
         "ALTER TABLE inbound_records ADD COLUMN photo TEXT",
+        "ALTER TABLE inbound_records ADD COLUMN photo_data TEXT",
         "ALTER TABLE mercari_listings ADD COLUMN brand TEXT",
         "ALTER TABLE sales_records ADD COLUMN shipping_fee REAL DEFAULT 0",
         "ALTER TABLE sales_records ADD COLUMN platform_fee REAL DEFAULT 0",
@@ -1363,7 +1378,7 @@ def api_inventory_list():
         else:
             d['photo_url'] = None
         d['photo_data'] = None  # 不传大数据
-    result.append(d)
+        result.append(d)
     return jsonify(result)
 
 
@@ -2270,7 +2285,7 @@ def api_inbound_photo():
     
     try:
         img = Image.open(file.stream)
-        barcodes = pyzbar_decode(img)
+        barcodes = _pyzbar_decode(img)
         
         if not barcodes:
             return jsonify({'error': 'バーコードが検出できませんでした。手動入力に切り替えてください。', 'type': 'no_barcode'})
@@ -2460,33 +2475,33 @@ def api_ai_read_barcode():
         img = Image.open(file.stream)
         
         # ── Strategy 1: Original image ──
-        decoded = pyzbar_decode(img)
+        decoded = _pyzbar_decode(img)
         if decoded:
             return _barcode_result(decoded, 'pyzbar_original')
         
         # ── Strategy 2: Grayscale ──
         img_gray = img.convert('L')
-        decoded = pyzbar_decode(img_gray)
+        decoded = _pyzbar_decode(img_gray)
         if decoded:
             return _barcode_result(decoded, 'pyzbar_gray')
         
         # ── Strategy 3: Binarize (binary threshold) ──
         img_bin = img_gray.point(lambda x: 255 if x > 128 else 0, '1')
-        decoded = pyzbar_decode(img_bin)
+        decoded = _pyzbar_decode(img_bin)
         if decoded:
             return _barcode_result(decoded, 'pyzbar_binary')
         
         # ── Strategy 4: Upscale 2x then grayscale ──
         w, h = img.size
         img_big = img.resize((w * 2, h * 2), Image.LANCZOS).convert('L')
-        decoded = pyzbar_decode(img_big)
+        decoded = _pyzbar_decode(img_big)
         if decoded:
             return _barcode_result(decoded, 'pyzbar_upscale2x')
         
         # ── Strategy 5: Upscale 3x then binary ──
         img_big3 = img.resize((w * 3, h * 3), Image.LANCZOS).convert('L')
         img_big3_bin = img_big3.point(lambda x: 255 if x > 128 else 0, '1')
-        decoded = pyzbar_decode(img_big3_bin)
+        decoded = _pyzbar_decode(img_big3_bin)
         if decoded:
             return _barcode_result(decoded, 'pyzbar_upscale3x')
         
@@ -2497,7 +2512,7 @@ def api_ai_read_barcode():
         if p98 > p2:
             img_arr = np.clip((img_arr - p2) * 255.0 / (p98 - p2), 0, 255).astype(np.uint8)
         img_contrast = Image.fromarray(img_arr)
-        decoded = pyzbar_decode(img_contrast)
+        decoded = _pyzbar_decode(img_contrast)
         if decoded:
             return _barcode_result(decoded, 'pyzbar_contrast')
         
@@ -2510,7 +2525,7 @@ def api_ai_read_barcode():
             diff = img_arr - blur_arr
             adaptive = ((diff > 0) * 255).astype(np.uint8)
             img_adaptive = Image.fromarray(adaptive, 'L')
-            decoded = pyzbar_decode(img_adaptive)
+            decoded = _pyzbar_decode(img_adaptive)
             if decoded:
                 return _barcode_result(decoded, 'pyzbar_adaptive')
         except:
@@ -2581,7 +2596,7 @@ def _pyzbar_try_decode(img):
     for name, make_img in strategies:
         try:
             proc = make_img()
-            decoded = pyzbar_decode(proc)
+            decoded = _pyzbar_decode(proc)
             if decoded:
                 raw = decoded[0].data.decode('utf-8', errors='replace').strip()
                 if raw:
